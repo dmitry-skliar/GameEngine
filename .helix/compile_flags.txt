@@ -1,0 +1,6 @@
+-Wall
+-I../engine.core/src/
+-I../application/src/
+-DKDEBUG_FLAG
+-DKPLATFORM_LINUX_FLAG
+-DKPLATFORM_LINUX_WAYLAND_FLAG

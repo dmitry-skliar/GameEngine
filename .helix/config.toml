@@ -1,0 +1,2 @@
+[keys.normal]
+b = { b = ":sh make build", r = ":sh make rebuild", c = ":sh make clean" }
