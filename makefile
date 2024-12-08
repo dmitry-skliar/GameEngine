@@ -172,7 +172,19 @@ endif
 .PHONY: help build rebuild clean $(__libraries) $(__applications) $(__postbuild)
 
 help:
-	@echo "Бесполезная помощь выведена."
+	@echo ""
+	@echo "Используй так: make [target/module] [platform=] [edition=]"
+	@echo ""
+	@echo "Цели:"
+	@echo "    build   - сборка проекта."
+	@echo "    rebuild - пересборка проекта."
+	@echo "    clean   - очистка директории '$(__binary_directory)'."
+	@echo "    help    - для вывода этой помощи."
+	@echo ""
+	@echo "Модули    : $(__libraries) $(__applications) $(__postbuild)"
+	@echo "Редакции  : $(__editions)"
+	@echo "Платформы : $(__platforms)"
+	@echo ""
 
 build: $(__libraries) $(__applications) $(__postbuild)
 	@echo "Сборка проекта завершена."
