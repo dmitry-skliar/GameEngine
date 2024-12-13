@@ -1,7 +1,7 @@
-#include <stdio.h>
+#include <test.h>
 
 int main()
 {
-    printf("Hello project.\n");
+    print_test(7);
     return 0;
 }
