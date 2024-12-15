@@ -33,25 +33,23 @@ typedef double f64;
 // @brief Логическое значение.
 typedef _Bool bool;
 
-#if __clang__
-    /*
-        @brief Выполняет проверку утверждения во время компиляции, и выводит сообщение если оно ложно.
-        @param assertion Проверяемое во время компиляции утверждение.
-        @param message Сообщение которое будет выведено если утверждение ложно.
-    */
-    #define STATIC_ASSERT(assertion, message) _Static_assert(assertion, message)
-#else
+#if __cplusplus
     /*
         @brief Выполняет проверку утверждения во время компиляции, и выводит сообщение если оно ложно.
         @param assertion Проверяемое во время компиляции утверждение.
         @param message Сообщение которое будет выведено если утверждение ложно.
     */
     #define STATIC_ASSERT(assertion, message) static_assert(assertion, message)
+#else
+    /*
+        @brief Выполняет проверку утверждения во время компиляции, и выводит сообщение если оно ложно.
+        @param assertion Проверяемое во время компиляции утверждение.
+        @param message Сообщение которое будет выведено если утверждение ложно.
+    */
+    #define STATIC_ASSERT(assertion, message) _Static_assert(assertion, message)
 #endif
 
-/*
-    Проверка типов.
-*/
+// Проверка типов.
 STATIC_ASSERT(sizeof(u8)  == 1, "Assertion 'sizeof(u8) == 1' failed.");
 STATIC_ASSERT(sizeof(u16) == 2, "Assertion 'sizeof(u16) == 2' failed.");
 STATIC_ASSERT(sizeof(u32) == 4, "Assertion 'sizeof(u32) == 4' failed.");
@@ -63,15 +61,17 @@ STATIC_ASSERT(sizeof(i64) == 8, "Assertion 'sizeof(i64) == 8' failed.");
 STATIC_ASSERT(sizeof(f32) == 4, "Assertion 'sizeof(f32) == 4' failed.");
 STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 
+// Определение логических констант.
 #define false 0
 #define true  1
 
-/*
-    Проверка поддерживаемых платформ и соответствующие требования к ним.
-    На уровне makefile и библиотеки.
-*/
+// Определение нулевого указателя.
+#define null  ((void*)0)
+
+// Проверка поддерживаемых платформ и их требований (На уровне makefile и библиотеки).
 #if KPLATFORM_LINUX_FLAG
 #elif KPLATFORM_WINDOWS_FLAG
+    // Дополнительная проверка на разрядность операционной системы.
     #ifndef _WIN64
         #error "64-bit is required on Windows."
     #endif
@@ -79,10 +79,8 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     #error "Unknown platform."
 #endif
 
-/*
-    Определение используемого компилятора. Только на уровне библиотеки.
-*/
-#if __clang__ || __gcc__
+// Определение используемого компилятора (Только на уровне библиотеки).
+#if __clang__
     #define KCOMPILER_CLANG_FLAG 1
 #elif _MSC_VER
     #define KCOMPILER_MICROSOFT_FLAG 1
@@ -90,9 +88,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     #error "Unknown compiler"
 #endif
 
-/*
-    Макроопределения внешнего интерфейса.
-*/
+// Определение квалификатора KAPI.
 #if KEXPORT_FLAG
     #if KCOMPILER_MICROSOFT_FLAG
         #define KAPI __declspec(dllexport)
@@ -106,3 +102,40 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
         #define KAPI
     #endif
 #endif
+
+// Определение квалификаторов KINLINE/NOINLINE.
+#if KCOMPILER_MICROSOFT_FLAG
+    #define KINLINE  __forceinline
+    #define NOINLINE __declspec(noinline)
+#elif KCOMPILER_CLANG_FLAG
+    #define KINLINE  __attribute__((always_inline)) inline
+    #define NOINLINE __attribute__((noinline))
+#endif
+
+/*
+    @brief Макрос для копирования 8 байт(64 бита) из источника в память назначения.
+    @param dest Источник байт которые нужно скопировать.
+    @param src Место назначения куда нужно скопировать байты.
+*/
+#define KCOPY8BYTES(dest, src) *((u64*)dest) = *((u64*)src)
+
+/*
+    @brief Макрос для копирования 4 байта(32 бита) из источника в память назначения.
+    @param dest Источник байт которые нужно скопировать.
+    @param src Место назначения куда нужно скопировать байты.
+*/
+#define KCOPY4BYTES(dest, src) *((u32*)dest) = *((u32*)src)
+
+/*
+    @brief Макрос для копирования 2 байта(16 бит) из источника в память назначения.
+    @param dest Источник байт которые нужно скопировать.
+    @param src Место назначения куда нужно скопировать байты.
+*/
+#define KCOPY2BYTES(dest, src) *((u16*)dest) = *((u16*)src)
+
+/*
+    @brief Макрос для копирования 1 байт (8 бит) из источника в память назначения.
+    @param dest Источник байт которые нужно скопировать.
+    @param src Место назначения куда нужно скопировать байты.
+*/
+#define KCOPY1BYTE(dest, src) *((u8*)dest) = *((u8*)src)
