@@ -9,6 +9,6 @@ int main()
     KWARNG("Test message: %.3f.", 3.1415f);
     KERROR("Test message: %.3f.", 3.1415f);
     // KFATAL("Test message: %.3f.", 3.1415f);
-    KASSERT(1==0);
+    // KASSERT_MSG(1==0,"Test message!");
     return 0;
 }
