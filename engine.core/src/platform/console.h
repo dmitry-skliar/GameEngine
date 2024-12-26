@@ -1,7 +1,6 @@
 #pragma once
 
 #include <defines.h>
-#include <logger.h>
 
 // Цвета символов, фона.
 typedef enum console_color {

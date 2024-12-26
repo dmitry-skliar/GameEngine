@@ -4,8 +4,8 @@
 
     #include <stdio.h>
 
-    static const char* colors[LOG_LEVELS_MAX] = {"1;41", "1;31", "1;33", "1;32", "1;34", "0;39"};
-    
+    static const char* colors[CONSOLE_COLORS_MAX] = {"1;41", "1;31", "1;33", "1;32", "1;34", "0;39"};
+
     void platform_console_write(console_color color, const char* message)
     {
         fprintf(stdout ,"\033[%sm%s\033[0m", colors[color], message);
@@ -15,5 +15,5 @@
     {
         fprintf(stderr ,"\033[%sm%s\033[0m", colors[color], message);
     }
-        
+
 #endif

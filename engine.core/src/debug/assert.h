@@ -28,7 +28,7 @@
 
 #if KASSERTION_ENABLED == 1
     /*
-        @brief Проверка утверждения и отображение сообщения с остановкой программы при несоответствии, 
+        @brief Проверка утверждения и отображение сообщения с остановкой программы при несоответствии,
         а также выводит местоположение: имя файла и строка, где это произошло.
         @param expression Утверждение которое нужно преверить.
         @param message Сообщение которое нужно вывести.
@@ -54,12 +54,44 @@
     }
 
     /*
-        @brief Проверка утверждения и отображение сообщения с остановкой программы при несоответствии, 
+        @brief Проверка утверждения и отображение сообщения с остановкой программы при несоответствии,
         а также выводит местоположение: имя файла и строка, где это произошло.
         @param expr Утверждение которое нужно преверить.
     */
-    #define KASSERT(expr) KASSERT_MSG(expr, "")
+    #define KASSERT(expr)                                                 \
+    {                                                                     \
+        if(expr) {}                                                       \
+        else                                                              \
+        {                                                                 \
+            report_assertion_failure(#expr, "", __FILE__, __LINE__);      \
+            KDEBUG_BREAK();                                               \
+        }                                                                 \
+    }
+
+
+    #if KDEBUG_FLAG
+        /*
+            @brief Проверка утверждения и отображение сообщения с остановкой программы при несоответствии,
+            а также выводит местоположение: имя файла и строка, где это произошло.
+            INFO: Используется только при отладке приложения.
+            @param expr Утверждение которое нужно преверить.
+        */
+        #define KASSERT_DEBUG(expr)                                      \
+        {                                                                \
+            if(expr) {}                                                  \
+            else                                                         \
+            {                                                            \
+                report_assertion_failure(#expr, "", __FILE__, __LINE__); \
+                KDEBUG_BREAK();                                          \
+            }                                                            \
+        }
+
+    #else
+        #define KASSERT_DEBUG(expr)
+    #endif
+
 #else
     #define KASSERT_MSG(expr, message)
-    #define KAKASSERT(expr)
+    #define KASSERT(expr)
+    #define KASSERT_DEBUG(expr)
 #endif

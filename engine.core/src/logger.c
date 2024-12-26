@@ -1,6 +1,7 @@
 #include "logger.h"
-#include "debug/assert.h"
+
 #include "platform/console.h"
+#include "debug/assert.h"
 
 #include <stdarg.h>
 // TODO: Убрать после замены printf, vsnprintf.
