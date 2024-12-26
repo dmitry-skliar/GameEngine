@@ -160,11 +160,12 @@
         xdg_toplevel_set_title(context->xtoplevel, config.title);
         xdg_toplevel_set_app_id(context->xtoplevel, config.title);
 
-        // INFO: Для полноэкранного режима по умолчанию, раскомментируете ниже.
-        // xdg_toplevel_set_fullscreen(context->xtoplevel, null);
-
+        // NOTE: Первая настройка поверхности, а потому до нее захват буфера работать не будет!
         wl_surface_commit(context->wsurface);
         wl_display_roundtrip(context->wdisplay);
+
+        // INFO: Для полноэкранного режима по умолчанию, раскомментируете ниже.
+        // xdg_toplevel_set_fullscreen(context->xtoplevel, null);
 
         // TODO: Временно начало.
         surface_draw(config.width, config.height);
