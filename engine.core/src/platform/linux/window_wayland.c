@@ -5,6 +5,11 @@
 
     #include <wayland-client.h>
     #include <string.h>
+    // TODO: Временно начало.
+    #include <sys/mman.h>
+    #include <fcntl.h>
+    #include <unistd.h>
+    // TODO: Временно конец.
 
     #include "window_wayland_xdg.h"
     #include "debug/assert.h"
@@ -16,7 +21,10 @@
         struct wl_registry*   wregistry;
         struct wl_compositor* wcompositor;
         struct wl_surface*    wsurface;
+        // TODO: Временно начало.
         struct wl_shm*        wshm;
+        struct wl_buffer*     wbuffer;
+        // TODO: Временно конец.
         struct xdg_wm_base*   xbase;
         struct xdg_surface*   xsurface;
         struct xdg_toplevel*  xtoplevel;
@@ -42,6 +50,39 @@
 
     // Указатель на структура контекста окна.
     static platform_window_context* context = null;
+
+    // TODO: Временно.
+    static void surface_draw(i32 width, i32 heigth)
+    {
+        i32 stride  = width * 4;
+        i32 size    = stride * heigth;
+        char name[] = "/platform_window_linux_wayland_shm_xxxxxx";
+
+        shm_unlink(name);
+        i32 fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0777);
+        KASSERT_MSG(fd >= 0, "Unable to open shared memory object.");
+        shm_unlink(name);
+
+        i32 result = ftruncate(fd, size);;
+        KASSERT_MSG(result >= 0, "Error truncating shared memory object.");
+
+        void* mem = mmap(null, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        KASSERT_MSG(mem != MAP_FAILED, "Memory map failed.");
+
+        // Рисуем в буфер.
+        memset(mem, 50, size);
+
+        struct wl_shm_pool* pool = wl_shm_create_pool(context->wshm, fd, size);
+        context->wbuffer = wl_shm_pool_create_buffer(pool, 0, width, heigth, stride, WL_SHM_FORMAT_ARGB8888);
+        wl_shm_pool_destroy(pool);
+
+        // Так как wl_buffer и файл(fd) сопоставленны, то можно закрыть дескриптор.
+        close(fd);
+
+        // Выполняем захват кадра и подтверждение изменений.
+        wl_surface_attach(context->wsurface, context->wbuffer, 0, 0);
+        wl_surface_commit(context->wsurface);
+    }
 
     // Обработчичи событий.
     static void wregistry_add(void* data, struct wl_registry* wregistry, u32 name, const char* interface, u32 version);
@@ -119,11 +160,15 @@
         xdg_toplevel_set_title(context->xtoplevel, config.title);
         xdg_toplevel_set_app_id(context->xtoplevel, config.title);
 
-        // INFO: For full screen mode, uncomment one item below.
+        // INFO: Для полноэкранного режима по умолчанию, раскомментируете ниже.
         // xdg_toplevel_set_fullscreen(context->xtoplevel, null);
 
         wl_surface_commit(context->wsurface);
         wl_display_roundtrip(context->wdisplay);
+
+        // TODO: Временно начало.
+        surface_draw(config.width, config.height);
+        // TODO: Временно конец.
 
         KTRACE("Platform window created...");
 
@@ -142,6 +187,10 @@
             if(context->xbase)       { xdg_wm_base_destroy(context->xbase); context->xbase = null;               }
             if(context->wsurface)    { wl_surface_destroy(context->wsurface); context->wsurface = null;          }
             if(context->wcompositor) { wl_compositor_destroy(context->wcompositor); context->wcompositor = null; }
+            // TODO: Временно начало.
+            if(context->wbuffer)     { wl_buffer_destroy(context->wbuffer); context->wbuffer = null;             }
+            if(context->wshm)        { wl_shm_destroy(context->wshm); context->wshm = null;                      }
+            // TODO: Временно конец.
             if(context->wregistry)   { wl_registry_destroy(context->wregistry); context->wregistry = null;       }
             if(context->wdisplay)    { wl_display_disconnect(context->wdisplay); context->wdisplay = null;       }
 
@@ -155,6 +204,7 @@
     bool platform_window_dispatch()
     {
         // return wl_display_roundtrip(context->wdisplay) != -1;
+        // TODO: Верхнюю раскомментировать, а нижнюю удалить.
         return wl_display_dispatch(context->wdisplay) != -1;
     }
 
@@ -164,23 +214,27 @@
         {
             context->wcompositor = wl_registry_bind(wregistry, name, &wl_compositor_interface, 1);
             KASSERT_MSG(context->wcompositor != null, "The Wayland compositor or its version is not supported!");
+            KTRACE("Wayland compositor found.");
         }
         else if(strcmp(interface, xdg_wm_base_interface.name) == 0)
         {
             context->xbase = wl_registry_bind(wregistry, name, &xdg_wm_base_interface, 1);
             KASSERT_MSG(context->xbase != null,"The Wayland xdg shell or its version is not supported!");
             xdg_wm_base_add_listener(context->xbase, &xbase_listeners, null);
+            KTRACE("Wayland xdg shell found.");
         }
         else if(strcmp(interface, wl_seat_interface.name) == 0)
         {
             context->wseat = wl_registry_bind(wregistry, name, &wl_seat_interface, 1);
             KASSERT_MSG(context->wseat != null, "The Wayland seat or its version is not supported!");
             wl_seat_add_listener(context->wseat, &wseat_listeners, null);
+            KTRACE("Wayland seat found.");
         }
         else if(strcmp(interface, wl_shm_interface.name) == 0)
         {
             context->wshm = wl_registry_bind(wregistry, name, &wl_shm_interface, 1);
-            KASSERT_MSG(context->wshm, "The Wayland shm or its version is not supported!");
+            KASSERT_MSG(context->wshm != null, "The Wayland shm or its version is not supported!");
+            KTRACE("Wayland shm found.");
         }
     }
 

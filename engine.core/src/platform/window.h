@@ -85,8 +85,11 @@ KAPI void platform_window_handler_focus_set(PFN_window_handler_focus handler);
 // KAPI void platform_window_title_set(const char* title);
 // KAPI char* platform_window_title_get();
 
-// KAPI void platform_window_fullscreen();
-// KAPI bool platform_window_is_fullscreen();
+// KAPI void platform_window_mode_fullscreen();
+// KAPI bool platform_window_is_mode_fullscreen();
+
+// KAPI void platform_window_mode_window();
+// KAPI bool platform_window_is_mode_window();
 
 // KAPI void platform_window_show();
 // KAPI void platform_window_hide();
