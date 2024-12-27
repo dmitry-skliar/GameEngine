@@ -260,6 +260,9 @@
             }
 
             context->resized = false;
+
+            // FIX: Этим достигается плавность изменения размера.
+            wl_surface_commit(context->wsurface);
         }
     }
 
