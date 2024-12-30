@@ -2,7 +2,7 @@
 
 #include <defines.h>
 
-// Цвета символов, фона.
+// @brief Цвета символов консоли.
 typedef enum console_color {
     CONSOLE_COLOR_BG_RED,
     CONSOLE_COLOR_FG_RED,

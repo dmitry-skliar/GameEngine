@@ -7,4 +7,4 @@
     INFO: Возвращает управление операционной системе.
     @param time Время в миллисекундах.
 */
-KAPI void platform_thread_sleep(u64 time);
+KAPI void platform_thread_sleep(u64 time_ms);

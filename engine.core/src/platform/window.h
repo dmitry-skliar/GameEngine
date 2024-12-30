@@ -2,10 +2,9 @@
 
 #include <defines.h>
 
+// @brief Конфигурация окна.
 typedef struct window_config {
     char* title;
-    i32 x;
-    i32 y;
     i32 width;
     i32 height;
 } window_config;
@@ -23,9 +22,9 @@ typedef void (*PFN_window_handler_focus)(bool focused);
     @brief Создает окно приложения.
     INFO: Если окно было успешно создано, то при повторном вызове возвращает false.
     @param config Конфигурация создаваемого окна.
-    @return В случае успеха - true, в случае ошибок или повторного вызова - false.
+    @return В случае успеха - true, в случае повторного вызова или ошибки - false.
 */
-KAPI bool platform_window_create(window_config config);
+KAPI bool platform_window_create(window_config* config);
 
 /*
     @brief Завершает работу окна.
@@ -33,9 +32,9 @@ KAPI bool platform_window_create(window_config config);
 KAPI void platform_window_destroy();
 
 /*
-    @brief Обрабатывает события окна.
+    @brief Обрабатывает событиий окна.
     INFO: Обязательно добавить в обработку кадра!
-    @return В случае успеха - true, в случае ошибки или завершения работы окна - false.
+    @return В случае успеха - true, в случае ошибки - false.
 */
 KAPI bool platform_window_dispatch();
 

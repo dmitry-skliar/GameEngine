@@ -41,7 +41,7 @@
         PFN_window_handler_mouse_wheel  on_mouse_wheel;
         PFN_window_handler_focus        on_focus;
         // Флаги состояний.
-        bool  resized;
+        bool  do_resize;
         // Кеширование значений.
         char* title;
         i32   width;
@@ -51,8 +51,12 @@
     // Указатель на структура контекста окна.
     static platform_window_context* context = null;
 
-    // TODO: Временно.
-    static void surface_draw(i32 width, i32 heigth)
+    // Сообщения (оптимизация).
+    static const char* message_context_not_created = "Window context was not created. Please first call 'platform_window_create'.";
+    static const char* message_event_not_set       = "Wayland event '%s' not set.";
+
+    // TODO: Временно. Вынести в отдельную API функцию!
+    static void screen_clear(i32 width, i32 heigth, u32 color)
     {
         i32 stride  = width * 4;
         i32 size    = stride * heigth;
@@ -60,17 +64,20 @@
 
         shm_unlink(name);
         i32 fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0777);
-        KASSERT_MSG(fd >= 0, "Unable to open shared memory object.");
-        shm_unlink(name);
+        KASSERT(fd >= 0, "Unable to open shared memory object.");
 
         i32 result = ftruncate(fd, size);;
-        KASSERT_MSG(result >= 0, "Error truncating shared memory object.");
+        KASSERT(result >= 0, "Error truncating shared memory object.");
 
         void* mem = mmap(null, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        KASSERT_MSG(mem != MAP_FAILED, "Memory map failed.");
+        KASSERT(mem != MAP_FAILED, "Memory map failed.");
+        shm_unlink(name);
 
         // Рисуем в буфер.
-        memset(mem, 50, size);
+        for(i32 i = 0; i < size; i += 4)
+        {
+            *((u32*)(mem + i)) = color;
+        }
 
         struct wl_shm_pool* pool = wl_shm_create_pool(context->wshm, fd, size);
         context->wbuffer = wl_shm_pool_create_buffer(pool, 0, width, heigth, stride, WL_SHM_FORMAT_ARGB8888);
@@ -125,85 +132,97 @@
         pt_axis_value120, pt_axis_relative_direction
     };
 
-    bool platform_window_create(window_config config)
+    bool platform_window_create(window_config* config)
     {
-        // Исключает повторный вызов.
-        if(context) return false;
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context == null, "Trying to call function 'platform_window_create' more than once!");
+        KASSERT_DEBUG(config != null, "Function 'platform_window_create' requires configuration!");
 
         // TODO: Сделать обертку над platform_memory_* 
         context = platform_memory_allocate(sizeof(platform_window_context));
-        KASSERT_MSG(context != null, "Memory was not allocated!");
+        if(!context)
+        {
+            KERROR("Memory for the window context was not allocated!");
+            return false;
+        }
         platform_memory_zero(context, sizeof(platform_window_context));
 
-        // 1. Инициализация WAYLAND клиента.
+        // Инициализация конфигурации окна платформы.
+        context->height = config->height;
+        context->width  = config->width;
+        // TODO: Добавить context->title!
+
+        // Инициализация WAYLAND клиента.
         context->wdisplay = wl_display_connect(null);
-        KASSERT_MSG(context->wdisplay != null, "Failed to connect to Wayland display!");
+        if(!context->wdisplay)
+        {
+            KERROR("Failed to connect to Wayland display!");
+            return false;
+        }
 
         context->wregistry = wl_display_get_registry(context->wdisplay);
-        KASSERT_DEBUG(context->wregistry != null);
-
         wl_registry_add_listener(context->wregistry, &wregistry_listeners, null);
         wl_display_roundtrip(context->wdisplay);
 
-        // 2. Инициализация поверхности окна.
+        // Инициализация поверхности окна.
         context->wsurface = wl_compositor_create_surface(context->wcompositor);
-        KASSERT_DEBUG(context->wsurface != null);
-
         context->xsurface = xdg_wm_base_get_xdg_surface(context->xbase, context->wsurface);
-        KASSERT_DEBUG(context->xsurface != null);
         xdg_surface_add_listener(context->xsurface, &xsurface_listeners, null);
 
         context->xtoplevel = xdg_surface_get_toplevel(context->xsurface);
-        KASSERT_DEBUG(context->xtoplevel != null);
         xdg_toplevel_add_listener(context->xtoplevel, &xtoplevel_listeners, null);
-        
-        xdg_toplevel_set_title(context->xtoplevel, config.title);
-        xdg_toplevel_set_app_id(context->xtoplevel, config.title);
+
+        // TODO: Заменить на context->title!
+        xdg_toplevel_set_title(context->xtoplevel, config->title);
+        xdg_toplevel_set_app_id(context->xtoplevel, config->title);
+
+        // INFO: Для полноэкранного режима по умолчанию, раскомментируете ниже.
+        // xdg_toplevel_set_fullscreen(context->xtoplevel, null);
 
         // NOTE: Первая настройка поверхности, а потому до нее захват буфера работать не будет!
         wl_surface_commit(context->wsurface);
         wl_display_roundtrip(context->wdisplay);
 
-        // INFO: Для полноэкранного режима по умолчанию, раскомментируете ниже.
-        // xdg_toplevel_set_fullscreen(context->xtoplevel, null);
-
-        // TODO: Временно начало.
-        surface_draw(config.width, config.height);
+        // TODO: Временно начало. Вынести в отдельную API функцию!
+        screen_clear(context->width, context->height, 0x77101010);
         // TODO: Временно конец.
 
-        KTRACE("Platform window created...");
+        KINFOR("Platform window created.");
 
         return true;
     }
 
     void platform_window_destroy()
     {
-        if(context)
-        {
-            if(context->wpointer)    { wl_pointer_destroy(context->wpointer); context->wpointer = null;          }
-            if(context->wkeyboard)   { wl_keyboard_destroy(context->wkeyboard); context->wkeyboard = null;       }
-            if(context->wseat)       { wl_seat_destroy(context->wseat); context->wseat = null;                   }
-            if(context->xtoplevel)   { xdg_toplevel_destroy(context->xtoplevel); context->xtoplevel = null;      }
-            if(context->xsurface)    { xdg_surface_destroy(context->xsurface); context->xsurface = null;         }
-            if(context->xbase)       { xdg_wm_base_destroy(context->xbase); context->xbase = null;               }
-            if(context->wsurface)    { wl_surface_destroy(context->wsurface); context->wsurface = null;          }
-            if(context->wcompositor) { wl_compositor_destroy(context->wcompositor); context->wcompositor = null; }
-            // TODO: Временно начало.
-            if(context->wbuffer)     { wl_buffer_destroy(context->wbuffer); context->wbuffer = null;             }
-            if(context->wshm)        { wl_shm_destroy(context->wshm); context->wshm = null;                      }
-            // TODO: Временно конец.
-            if(context->wregistry)   { wl_registry_destroy(context->wregistry); context->wregistry = null;       }
-            if(context->wdisplay)    { wl_display_disconnect(context->wdisplay); context->wdisplay = null;       }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
 
-            platform_memory_free(context);
-            context = null;
+        if(context->wpointer)    { wl_pointer_destroy(context->wpointer); context->wpointer = null;          }
+        if(context->wkeyboard)   { wl_keyboard_destroy(context->wkeyboard); context->wkeyboard = null;       }
+        if(context->wseat)       { wl_seat_destroy(context->wseat); context->wseat = null;                   }
+        if(context->xtoplevel)   { xdg_toplevel_destroy(context->xtoplevel); context->xtoplevel = null;      }
+        if(context->xsurface)    { xdg_surface_destroy(context->xsurface); context->xsurface = null;         }
+        if(context->xbase)       { xdg_wm_base_destroy(context->xbase); context->xbase = null;               }
+        if(context->wsurface)    { wl_surface_destroy(context->wsurface); context->wsurface = null;          }
+        if(context->wcompositor) { wl_compositor_destroy(context->wcompositor); context->wcompositor = null; }
+        // TODO: Временно начало.
+        if(context->wbuffer)     { wl_buffer_destroy(context->wbuffer); context->wbuffer = null;             }
+        if(context->wshm)        { wl_shm_destroy(context->wshm); context->wshm = null;                      }
+        // TODO: Временно конец.
+        if(context->wregistry)   { wl_registry_destroy(context->wregistry); context->wregistry = null;       }
+        if(context->wdisplay)    { wl_display_disconnect(context->wdisplay); context->wdisplay = null;       }
 
-            KTRACE("Platform window destroyed...");
-        }
+        platform_memory_free(context);
+        context = null;
+
+        KINFOR("Platform window destroyed.");
     }
 
     bool platform_window_dispatch()
     {
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+
         // return wl_display_roundtrip(context->wdisplay) != -1;
         // TODO: Верхнюю раскомментировать, а нижнюю удалить.
         return wl_display_dispatch(context->wdisplay) != -1;
@@ -214,28 +233,24 @@
         if(strcmp(interface, wl_compositor_interface.name) == 0)
         {
             context->wcompositor = wl_registry_bind(wregistry, name, &wl_compositor_interface, 1);
-            KASSERT_MSG(context->wcompositor != null, "The Wayland compositor or its version is not supported!");
-            KTRACE("Wayland compositor found.");
+            if(!context->wcompositor) KFATAL("Wayland interface 'compositor' is not supported!");
         }
         else if(strcmp(interface, xdg_wm_base_interface.name) == 0)
         {
             context->xbase = wl_registry_bind(wregistry, name, &xdg_wm_base_interface, 1);
-            KASSERT_MSG(context->xbase != null,"The Wayland xdg shell or its version is not supported!");
+            if(!context->xbase) KFATAL("Wayland interface 'xdg-shell' is not supported!");
             xdg_wm_base_add_listener(context->xbase, &xbase_listeners, null);
-            KTRACE("Wayland xdg shell found.");
         }
         else if(strcmp(interface, wl_seat_interface.name) == 0)
         {
             context->wseat = wl_registry_bind(wregistry, name, &wl_seat_interface, 1);
-            KASSERT_MSG(context->wseat != null, "The Wayland seat or its version is not supported!");
+            if(!context->wseat) KFATAL("Wayland interface 'seat' is not supported!");
             wl_seat_add_listener(context->wseat, &wseat_listeners, null);
-            KTRACE("Wayland seat found.");
         }
         else if(strcmp(interface, wl_shm_interface.name) == 0)
         {
             context->wshm = wl_registry_bind(wregistry, name, &wl_shm_interface, 1);
-            KASSERT_MSG(context->wshm != null, "The Wayland shm or its version is not supported!");
-            KTRACE("Wayland shm found.");
+            if(!context->wshm) KFATAL("Wayland interface 'shm' is not supported!");
         }
     }
 
@@ -252,27 +267,31 @@
     {
         xdg_surface_ack_configure(xsurface, serial);
 
-        if(context->resized)
+        if(context->do_resize)
         {
             if(context->on_resize)
             {
                 context->on_resize(context->width, context->height);
             }
-
-            context->resized = false;
+            else
+            {
+                KTRACE(message_event_not_set, "on_resize");
+            }
 
             // FIX: Этим достигается плавность изменения размера.
             wl_surface_commit(context->wsurface);
+
+            context->do_resize = false;
         }
     }
 
     void xtoplevel_configure(void* data, struct xdg_toplevel* xtoplevel, i32 width, i32 height, struct wl_array* states)
     {
-        if(width != 0 && height != 0)
+        if(width != 0 && height != 0 && (context->width != width || context->height != height))
         {
-            context->resized = true;
-            context->width   = width;
-            context->height  = height;
+            context->do_resize = true;
+            context->width     = width;
+            context->height    = height;
         }
     }
 
@@ -281,6 +300,10 @@
         if(context->on_close)
         {
             context->on_close();
+        }
+        else
+        {
+            KTRACE(message_event_not_set, "on_close");
         }
     }
 
@@ -358,6 +381,10 @@
                 kb_translate_keycode(key), state == WL_KEYBOARD_KEY_STATE_PRESSED ? true : false
             );
         }
+        else
+        {
+            KTRACE(message_event_not_set, "on_keyboard_key");
+        }
     }
 
     void kb_mods(void* data, struct wl_keyboard* wkeyboard, u32 serial, u32 depressed, u32 latched, u32 locked, u32 group)
@@ -381,6 +408,10 @@
         {
             context->on_focus(true);
         }
+        else
+        {
+            KTRACE(message_event_not_set, "on_focus");
+        }
     }
 
     void pt_leave(void* data, struct wl_pointer* wpointer, u32 serial, struct wl_surface* wsurface)
@@ -388,6 +419,10 @@
         if(context->on_focus)
         {
             context->on_focus(false);
+        }
+        else
+        {
+            KTRACE(message_event_not_set, "on_focus");
         }
     }
 
@@ -401,6 +436,10 @@
         {
             context->on_mouse_move(x, y);
         }
+        else
+        {
+            KTRACE(message_event_not_set, "on_mouse_move");
+        }
     }
 
     void pt_button(void* data, struct wl_pointer* wpointer, u32 serial, u32 time, u32 button, u32 state)
@@ -410,6 +449,10 @@
             context->on_mouse_button(
                 pt_translate_button_code(button), state == WL_POINTER_BUTTON_STATE_PRESSED ? true : false
             );
+        }
+        else
+        {
+            KTRACE(message_event_not_set, "on_mouse_button");
         }
     }
 
@@ -421,6 +464,10 @@
         if(context->on_mouse_wheel)
         {
             context->on_mouse_wheel(value);
+        }
+        else
+        {
+            KTRACE(message_event_not_set, "on_mouse_wheel");
         }
     }
 
@@ -450,58 +497,51 @@
 
     void platform_window_handler_close_set(PFN_window_handler_close handler)
     {
-        if(context)
-        {
-            context->on_close = handler;
-        }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+        context->on_close = handler;
     }
 
     void platform_window_handler_resize_set(PFN_window_handler_resize handler)
     {
-        if(context)
-        {
-            context->on_resize = handler;
-        }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+        context->on_resize = handler;
     }
 
     void platform_window_handler_keyboard_key_set(PFN_window_handler_keyboard_key handler)
     {
-        if(context)
-        {
-            context->on_keyboard_key = handler;
-        }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+        context->on_keyboard_key = handler;
     }
 
     void platform_window_handler_mouse_move_set(PFN_window_handler_mouse_move handler)
     {
-        if(context)
-        {
-            context->on_mouse_move = handler;
-        }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+        context->on_mouse_move = handler;
     }
 
     void platform_window_handler_mouse_button_set(PFN_window_handler_mouse_button handler)
     {
-        if(context)
-        {
-            context->on_mouse_button = handler;
-        }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+        context->on_mouse_button = handler;
     }
 
     void platform_window_handler_mouse_wheel_set(PFN_window_handler_mouse_wheel handler)
     {
-        if(context)
-        {
-            context->on_mouse_wheel = handler;
-        }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+        context->on_mouse_wheel = handler;
     }
 
     void platform_window_handler_focus_set(PFN_window_handler_focus handler)
     {
-        if(context)
-        {
-            context->on_focus = handler;
-        }
+        // Проверка вызова функции.
+        KASSERT_DEBUG(context != null, message_context_not_created);
+        context->on_focus = handler;
     }
 
 #endif
