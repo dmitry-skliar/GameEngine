@@ -1,7 +1,11 @@
+// Cобственные подключения.
 #include "platform/memory.h"
 
 #if KPLATFORM_LINUX_FLAG
 
+    // Внутренние подключения.
+
+    // Внешние подключения.
     #include <stdlib.h>
     #include <string.h>
 

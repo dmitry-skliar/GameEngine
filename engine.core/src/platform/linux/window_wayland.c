@@ -1,7 +1,15 @@
+// Cобственные подключения.
 #include "platform/window.h"
 
 #if KPLATFORM_LINUX_WAYLAND_FLAG
 
+    // Внутренние подключения.
+    #include "window_wayland_xdg.h"
+    #include "debug/assert.h"
+    #include "memory/memory.h"
+    #include "logger.h"
+
+    // Внешние подключения.
     #include <wayland-client.h>
     #include <string.h>
     // TODO: Временно начало.
@@ -9,11 +17,6 @@
     #include <fcntl.h>
     #include <unistd.h>
     // TODO: Временно конец.
-
-    #include "window_wayland_xdg.h"
-    #include "debug/assert.h"
-    #include "memory/memory.h"
-    #include "logger.h"
 
     typedef struct platform_window_context {
         // Для работы с окном приложения.

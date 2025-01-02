@@ -1,8 +1,11 @@
+// Cобственные подключения.
 #include "logger.h"
 
+// Внутренние подключения.
 #include "platform/console.h"
 #include "debug/assert.h"
 
+// Внешние подключения.
 #include <stdarg.h>
 // TODO: Убрать после замены printf, vsnprintf.
 #include <stdio.h>

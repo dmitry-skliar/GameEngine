@@ -1,6 +1,5 @@
 #pragma once
 
-#include <defines.h>
 #include <application.h>
 
 typedef struct game_context {

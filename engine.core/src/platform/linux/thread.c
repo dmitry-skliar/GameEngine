@@ -1,7 +1,11 @@
+// Cобственные подключения.
 #include "platform/thread.h"
 
 #if KPLATFORM_LINUX_FLAG
 
+    // Внутренние подключения.
+
+    // Внешние подключения.
     #include <time.h>
 
     void platform_thread_sleep(u64 time_ms)

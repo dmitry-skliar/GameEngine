@@ -1,6 +1,5 @@
-#include "game.h"
-
 #include <entry.h>
+#include "game.h"
 
 bool create_game(struct game* inst)
 {

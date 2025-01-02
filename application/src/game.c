@@ -1,5 +1,4 @@
 #include "game.h"
-
 #include <logger.h>
 
 bool game_initialize(game* inst)

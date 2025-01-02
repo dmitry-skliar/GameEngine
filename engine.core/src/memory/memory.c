@@ -1,9 +1,12 @@
+// Cобственные подключения.
 #include "memory/memory.h"
 
+// Внутренние подключения.
 #include "platform/memory.h"
 #include "debug/assert.h"
 #include "logger.h"
 
+// Внешние подключения.
 // TODO: Удалить после создания обертки над функциями.
 #include <string.h>
 #include <stdio.h>

@@ -1,10 +1,14 @@
+// Cобственные подключения.
 #include "application.h"
 
+// Внутренние подключения.
 #include "logger.h"
 #include "debug/assert.h"
 #include "platform/window.h"
 #include "platform/memory.h"
 #include "memory/memory.h"
+
+// Внешние подключения.
 
 typedef struct application_context {
     game* game;

@@ -1,7 +1,11 @@
+// Cобственные подключения.
 #include "platform/time.h"
 
 #if KPLATFORM_LINUX_FLAG
 
+    // Внутренние подключения.
+
+    // Внешние подключения.
     #include <time.h>
 
     f64 platform_absolute_time_get()
