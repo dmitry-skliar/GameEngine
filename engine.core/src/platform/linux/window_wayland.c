@@ -1,5 +1,4 @@
 #include "platform/window.h"
-#include "platform/memory.h"
 
 #if KPLATFORM_LINUX_WAYLAND_FLAG
 
@@ -13,6 +12,7 @@
 
     #include "window_wayland_xdg.h"
     #include "debug/assert.h"
+    #include "memory/memory.h"
     #include "logger.h"
 
     typedef struct platform_window_context {
@@ -64,13 +64,13 @@
 
         shm_unlink(name);
         i32 fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0777);
-        KASSERT(fd >= 0, "Unable to open shared memory object.");
+        kassert(fd >= 0, "Unable to open shared memory object.");
 
         i32 result = ftruncate(fd, size);;
-        KASSERT(result >= 0, "Error truncating shared memory object.");
+        kassert(result >= 0, "Error truncating shared memory object.");
 
         void* mem = mmap(null, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        KASSERT(mem != MAP_FAILED, "Memory map failed.");
+        kassert(mem != MAP_FAILED, "Memory map failed.");
         shm_unlink(name);
 
         // Рисуем в буфер.
@@ -135,17 +135,16 @@
     bool platform_window_create(window_config* config)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context == null, "Trying to call function 'platform_window_create' more than once!");
-        KASSERT_DEBUG(config != null, "Function 'platform_window_create' requires configuration!");
+        kassert_debug(context == null, "Trying to call function 'platform_window_create' more than once!");
+        kassert_debug(config != null, "Function 'platform_window_create' requires configuration!");
 
-        // TODO: Сделать обертку над platform_memory_* 
-        context = platform_memory_allocate(sizeof(platform_window_context));
+        context = kmallocate_t(platform_window_context, MEMORY_TAG_APPLICATION);
         if(!context)
         {
-            KERROR("Memory for the window context was not allocated!");
+            kerror("Memory for the window context was not allocated!");
             return false;
         }
-        platform_memory_zero(context, sizeof(platform_window_context));
+        kmzero_tc(context, platform_window_context, 1);
 
         // Инициализация конфигурации окна платформы.
         context->height = config->height;
@@ -156,7 +155,7 @@
         context->wdisplay = wl_display_connect(null);
         if(!context->wdisplay)
         {
-            KERROR("Failed to connect to Wayland display!");
+            kerror("Failed to connect to Wayland display!");
             return false;
         }
 
@@ -187,7 +186,7 @@
         screen_clear(context->width, context->height, 0x77101010);
         // TODO: Временно конец.
 
-        KINFOR("Platform window created.");
+        kinfor("Platform window created.");
 
         return true;
     }
@@ -195,7 +194,7 @@
     void platform_window_destroy()
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
 
         if(context->wpointer)    { wl_pointer_destroy(context->wpointer); context->wpointer = null;          }
         if(context->wkeyboard)   { wl_keyboard_destroy(context->wkeyboard); context->wkeyboard = null;       }
@@ -212,16 +211,16 @@
         if(context->wregistry)   { wl_registry_destroy(context->wregistry); context->wregistry = null;       }
         if(context->wdisplay)    { wl_display_disconnect(context->wdisplay); context->wdisplay = null;       }
 
-        platform_memory_free(context);
+        kmfree(context);
         context = null;
 
-        KINFOR("Platform window destroyed.");
+        kinfor("Platform window destroyed.");
     }
 
     bool platform_window_dispatch()
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
 
         // return wl_display_roundtrip(context->wdisplay) != -1;
         // TODO: Верхнюю раскомментировать, а нижнюю удалить.
@@ -233,24 +232,24 @@
         if(strcmp(interface, wl_compositor_interface.name) == 0)
         {
             context->wcompositor = wl_registry_bind(wregistry, name, &wl_compositor_interface, 1);
-            if(!context->wcompositor) KFATAL("Wayland interface 'compositor' is not supported!");
+            if(!context->wcompositor) kfatal("Wayland interface 'compositor' is not supported!");
         }
         else if(strcmp(interface, xdg_wm_base_interface.name) == 0)
         {
             context->xbase = wl_registry_bind(wregistry, name, &xdg_wm_base_interface, 1);
-            if(!context->xbase) KFATAL("Wayland interface 'xdg-shell' is not supported!");
+            if(!context->xbase) kfatal("Wayland interface 'xdg-shell' is not supported!");
             xdg_wm_base_add_listener(context->xbase, &xbase_listeners, null);
         }
         else if(strcmp(interface, wl_seat_interface.name) == 0)
         {
             context->wseat = wl_registry_bind(wregistry, name, &wl_seat_interface, 1);
-            if(!context->wseat) KFATAL("Wayland interface 'seat' is not supported!");
+            if(!context->wseat) kfatal("Wayland interface 'seat' is not supported!");
             wl_seat_add_listener(context->wseat, &wseat_listeners, null);
         }
         else if(strcmp(interface, wl_shm_interface.name) == 0)
         {
             context->wshm = wl_registry_bind(wregistry, name, &wl_shm_interface, 1);
-            if(!context->wshm) KFATAL("Wayland interface 'shm' is not supported!");
+            if(!context->wshm) kfatal("Wayland interface 'shm' is not supported!");
         }
     }
 
@@ -275,7 +274,7 @@
             }
             else
             {
-                KTRACE(message_event_not_set, "on_resize");
+                ktrace(message_event_not_set, "on_resize");
             }
 
             // FIX: Этим достигается плавность изменения размера.
@@ -303,7 +302,7 @@
         }
         else
         {
-            KTRACE(message_event_not_set, "on_close");
+            ktrace(message_event_not_set, "on_close");
         }
     }
 
@@ -323,13 +322,13 @@
             {
                 wl_keyboard_release(context->wkeyboard);
                 context->wkeyboard = null;
-                KTRACE("Wayland seat: the keyboard is lost.");
+                ktrace("Wayland seat: the keyboard is lost.");
             }
             else
             {
                 context->wkeyboard = wl_seat_get_keyboard(wseat);
                 wl_keyboard_add_listener(context->wkeyboard, &keyboard_listeners, null);
-                KTRACE("Wayland seat: the keyboard is found.");
+                ktrace("Wayland seat: the keyboard is found.");
             }
         }
 
@@ -339,13 +338,13 @@
             {
                 wl_pointer_release(context->wpointer);
                 context->wpointer = null;
-                KTRACE("Wayland seat: the pointer is lost.");
+                ktrace("Wayland seat: the pointer is lost.");
             }
             else
             {
                 context->wpointer = wl_seat_get_pointer(wseat);
                 wl_pointer_add_listener(context->wpointer, &pointer_listeners, null);
-                KTRACE("Wayland seat: the pointer is found.");
+                ktrace("Wayland seat: the pointer is found.");
             }
         }
     }
@@ -383,7 +382,7 @@
         }
         else
         {
-            KTRACE(message_event_not_set, "on_keyboard_key");
+            ktrace(message_event_not_set, "on_keyboard_key");
         }
     }
 
@@ -410,7 +409,7 @@
         }
         else
         {
-            KTRACE(message_event_not_set, "on_focus");
+            ktrace(message_event_not_set, "on_focus");
         }
     }
 
@@ -422,7 +421,7 @@
         }
         else
         {
-            KTRACE(message_event_not_set, "on_focus");
+            ktrace(message_event_not_set, "on_focus");
         }
     }
 
@@ -438,7 +437,7 @@
         }
         else
         {
-            KTRACE(message_event_not_set, "on_mouse_move");
+            ktrace(message_event_not_set, "on_mouse_move");
         }
     }
 
@@ -452,7 +451,7 @@
         }
         else
         {
-            KTRACE(message_event_not_set, "on_mouse_button");
+            ktrace(message_event_not_set, "on_mouse_button");
         }
     }
 
@@ -467,7 +466,7 @@
         }
         else
         {
-            KTRACE(message_event_not_set, "on_mouse_wheel");
+            ktrace(message_event_not_set, "on_mouse_wheel");
         }
     }
 
@@ -498,49 +497,49 @@
     void platform_window_handler_close_set(PFN_window_handler_close handler)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
         context->on_close = handler;
     }
 
     void platform_window_handler_resize_set(PFN_window_handler_resize handler)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
         context->on_resize = handler;
     }
 
     void platform_window_handler_keyboard_key_set(PFN_window_handler_keyboard_key handler)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
         context->on_keyboard_key = handler;
     }
 
     void platform_window_handler_mouse_move_set(PFN_window_handler_mouse_move handler)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
         context->on_mouse_move = handler;
     }
 
     void platform_window_handler_mouse_button_set(PFN_window_handler_mouse_button handler)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
         context->on_mouse_button = handler;
     }
 
     void platform_window_handler_mouse_wheel_set(PFN_window_handler_mouse_wheel handler)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
         context->on_mouse_wheel = handler;
     }
 
     void platform_window_handler_focus_set(PFN_window_handler_focus handler)
     {
         // Проверка вызова функции.
-        KASSERT_DEBUG(context != null, message_context_not_created);
+        kassert_debug(context != null, message_context_not_created);
         context->on_focus = handler;
     }
 

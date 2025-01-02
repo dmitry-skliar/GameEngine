@@ -26,14 +26,14 @@ typedef struct game {
     // Указатель на функцию изменения размера окна игры.
     void (*on_resize)(struct game* inst, i32 width, i32 height);
 
-    // Указатель данные игры.
+    // Указатель на данные игры.
     void* state;
 
 } game;
 
 /*
     @brief Инициализирует и создает приложение.
-    @return В случае успеха - true, в случае ошибок повторного вызова - false.
+    @return В случае успеха - true, в случае ошибок или повторного вызова - false.
 */
 KAPI bool application_create(game* inst);
 

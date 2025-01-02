@@ -45,7 +45,7 @@ void log_output(log_level level, const char* message, ...)
 
     if(level == LOG_LEVEL_FATAL)
     {
-        KDEBUG_BREAK();
+        kdebug_break();
     }
 }
 

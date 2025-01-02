@@ -2,8 +2,9 @@
 
 #include "logger.h"
 #include "debug/assert.h"
-#include "platform/memory.h"
 #include "platform/window.h"
+#include "platform/memory.h"
+#include "memory/memory.h"
 
 typedef struct application_context {
     game* game;
@@ -14,24 +15,23 @@ typedef struct application_context {
 
 static application_context* context = null;
 
-void application_on_close()
-{
-    context->is_running = false;
-}
+void application_on_keyboard_key(u32 keycode, bool pressed);
+void application_on_resize(i32 width, i32 height);
+void application_on_close();
 
 bool application_create(game* game)
 {
     // Проверка вызова функции.
-    KASSERT_DEBUG(context == null, "Trying to call function 'application_create' more than once!");
-    KASSERT_DEBUG(game != null, "The 'application_create' function requires a game structure!");
+    kassert_debug(context == null, "Trying to call function 'application_create' more than once!");
+    kassert_debug(game != null, "The 'application_create' function requires a game structure!");
 
-    context = platform_memory_allocate(sizeof(application_context));
+    context = kmallocate_t(application_context, MEMORY_TAG_APPLICATION);
     if(!context)
     {
-        KERROR("Memory for application context not allocated! Aborted.");
+        kerror("Memory for application context not allocated! Aborted.");
         return false;
     }
-    platform_memory_zero(context, sizeof(application_context));
+    kmzero_tc(context, application_context, 1);
 
     context->game = game;
 
@@ -39,17 +39,19 @@ bool application_create(game* game)
     window_config config = { game->window_title, game->window_width, game->window_height };
     if(!platform_window_create(&config))
     {
-        KERROR("The window was not created! Aborted.");
+        kerror("The window was not created! Aborted.");
         return false;
     }
 
     // Обработчики событий окна.
     platform_window_handler_close_set(application_on_close);
+    platform_window_handler_resize_set(application_on_resize);
+    platform_window_handler_keyboard_key_set(application_on_keyboard_key);
 
     // Инициализация игры.
     if(!game->initialize(game))
     {
-        KERROR("Game failed to initialize.");
+        kerror("Game failed to initialize.");
         return false;
     }
 
@@ -64,7 +66,7 @@ bool application_create(game* game)
 bool application_run()
 {
     // Проверка вызова функции.
-    KASSERT_DEBUG(context != null, "Application context was not created. Please first call 'application_create'.");
+    kassert_debug(context != null, "Application context was not created. Please first call 'application_create'.");
 
     while(context->is_running)
     {
@@ -77,21 +79,45 @@ bool application_run()
         {
             if(!context->game->update(context->game, (f32)0))
             {
-                KERROR("Game update failed, shutting down!");
+                kerror("Game update failed, shutting down!");
                 context->is_running = false;
                 break;
             }
 
             if(!context->game->render(context->game, (f32)0))
             {
-                KERROR("Game render failed, shutting down!");
+                kerror("Game render failed, shutting down!");
                 context->is_running = false;
                 break;
             }
         }
     }
 
+    kmfree(context);
+
     platform_window_destroy();
 
     return true;
+}
+
+void application_on_keyboard_key(u32 keycode, bool pressed)
+{
+    if(keycode == 16 && pressed) context->is_running = false;
+    if(keycode == 23 && pressed)
+    {
+        const char* meminfo = memory_system_usage_get();
+        kinfor(meminfo);
+        // TODO: Заменить на kmfree(meminfo);
+        platform_memory_free((void*)meminfo);
+    }
+}
+
+void application_on_resize(i32 width, i32 height)
+{
+    context->game->on_resize(context->game, width, height);
+}
+
+void application_on_close()
+{
+    context->is_running = false;
 }

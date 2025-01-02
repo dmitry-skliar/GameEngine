@@ -53,15 +53,15 @@ KAPI void log_output(log_level level, const char* message, ...);
     @param message Сообщение или строка форматирования.
     @param ... Аргументы строки форматирования.
 */
-#define KFATAL(message, ...) log_output(LOG_LEVEL_FATAL, message, ##__VA_ARGS__)
+#define kfatal(message, ...) log_output(LOG_LEVEL_FATAL, message, ##__VA_ARGS__)
 
-#ifndef KERROR
+#ifndef kerror
     /*
         @brief Отправляет сообщение с критическим уровнем в логи.
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KERROR(message, ...) log_output(LOG_LEVEL_ERROR, message, ##__VA_ARGS__)
+    #define kerror(message, ...) log_output(LOG_LEVEL_ERROR, message, ##__VA_ARGS__)
 #endif
 
 #if LOG_WARNG_ENABLED == 1
@@ -70,14 +70,14 @@ KAPI void log_output(log_level level, const char* message, ...);
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KWARNG(message, ...) log_output(LOG_LEVEL_WARNG, message, ##__VA_ARGS__)
+    #define kwarng(message, ...) log_output(LOG_LEVEL_WARNG, message, ##__VA_ARGS__)
 #else
     /*
         @brief Отправляет сообщение с не критическим уровнем в логи.
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KWARNG(message, ...)
+    #define kwarng(message, ...)
 #endif
 
 #if LOG_INFOR_ENABLED == 1
@@ -86,14 +86,14 @@ KAPI void log_output(log_level level, const char* message, ...);
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KINFOR(message, ...) log_output(LOG_LEVEL_INFOR, message, ##__VA_ARGS__)
+    #define kinfor(message, ...) log_output(LOG_LEVEL_INFOR, message, ##__VA_ARGS__)
 #else
     /*
         @brief Отправляет сообщение с информационным уровнем в логи.
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KINFOR(message, ...)
+    #define kinfor(message, ...)
 #endif
 
 #if LOG_DEBUG_ENABLED == 1
@@ -102,14 +102,14 @@ KAPI void log_output(log_level level, const char* message, ...);
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KDEBUG(message, ...) log_output(LOG_LEVEL_DEBUG, message, ##__VA_ARGS__)
+    #define kdebug(message, ...) log_output(LOG_LEVEL_DEBUG, message, ##__VA_ARGS__)
 #else
     /*
         @brief Отправляет сообщение с отладочным уровнем в логи.
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KDEBUG(message, ...)
+    #define kdebug(message, ...)
 #endif
 
 #if LOG_TRACE_ENABLED == 1
@@ -118,12 +118,12 @@ KAPI void log_output(log_level level, const char* message, ...);
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KTRACE(message, ...) log_output(LOG_LEVEL_TRACE, message, ##__VA_ARGS__)
+    #define ktrace(message, ...) log_output(LOG_LEVEL_TRACE, message, ##__VA_ARGS__)
 #else
     /*
         @brief Отправляет сообщение с пошаговым уровнем в логи.
         @param message Сообщение или строка форматирования.
         @param ... Аргументы строки форматирования.
     */
-    #define KTRACE(message, ...)
+    #define ktrace(message, ...)
 #endif

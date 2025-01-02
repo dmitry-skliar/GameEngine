@@ -1,5 +1,6 @@
-#include <entry.h>
 #include "game.h"
+
+#include <entry.h>
 
 bool create_game(struct game* inst)
 {
@@ -12,9 +13,7 @@ bool create_game(struct game* inst)
     inst->render     = game_render;
     inst->on_resize  = game_on_resize;
 
-    // TODO: Сделать динамически выделяемым.
-    game_context context;
-    inst->state = &context;
+    inst->state = kmallocate_t(game_context, MEMORY_TAG_GAME);
 
     return true;
 }

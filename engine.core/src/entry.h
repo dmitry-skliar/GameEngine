@@ -1,45 +1,53 @@
 #pragma once
 
-#include <defines.h>
 #include <logger.h>
 #include <application.h>
+#include <memory/memory.h>
 
 // Внешняя функция для создания игры.
 extern bool create_game(struct game* inst);
 
 int main()
 {
-    game inst = {0};
+    memory_system_initialize();
 
-    if(!create_game(&inst))
+    game* inst = kmallocate_t(game, MEMORY_TAG_GAME);
+    kmzero_tc(inst, game, 1);
+
+    if(!create_game(inst))
     {
-        KERROR("Could not create game!");
+        kerror("Could not create game!");
         return -1;
     }
 
-    if(!inst.initialize || !inst.update || !inst.render || !inst.on_resize)
+    if(!inst->initialize || !inst->update || !inst->render || !inst->on_resize)
     {
-        KERROR("The application's function pointers must be assigned!");
+        kerror("The application's function pointers must be assigned!");
         return -2;
     }
 
-    if(!inst.window_width || !inst.window_height || !inst.window_title)
+    if(!inst->window_width || !inst->window_height || !inst->window_title)
     {
-        KERROR("The application configuration requires the window width, height, and title.");
+        kerror("The application configuration requires the window width, height, and title.");
         return -3;
     }
 
-    if(!application_create(&inst))
+    if(!application_create(inst))
     {
-        KERROR("The application failed to create!");
+        kerror("The application failed to create!");
         return 1;
     }
 
     if(!application_run())
     {
-        KERROR("The application didn't shutdown gracefully.");
+        kerror("The application didn't shutdown gracefully.");
         return 2;
     }
+
+    kmfree(inst->state);
+    kmfree(inst);
+
+    memory_system_shutdown();
 
     return 0;
 }

@@ -8,21 +8,21 @@
 // Макрос точки останова используется для отладки приложения.
 #if defined(__has_builtin) && !defined(__ibmxl__)
     #if __has_builtin(__builtin_debugtrap)
-        #define KDEBUG_BREAK() __builtin_debugtrap()
+        #define kdebug_break() __builtin_debugtrap()
     #elif __has_builtin(__debugbreak)
-        #define KDEBUG_BREAK() __debugbreak()
+        #define kdebug_break() __debugbreak()
     #endif
 #endif
 
 // Старый способ определения макроса точки останова для отладки.
-#if !defined(KDEBUG_BREAK)
+#if !defined(kdebug_break)
     #if KCOMPILER_CLANG_FLAG
-        #define KDEBUG_BREAK() __builtin_trap()
+        #define kdebug_break() __builtin_trap()
     #elif KCOMPILER_MICROSOFT_FLAG
         #include <intrin.h>
-        #define KDEBUG_BREAK() __debugbreak()
+        #define kdebug_break() __debugbreak()
     #else
-        #define KDEBUG_BREAK() asm { int 3 }
+        #define kdebug_break() asm { int 3 }
     #endif
 #endif
 
@@ -43,13 +43,13 @@
         @param expr Утверждение которое нужно преверить.
         @param message Сообщение которое нужно вывести.
     */
-    #define KASSERT(expr, message)                                        \
+    #define kassert(expr, message)                                        \
     {                                                                     \
         if(expr) {}                                                       \
         else                                                              \
         {                                                                 \
             report_assertion_failure(#expr, message, __FILE__, __LINE__); \
-            KDEBUG_BREAK();                                               \
+            kdebug_break();                                               \
         }                                                                 \
     }
 
@@ -60,20 +60,20 @@
             INFO: Используется только при отладке приложения.
             @param expr Утверждение которое нужно преверить.
         */
-        #define KASSERT_DEBUG(expr, message)                                  \
+        #define kassert_debug(expr, message)                                  \
         {                                                                     \
             if(expr) {}                                                       \
             else                                                              \
             {                                                                 \
                 report_assertion_failure(#expr, message, __FILE__, __LINE__); \
-                KDEBUG_BREAK();                                               \
+                kdebug_break();                                               \
             }                                                                 \
         }
 
     #else
-        #define KASSERT_DEBUG(expr)
+        #define kassert_debug(expr)
     #endif
 #else
-    #define KASSERT(expr, message)
-    #define KASSERT_DEBUG(expr, message)
+    #define kassert(expr, message)
+    #define kassert_debug(expr, message)
 #endif

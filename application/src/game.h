@@ -1,7 +1,6 @@
 #pragma once
 
 #include <defines.h>
-#include <logger.h>
 #include <application.h>
 
 typedef struct game_context {
