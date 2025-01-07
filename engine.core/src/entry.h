@@ -4,15 +4,15 @@
 #include <application.h>
 #include <memory/memory.h>
 
-// Внешняя функция для создания игры.
-extern bool create_game(struct game* inst);
+// @brief Внешняя функция для создания игры.
+extern bool create_game(application* inst);
 
 int main()
 {
     memory_system_initialize();
 
-    game* inst = kmallocate_t(game, MEMORY_TAG_GAME);
-    kmzero_tc(inst, game, 1);
+    application* inst = kmallocate_t(application, MEMORY_TAG_GAME);
+    kmzero_tc(inst, application, 1);
 
     if(!create_game(inst))
     {

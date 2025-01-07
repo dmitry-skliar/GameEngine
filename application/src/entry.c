@@ -1,7 +1,7 @@
 #include <entry.h>
 #include "game.h"
 
-bool create_game(struct game* inst)
+bool create_game(application* inst)
 {
     inst->window_title  = "Game Application";
     inst->window_width  = 1024;

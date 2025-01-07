@@ -29,17 +29,20 @@ typedef struct memory_header {
     u64 size;
 } memory_header;
 
-// Указатель на структуру контекста всей памяти.
+// Указатель на контекст системы памяти.
 static memory_system_context* context = null;
 
 // Сообщения.
-static const char* message_context_not_initialized = "Memory system was not initialized. Please first call 'memory_system_initialize'.";
+static const char* message_requires_a_context = "Memory system was not initialized. Please first call 'memory_system_initialize'.";
+static const char* message_requires_a_pointer = "Function '%s' requires a non-null memory pointer.";
+static const char* message_header_invalid = "Function '%s' could not check the header number, or the memory pointer is invalid!";
 
 void memory_system_initialize()
 {
     kassert_debug(context == null, "Trying to call function 'memory_system_initialize' more than once!");
 
     context = platform_memory_allocate(sizeof(memory_system_context));
+    kassert(context != null, "Memory system context was not allocated!");
     platform_memory_zero(context, sizeof(memory_system_context));
 
     kinfor("Memory system started.");
@@ -47,7 +50,7 @@ void memory_system_initialize()
 
 void memory_system_shutdown()
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    kassert_debug(context != null, message_requires_a_context);
 
     if(context->total_allocated > 0)
     {
@@ -61,27 +64,13 @@ void memory_system_shutdown()
     kinfor("Memory system stopped.");
 }
 
-u64 memory_size_get(void* block)
-{
-    kassert_debug(context != null, message_context_not_initialized);
-    kassert_debug(block != null, "The 'memory_size_get' function requires a non-null memory pointer.");
-
-    memory_header* header = (memory_header*)((u8*)block - sizeof(memory_header));
-
-    if(header->check != CHECK_NUMBER)
-    {
-        kfatal("Function 'memory_size_get' could not check the header number, or the memory pointer is invalid!");
-    }
-
-    return header->size - sizeof(memory_header);
-}
-
 const char* memory_system_usage_get()
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    kassert_debug(context != null, message_requires_a_context);
 
     static const char* memory_tag_strings[MEMORY_TAGS_MAX + 1] = {
         "UNKNOWN          ",
+        "SYSTEM           ",
         "ARRAY            ",
         "DARRAY           ",
         "HASHTABLE        ",
@@ -158,9 +147,14 @@ const char* memory_system_usage_get()
 
 void* memory_allocate(u64 size, memory_tag tag)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    kassert_debug(size > 0, "Function 'memory_allocate' requires size more than null.");
-    kassert_debug(tag >= MEMORY_TAG_UNKNOWN && tag < MEMORY_TAGS_MAX, "Tag value is out of bounds.");
+    kassert_debug(context != null, message_requires_a_context);
+    kassert_debug(tag < MEMORY_TAGS_MAX, "Tag value is out of bounds.");
+
+    if(!size)
+    {
+        kerror("Function '%s' requires size more than 0. Return null!", __FUNCTION__);
+        return null;
+    }
 
     if(tag == MEMORY_TAG_UNKNOWN)
     {
@@ -184,19 +178,24 @@ void* memory_allocate(u64 size, memory_tag tag)
         return (void*)((u8*)header + sizeof(memory_header));
     }
 
+    kerror("In function '%s' memory was not allocated. Return null!", __FUNCTION__);
     return null;
 }
 
 void memory_free(void* block)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    kassert_debug(block != null, "The 'memory_free' function requires a non-null memory pointer.");
+    kassert_debug(context != null, message_requires_a_context);
+
+    if(!block)
+    {
+        kfatal(message_requires_a_pointer, __FUNCTION__);
+    }
 
     memory_header* header = (memory_header*)((u8*)block - sizeof(memory_header));
 
     if(header->check != CHECK_NUMBER)
     {
-        kfatal("Function 'memory_free' could not check the header number, or the memory pointer is invalid!");
+        kfatal(message_header_invalid, __FUNCTION__);
     }
 
     context->tagged_allocated[header->tag] -= header->size;
@@ -223,4 +222,42 @@ void memory_copy(void* dest, const void* src, u64 size)
 void memory_move(void* dest, const void* src, u64 size)
 {
     platform_memory_move(dest, src, size);
+}
+
+u64 memory_size_get(void* block)
+{
+    kassert_debug(context != null, message_requires_a_context);
+
+    if(!block)
+    {
+        kfatal(message_requires_a_pointer, __FUNCTION__);
+    }
+
+    memory_header* header = (memory_header*)((u8*)block - sizeof(memory_header));
+
+    if(header->check != CHECK_NUMBER)
+    {
+        kfatal(message_header_invalid, __FUNCTION__);
+    }
+
+    return header->size - sizeof(memory_header);
+}
+
+memory_tag memory_tag_get(void* block)
+{
+    kassert_debug(context != null, message_requires_a_context);
+
+    if(!block)
+    {
+        kfatal(message_requires_a_pointer, __FUNCTION__);
+    }
+
+    memory_header* header = (memory_header*)((u8*)block - sizeof(memory_header));
+
+    if(header->check != CHECK_NUMBER)
+    {
+        kfatal(message_header_invalid, __FUNCTION__);
+    }
+
+    return header->tag;
 }

@@ -144,7 +144,7 @@
         context = kmallocate_t(platform_window_context, MEMORY_TAG_APPLICATION);
         if(!context)
         {
-            kerror("Memory for the window context was not allocated!");
+            kerror("Memory for window context was not allocated!");
             return false;
         }
         kmzero_tc(context, platform_window_context, 1);

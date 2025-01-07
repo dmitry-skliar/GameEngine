@@ -3,39 +3,40 @@
 #include <defines.h>
 
 // @brief Конфигурация приложения.
-typedef struct game {
+typedef struct application {
 
-    // Заголовок окна.
+    // @brief Заголовок окна.
     char* window_title;
 
-    // Щирина окна.
+    // @brief Щирина окна.
     i32   window_width;
 
-    // Высота окна.
+    // @brief Высота окна.
     i32   window_height;
 
-    // Указатель на функцию инициализации игры.
-    bool (*initialize)(struct game* inst);
+    // @brief Указатель на функцию инициализации игры.
+    bool (*initialize)(struct application* inst);
 
-    // Указатель на функцию обновления состояния игры.
-    bool (*update)(struct game* inst, f32 delta_time);
+    // @brief Указатель на функцию обновления состояния игры.
+    bool (*update)(struct application* inst, f32 delta_time);
 
-    // Указатель на функцию отрисовки игры.
-    bool (*render)(struct game* inst, f32 delta_time);
+    // @brief Указатель на функцию отрисовки игры.
+    bool (*render)(struct application* inst, f32 delta_time);
 
-    // Указатель на функцию изменения размера окна игры.
-    void (*on_resize)(struct game* inst, i32 width, i32 height);
+    // @brief Указатель на функцию изменения размера окна игры.
+    void (*on_resize)(struct application* inst, i32 width, i32 height);
 
-    // Указатель на данные игры.
+    // @brief Указатель на данные игры.
     void* state;
 
-} game;
+} application;
 
 /*
     @brief Инициализирует и создает приложение.
+    @param inst Конфигурация приложения.
     @return В случае успеха - true, в случае ошибок или повторного вызова - false.
 */
-KAPI bool application_create(game* inst);
+KAPI bool application_create(application* application);
 
 /*
     @brief Рабочий цикл приложения.

@@ -5,6 +5,7 @@
 // @brief Маркеры участков памяти.
 typedef enum memory_tag {
     MEMORY_TAG_UNKNOWN,
+    MEMORY_TAG_SYSTEM,
     MEMORY_TAG_ARRAY,
     MEMORY_TAG_DARRAY,
     MEMORY_TAG_HASHTABLE,
@@ -26,12 +27,12 @@ typedef enum memory_tag {
 } memory_tag;
 
 /*
-    @brief Инициализация системы памяти.
+    @brief Инициализирует и запускает систему менеджмента и контроля памяти.
 */
 KAPI void memory_system_initialize();
 
 /*
-    @brief Завершение работы системы памяти и контроль утечки памяти.
+    @brief Завершение и останавливает систему менеджмента и контроля памяти.
 */
 KAPI void memory_system_shutdown();
 
@@ -92,11 +93,19 @@ KAPI void memory_copy(void* dest, const void* src, u64 size);
 KAPI void memory_move(void* dest, const void* src, u64 size);
 
 /*
-    @brief Получить размер ранее памяти по указателю.
+    @brief Получить размер участка памяти.
     INFO: Применять к указателю, который был выделен функцией 'memory_allocate'.
     @param block Указатель на память.
+    @return Размер памяти.
 */
 KAPI u64 memory_size_get(void* block);
+
+/*
+    @brief Получить метку участка памяти.
+    @param block Указатель на память.
+    @return Метка памяти.
+*/
+KAPI memory_tag memory_tag_get(void* block);
 
 /*
     @brief Запрашивает память у системы заданного размера и помечает маркером для анализа.
