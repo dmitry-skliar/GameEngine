@@ -4,10 +4,11 @@
 #if KPLATFORM_LINUX_WAYLAND_FLAG
 
     // Внутренние подключения.
-    #include "window_wayland_xdg.h"
+    #include "logger.h"
     #include "debug/assert.h"
     #include "memory/memory.h"
-    #include "logger.h"
+    #include "input_types.h"
+    #include "window_wayland_xdg.h"
 
     // Внешние подключения.
     #include <wayland-client.h>
@@ -178,7 +179,7 @@
         xdg_toplevel_set_title(context->xtoplevel, config->title);
         xdg_toplevel_set_app_id(context->xtoplevel, config->title);
 
-        // INFO: Для полноэкранного режима по умолчанию, раскомментируете ниже.
+        // NOTE: Для полноэкранного режима по умолчанию, раскомментируете ниже.
         // xdg_toplevel_set_fullscreen(context->xtoplevel, null);
 
         // NOTE: Первая настройка поверхности, а потому до нее захват буфера работать не будет!
@@ -356,11 +357,53 @@
     {
     }
 
-    u32 kb_translate_keycode(u32 keycode)
+    u32 kb_translate_keycode(u32 key_code)
     {
-        // TODO: Реализовать таблицу трансляции linux keycode -> virtual keycode.
+        // NOTE: Таблица трансляции linux keycode -> virtual keycode.
         //       Смотреть linux/input-event-codes.h
-        return keycode;
+        static const key codes[KEYS_MAX] = {
+            [0x01] = KEY_ESCAPE,       [0x02] = KEY_1,            [0x03] = KEY_2,            [0x04] = KEY_3,
+            [0x05] = KEY_4,            [0x06] = KEY_5,            [0x07] = KEY_6,            [0x08] = KEY_7,
+            [0x09] = KEY_8,            [0x0A] = KEY_9,            [0x0B] = KEY_0,            [0x0C] = KEY_MINUS,
+            [0x0D] = KEY_EQUAL,        [0x0E] = KEY_BACKSPACE,    [0x0F] = KEY_TAB,          [0x10] = KEY_Q,
+            [0x11] = KEY_W,            [0x12] = KEY_E,            [0x13] = KEY_R,            [0x14] = KEY_T,
+            [0x15] = KEY_Y,            [0x16] = KEY_U,            [0x17] = KEY_I,            [0x18] = KEY_O,
+            [0x19] = KEY_P,            [0x1A] = KEY_LBRACKET,     [0x1B] = KEY_RBRACKET,     [0x1C] = KEY_ENTER,
+            [0x1D] = KEY_LCONTROL,     [0x1E] = KEY_A,            [0x1F] = KEY_S,            [0x20] = KEY_D,
+            [0x21] = KEY_F,            [0x22] = KEY_G,            [0x23] = KEY_H,            [0x24] = KEY_J,
+            [0x25] = KEY_K,            [0x26] = KEY_L,            [0x27] = KEY_SEMICOLON,    [0x28] = KEY_APOSTROPHE,
+            [0x29] = KEY_GRAVE,        [0x2A] = KEY_LSHIFT,       [0x2B] = KEY_BACKSLASH,    [0x2C] = KEY_Z,
+            [0x2D] = KEY_X,            [0x2E] = KEY_C,            [0x2F] = KEY_V,            [0x30] = KEY_B,
+            [0x31] = KEY_N,            [0x32] = KEY_M,            [0x33] = KEY_COMMA,        [0x34] = KEY_DOT,
+            [0x35] = KEY_SLASH,        [0x36] = KEY_RSHIFT,       [0x37] = KEY_UNKNOWN,      [0x38] = KEY_LALT,
+            [0x39] = KEY_SPACE,        [0x3A] = KEY_CAPSLOCK,     [0x3B] = KEY_F1,           [0x3C] = KEY_F2,
+            [0x3D] = KEY_F3,           [0x3E] = KEY_F4,           [0x3F] = KEY_F5,           [0x40] = KEY_F6,
+            [0x41] = KEY_F7,           [0x42] = KEY_F8,           [0x43] = KEY_F9,           [0x44] = KEY_F10,
+            [0x45] = KEY_NUMLOCK,      [0x46] = KEY_SCROLLOCK,    [0x47] = KEY_NUMPAD7,      [0x48] = KEY_NUMPAD8,
+            [0x49] = KEY_NUMPAD9,      [0x4A] = KEY_SUBTRACT,     [0x4B] = KEY_NUMPAD4,      [0x4C] = KEY_NUMPAD5,
+            [0x4D] = KEY_NUMPAD6,      [0x4E] = KEY_ADD,          [0x4F] = KEY_NUMPAD1,      [0x50] = KEY_NUMPAD2,
+            [0x51] = KEY_NUMPAD3,      [0x52] = KEY_NUMPAD0,      [0x53] = KEY_DECIMAL,      [0x57] = KEY_F11,
+            [0x58] = KEY_F12,          [0x60] = KEY_UNKNOWN,      [0x61] = KEY_RCONTROL,     [0x62] = KEY_DIVIDE,
+            [0x63] = KEY_PRINTSCREEN,  [0x64] = KEY_RALT,         [0x65] = KEY_UNKNOWN,      [0x66] = KEY_HOME,
+            [0x67] = KEY_UP,           [0x68] = KEY_PAGEUP,       [0x69] = KEY_LEFT,         [0x6A] = KEY_RIGHT,
+            [0x6B] = KEY_END,          [0x6C] = KEY_DOWN,         [0x6D] = KEY_PAGEDOWN,     [0x6E] = KEY_INSERT,
+            [0x6F] = KEY_DELETE,       [0x75] = KEY_NUMPAD_EQUAL, [0x76] = KEY_UNKNOWN,      [0x77] = KEY_PAUSE,
+            [0x7D] = KEY_LSUPER,       [0x7E] = KEY_RSUPER,       [0x7F] = KEY_APPS,      
+            //...
+            [0xB7] = KEY_F13,          [0xB8] = KEY_F14,          [0xB9] = KEY_F15,          [0xBA] = KEY_F16,
+            [0xBB] = KEY_F17,          [0xBC] = KEY_F18,          [0xBD] = KEY_F19,          [0xBE] = KEY_F20,
+            [0xBF] = KEY_F21,          [0xC0] = KEY_F22,          [0xC1] = KEY_F23,          [0xC2] = KEY_F24,
+            //...
+            [0xD2] = KEY_PRINT
+        };
+
+        if(codes[key_code] == KEY_UNKNOWN || key_code > KEYS_MAX)
+        {
+            kwarng("In Linux, the key code %X is translated as KEY_UNKNOWN", key_code);
+            return KEY_UNKNOWN;
+        }
+
+        return codes[key_code];
     }
 
     void kb_keymap(void* data, struct wl_keyboard* wkeyboard, u32 format, i32 fd, u32 size)
@@ -399,9 +442,21 @@
 
     u32 pt_translate_button_code(u32 button_code)
     {
-        // TODO: Реализовать таблицу трансляции linux button code -> virtual button code.
+        #define BTNS_START 0x110
+        #define BTNS_END   0x114
+
+        // NOTE: Таблица трансляции linux button code -> virtual button code.
         //       Смотреть linux/input-event-codes.h
-        return button_code;
+        static const u16 codes[] = {
+            [0x00] = BTN_LEFT, [0x01] = BTN_RIGHT, [0x02] = BTN_MIDDLE, [0x03] = BTN_BACKWARD, [0x04] = BTN_FORWARD
+        };
+
+        if(button_code < BTNS_START || button_code > BTNS_END)
+        {
+            kwarng("In Linux, the key code %X is translated as KEY_UNKNOWN", button_code);
+        }
+
+        return codes[button_code - BTNS_START];
     }
 
     void pt_enter(void* data, struct wl_pointer* wpointer, u32 serial, struct wl_surface* wsurface, wl_fixed_t x, wl_fixed_t y)
@@ -497,49 +552,49 @@
     {
     }
 
-    void platform_window_handler_close_set(PFN_window_handler_close handler)
+    void platform_window_set_on_close_handler(PFN_window_handler_close handler)
     {
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_close = handler;
     }
 
-    void platform_window_handler_resize_set(PFN_window_handler_resize handler)
+    void platform_window_set_on_resize_handler(PFN_window_handler_resize handler)
     {
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_resize = handler;
     }
 
-    void platform_window_handler_keyboard_key_set(PFN_window_handler_keyboard_key handler)
+    void platform_window_set_on_keyboard_key_handler(PFN_window_handler_keyboard_key handler)
     {
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_keyboard_key = handler;
     }
 
-    void platform_window_handler_mouse_move_set(PFN_window_handler_mouse_move handler)
+    void platform_window_set_on_mouse_move_handler(PFN_window_handler_mouse_move handler)
     {
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_mouse_move = handler;
     }
 
-    void platform_window_handler_mouse_button_set(PFN_window_handler_mouse_button handler)
+    void platform_window_set_on_mouse_button_handler(PFN_window_handler_mouse_button handler)
     {
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_mouse_button = handler;
     }
 
-    void platform_window_handler_mouse_wheel_set(PFN_window_handler_mouse_wheel handler)
+    void platform_window_set_on_mouse_wheel_handler(PFN_window_handler_mouse_wheel handler)
     {
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_mouse_wheel = handler;
     }
 
-    void platform_window_handler_focus_set(PFN_window_handler_focus handler)
+    void platform_window_set_on_focus_handler(PFN_window_handler_focus handler)
     {
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);

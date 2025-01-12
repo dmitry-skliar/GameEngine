@@ -16,36 +16,36 @@ KAPI void* dynamic_array_create(u64 stride, u64 capacity);
 
 /*
     @brief Изменяет размер динамического массива.
-    INFO: Изменяется указатель на массив, указатель на старый становится недействительным.
+    NOTE: Изменяется указатель на массив, указатель на старый становится недействительным.
     @param array Указатель на старый массив.
     @param capacity Новое количество резервируемых элементов в массиве.
-    @return Возвращает старый или новый указатель на массив (смотри INFO).
+    @return Возвращает старый или новый указатель на массив.
 */
 KAPI void* dynamic_array_resize(void* array, u64 capacity);
 
 /*
     @brief Удаляет динамический массив.
-    INFO: Указатель необходимо обнулить самостоятельно!
+    NOTE: Указатель необходимо обнулить самостоятельно!
     @param array Указатель на массив.
 */
 KAPI void dynamic_array_destroy(void* array);
 
 /*
     @brief Добавляет элемент в массив.
-    INFO: Изменяется указатель на массив.
+    NOTE: Изменяется указатель на массив.
     @param array Указатель на массив.
     @param element Указатель на элемент который нужно добавить.
-    @return Возвращает старый или новый указатель на массив (смотри INFO).
+    @return Возвращает старый или новый указатель на массив.
 */
 KAPI void* dynamic_array_push(void* array, const void* element);
 
 /*
     @brief Вставляет элемент в заданную позицию массива.
-    INFO: Изменяется указатель на массив.
+    NOTE: Изменяется указатель на массив.
     @param array Указатель на массив.
     @param index Индекс позиции элемента, может быть от 0 до текущей длинны массива.
     @param element Указатель на элемент который нужно вставить.
-    @return Возвращает старый или новый указатель на массив (смотри INFO).
+    @return Возвращает старый или новый указатель на массив.
 */
 KAPI void* dynamic_array_insert_at(void* array, u64 index, const void* element);
 
@@ -66,7 +66,7 @@ KAPI void dynamic_array_pop_at(void* array, u64 index, void* dest);
 
 /*
     @brief Удаляет элементы массива.
-    INFO: Не стирает данные.
+    NOTE: Не стирает данные.
     @param array Указатель на массив.
 */
 KAPI void dynamic_array_clear(void* array);
@@ -76,21 +76,21 @@ KAPI void dynamic_array_clear(void* array);
     @param array Указатель на массив.
     @return Текущее количество элементов.
 */
-KAPI u64 dynamic_array_length_get(void* array);
+KAPI u64 dynamic_array_get_length(void* array);
 
 /*
     @brief Получает зарезервированное количество элементов массив.
     @param array Указатель на массив.
     @return Зарезервированное количество элементов.
 */
-KAPI u64 dynamic_array_capacity_get(void* array);
+KAPI u64 dynamic_array_get_capacity(void* array);
 
 /*
     @brief Размер элемента массива.
     @param array Указатель на массив.
     @return Размер элемента.
 */
-KAPI u64 dynamic_array_stride_get(void* array);
+KAPI u64 dynamic_array_get_stride(void* array);
 
 /*
     @brief Создает динамический массив.
@@ -109,23 +109,23 @@ KAPI u64 dynamic_array_stride_get(void* array);
 
 /*
     @brief Изменяет размер динамического массива.
-    INFO: Изменяется указатель на массив.
+    NOTE: Изменяется указатель на массив.
     @param array Указатель на старый массив.
     @param capacity Новое количество резервируемых элементов в массиве.
-    @return Возвращает старый или новый указатель на массив (смотри INFO).
+    @return Возвращает старый или новый указатель на массив.
 */
 #define darray_resize(old_array, capacity) dynamic_array_resize(old_array, capacity)
 
 /*
     @brief Удаляет динамический массив.
-    INFO: Указатель необходимо обнулить самостоятельно!
+    NOTE: Указатель необходимо обнулить самостоятельно!
     @param array Указатель на массив.
 */
 #define darray_destroy(array) dynamic_array_destroy(array)
 
 /*
     @brief Добавляет элемент в массив.
-    INFO: Изменяется указатель на массив.
+    NOTE: Изменяется указатель на массив.
     @param array Указатель на массив.
     @param element Указатель на элемент который нужно добавить.
 */
@@ -137,7 +137,7 @@ KAPI u64 dynamic_array_stride_get(void* array);
 
 /*
     @brief Вставляет элемент в заданную позицию массива.
-    INFO: Изменяется указатель на массив.
+    NOTE: Изменяется указатель на массив.
     @param array Указатель на массив.
     @param index Индекс позиции элемента, может быть от 0 до текущей длинны массива.
     @param element Указатель на элемент который нужно вставить.
@@ -165,7 +165,7 @@ KAPI u64 dynamic_array_stride_get(void* array);
 
 /*
     @brief Удаляет элементы массива.
-    INFO: Не стирает данные.
+    NOTE: Не стирает данные.
     @param array Указатель на массив.
 */
 #define darray_clear(array) dynamic_array_clear(array)
@@ -175,18 +175,18 @@ KAPI u64 dynamic_array_stride_get(void* array);
     @param array Указатель на массив.
     @return Текущее количество элементов.
 */
-#define darray_length_get(array) dynamic_array_length_get(array)
+#define darray_get_length(array) dynamic_array_get_length(array)
 
 /*
     @brief Получает зарезервированное количество элементов массив.
     @param array Указатель на массив.
     @return Зарезервированное количество элементов.
 */
-#define darray_capacity_get(array) dynamic_array_capacity_get(array)
+#define darray_get_capacity(array) dynamic_array_get_capacity(array)
 
 /*
     @brief Размер элемента массива.
     @param array Указатель на массив.
     @return Размер элемента.
 */
-#define darray_stride_get(array) dynamic_array_stride_get(array)
+#define darray_get_stride(array) dynamic_array_get_stride(array)

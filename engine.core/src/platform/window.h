@@ -20,7 +20,7 @@ typedef void (*PFN_window_handler_focus)(bool focused);
 
 /*
     @brief Создает окно приложения.
-    INFO: Если окно было успешно создано, то при повторном вызове возвращает false.
+    NOTE: Если окно было успешно создано, то при повторном вызове возвращает false.
     @param config Конфигурация создаваемого окна.
     @return В случае успеха - true, в случае повторного вызова или ошибки - false.
 */
@@ -33,7 +33,7 @@ KAPI void platform_window_destroy();
 
 /*
     @brief Обрабатывает событиий окна.
-    INFO: Обязательно добавить в обработку кадра!
+    NOTE: Обязательно добавить в обработку кадра!
     @return В случае успеха - true, в случае ошибки - false.
 */
 KAPI bool platform_window_dispatch();
@@ -42,43 +42,43 @@ KAPI bool platform_window_dispatch();
     @brief Задает обработчик на закрытие окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_handler_close_set(PFN_window_handler_close handler);
+KAPI void platform_window_set_on_close_handler(PFN_window_handler_close handler);
 
 /*
     @brief Задает обработчик на изменение размеров окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_handler_resize_set(PFN_window_handler_resize handler);
+KAPI void platform_window_set_on_resize_handler(PFN_window_handler_resize handler);
 
 /*
     @brief Задает обработчик на нажатия клавиш клавиатуры.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_handler_keyboard_key_set(PFN_window_handler_keyboard_key handler);
+KAPI void platform_window_set_on_keyboard_key_handler(PFN_window_handler_keyboard_key handler);
 
 /*
     @brief Задает обработчик на перемещения курсора мышки.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_handler_mouse_move_set(PFN_window_handler_mouse_move handler);
+KAPI void platform_window_set_on_mouse_move_handler(PFN_window_handler_mouse_move handler);
 
 /*
     @brief Задает обработчик на нажатие клавиш мышки.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_handler_mouse_button_set(PFN_window_handler_mouse_button handler);
+KAPI void platform_window_set_on_mouse_button_handler(PFN_window_handler_mouse_button handler);
 
 /*
     @brief Задает обработчик на прокрутку колесика мышки.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_handler_mouse_wheel_set(PFN_window_handler_mouse_wheel handler);
+KAPI void platform_window_set_on_mouse_wheel_handler(PFN_window_handler_mouse_wheel handler);
 
 /*
     @brief Задает обработчик на фокусировку окна курсором мышки.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_handler_focus_set(PFN_window_handler_focus handler);
+KAPI void platform_window_set_on_focus_handler(PFN_window_handler_focus handler);
 
 // TODO: Реализовать следующее.
 // KAPI void platform_window_title_set(const char* title);

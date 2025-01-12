@@ -1,10 +1,33 @@
 #include "game.h"
 #include <logger.h>
 #include <event.h>
+#include <input.h>
 
 bool game_on_key(event_code code, void* sender, void* listener, event_context data)
 {
-    kdebug("Keyboard code %d", data.u32[0]);
+    if(code == EVENT_CODE_KEYBOARD_KEY_PRESSED)
+    {
+        kdebug("Keyboard key '%s' pressed.", input_get_keyboard_key_name(data.u32[0]));
+    }
+    else
+    {
+        kdebug("Keyboard key '%s' released.", input_get_keyboard_key_name(data.u32[0]));
+    }
+
+    return false;
+}
+
+bool game_on_button(event_code code, void* sender, void* listener, event_context data)
+{
+    if(code == EVENT_CODE_MOUSE_BUTTON_PRESSED)
+    {
+        kdebug("Mouse button '%s' pressed.", input_get_mouse_button_name(data.u32[0]));
+    }
+    else
+    {
+        kdebug("Mouse button '%s' released.", input_get_mouse_button_name(data.u32[0]));
+    }
+
     return false;
 }
 
@@ -13,6 +36,8 @@ bool game_initialize(application* inst)
     // kdebug("Game init!");
     event_register(EVENT_CODE_KEYBOARD_KEY_PRESSED, null, game_on_key);
     event_register(EVENT_CODE_KEYBOARD_KEY_RELEASED, null, game_on_key);
+    event_register(EVENT_CODE_MOUSE_BUTTON_PRESSED, null, game_on_button);
+    event_register(EVENT_CODE_MOUSE_BUTTON_RELEASED, null, game_on_button);
     return true;
 }
 
@@ -30,5 +55,5 @@ bool game_render(application* inst, f32 delta_time)
 
 void game_on_resize(application* inst, i32 width, i32 height)
 {
-    kdebug("Update screen size %d:%d", width, height);
+    ktrace("Game: update screen size %d : %d", width, height);
 }

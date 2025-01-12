@@ -7,8 +7,6 @@
 #include "memory/memory.h"
 #include "containers/darray.h"
 
-// Внешние подключения.
-
 typedef struct registered_listener {
     void* instance;
     PFN_event_handler handler;
@@ -78,14 +76,14 @@ bool event_register(event_code code, void* listener, PFN_event_handler handler)
         context->events[code].listeners = darray_create(registered_listener);
     }
 
-    u64 registered_count = darray_length_get(context->events[code].listeners);
+    u64 registered_count = darray_get_length(context->events[code].listeners);
 
     for(u64 i = 0; i < registered_count; ++i)
     {
         if(context->events[code].listeners[i].instance == listener
         && context->events[code].listeners[i].handler == handler)
         {
-            kwarng("Event has alreay been registered with the code (%s).", event_code_name_get(code));
+            kwarng("Event has alreay been registered with the code (%s).", event_get_code_name(code));
             return false;
         }
     }
@@ -106,11 +104,11 @@ bool event_unregister(event_code code, void* listener, PFN_event_handler handler
 
     if(context->events[code].listeners == null)
     {
-        kwarng(message_has_no_listeners, __FUNCTION__, event_code_name_get(code));
+        kwarng(message_has_no_listeners, __FUNCTION__, event_get_code_name(code));
         return false;
     }
 
-    u64 registered_count = darray_length_get(context->events[code].listeners);
+    u64 registered_count = darray_get_length(context->events[code].listeners);
 
     for(u64 i = 0; i < registered_count; ++i)
     {
@@ -123,7 +121,7 @@ bool event_unregister(event_code code, void* listener, PFN_event_handler handler
         }
     }
 
-    ktrace("In function '%s' event code (%s) has no listener!", __FUNCTION__, event_code_name_get(code));
+    ktrace("In function '%s' event code (%s) has no listener!", __FUNCTION__, event_get_code_name(code));
     return false;
 }
 
@@ -134,11 +132,13 @@ bool event_send(event_code code, void* sender, event_context data)
 
     if(context->events[code].listeners == null)
     {
-        ktrace(message_has_no_listeners, __FUNCTION__, event_code_name_get(code));
+        // NOTE: Включить при отладке!
+        // ktrace(message_has_no_listeners, __FUNCTION__, event_get_code_name(code));
+
         return false;
     }
 
-    u64 registered_count = darray_length_get(context->events[code].listeners);
+    u64 registered_count = darray_get_length(context->events[code].listeners);
 
     for(u64 i = 0; i < registered_count; ++i)
     {
@@ -155,10 +155,8 @@ bool event_send(event_code code, void* sender, event_context data)
     return false;
 }
 
-const char* event_code_name_get(event_code code)
+const char* event_get_code_name(event_code code)
 {
-    kassert_debug(code < EVENT_CODES_MAX, message_number_out_of_bounds);
-
     static const char* code_name[EVENT_CODES_MAX] = {
         [EVENT_CODE_NULL]                  = "EVENT_CODE_NULL",
         [EVENT_CODE_APPLICATION_QUIT]      = "EVENT_CODE_APPLICATION_QUIT",
@@ -170,6 +168,11 @@ const char* event_code_name_get(event_code code)
         [EVENT_CODE_MOUSE_MOVED]           = "EVENT_CODE_MOUSE_MOVED",
         [EVENT_CODE_MOUSE_WHEEL]           = "EVENT_CODE_MOUSE_WHEEL"
     };
+
+    if(code >= EVENT_CODES_MAX)
+    {
+        return code_name[EVENT_CODE_NULL];
+    }
 
     return code_name[code];
 }

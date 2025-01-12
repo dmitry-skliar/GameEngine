@@ -21,7 +21,7 @@ void log_output_hook_default(log_level level, const char* message);
 
 /*
     Буфер сообщений.
-    INFO: Только для однопоточной работы.
+    NOTE: Только для однопоточной работы.
     TODO: Заменить на многопоточный вариант.
 */
 static char buffer[LOG_BUFFER_SIZE];

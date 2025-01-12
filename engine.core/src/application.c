@@ -8,8 +8,7 @@
 #include "platform/window.h"
 #include "platform/memory.h"
 #include "memory/memory.h"
-
-// Внешние подключения.
+#include "input.h"
 
 typedef struct application_context {
     application* application;
@@ -20,6 +19,9 @@ typedef struct application_context {
 
 static application_context* context = null;
 
+void application_on_focus(bool focused);
+void application_on_mouse_wheel(i32 zdelta);
+void application_on_mouse_button(u32 button, bool pressed);
 void application_on_mouse_move(i32 x, i32 y);
 void application_on_keyboard_key(u32 keycode, bool pressed);
 void application_on_resize(i32 width, i32 height);
@@ -49,20 +51,32 @@ bool application_create(application* application)
     window_config config = { application->window_title, application->window_width, application->window_height };
     if(!platform_window_create(&config))
     {
-        kerror("The window was not created! Aborted.");
+        kerror("The window was not created. Application aborted!");
         return false;
     }
 
     // Обработчики событий окна.
-    platform_window_handler_close_set(application_on_close);
-    platform_window_handler_resize_set(application_on_resize);
-    platform_window_handler_keyboard_key_set(application_on_keyboard_key);
-    platform_window_handler_mouse_move_set(application_on_mouse_move);
+    platform_window_set_on_close_handler(application_on_close);
+    platform_window_set_on_resize_handler(application_on_resize);
+    platform_window_set_on_keyboard_key_handler(application_on_keyboard_key);
+    platform_window_set_on_mouse_move_handler(application_on_mouse_move);
+    platform_window_set_on_mouse_button_handler(application_on_mouse_button);
+    platform_window_set_on_mouse_wheel_handler(application_on_mouse_wheel);
+    platform_window_set_on_focus_handler(application_on_focus);
 
     // Инициализация подсистемы событий.
-    event_system_initialize();
+    if(!event_system_initialize())
+    {
+        kerror("The event system was not initialized. Application aborted!");
+        return false;
+    }
 
-    // Регистрация обработчиков событий.
+    // Инициализация подсистемы ввода.
+    if(!input_system_initialize())
+    {
+        kerror("The input system was not initialized. Application aborted!");
+        return false;
+    }
 
     // Инициализация игры.
     if(!application->initialize(application))
@@ -110,39 +124,48 @@ bool application_run()
     }
 
     // Нормальное завершение работы.
+    input_system_shutdown();
     event_system_shutdown();
     platform_window_destroy();
     kmfree(context);
+    context = null;
 
     return true;
 }
 
+//////////////////////////////// EVENTS /////////////////////////////////
+
+void application_on_focus(bool focused)
+{
+    // Stub!
+}
+
+void application_on_mouse_wheel(i32 zdelta)
+{
+    input_update_mouse_wheel(zdelta);    
+}
+
+void application_on_mouse_button(u32 button, bool pressed)
+{
+    input_update_mouse_button(button, pressed);
+}
+
 void application_on_mouse_move(i32 x, i32 y)
 {
-    event_context data = { .i32[0] = x, .i32[1] = y };
-    event_send(EVENT_CODE_MOUSE_MOVED, null, data);
+    input_update_mouse_move(x, y);
 }
 
 void application_on_keyboard_key(u32 keycode, bool pressed)
 {
-    if(keycode == 16 && pressed) context->is_running = false;
-    if(keycode == 23 && pressed)
+    if(keycode == KEY_Q && pressed) context->is_running = false;
+    if(keycode == KEY_I && pressed)
     {
         const char* meminfo = memory_system_usage_get();
         kinfor(meminfo);
-        // TODO: Заменить на kmfree(meminfo);
         platform_memory_free((void*)meminfo);
     }
 
-    event_context data = { .u32[0] = keycode };
-    if(pressed)
-    {
-        event_send(EVENT_CODE_KEYBOARD_KEY_PRESSED, null, data);
-    }
-    else
-    {
-        event_send(EVENT_CODE_KEYBOARD_KEY_RELEASED, null, data);
-    }
+    input_update_keyboard_key(keycode, pressed);
 }
 
 void application_on_resize(i32 width, i32 height)

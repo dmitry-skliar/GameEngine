@@ -5,8 +5,6 @@
 #include "logger.h"
 #include "memory/memory.h"
 
-// Внешние подключения.
-
 typedef struct dynamic_array_header {
     u64 capacity;
     u64 stride;
@@ -216,7 +214,7 @@ void dynamic_array_clear(void* array)
     header->length = 0;
 }
 
-u64 dynamic_array_length_get(void* array)
+u64 dynamic_array_get_length(void* array)
 {
     if(!array)
     {
@@ -228,7 +226,7 @@ u64 dynamic_array_length_get(void* array)
     return header->length;    
 }
 
-u64 dynamic_array_capacity_get(void* array)
+u64 dynamic_array_get_capacity(void* array)
 {
     if(!array)
     {
@@ -240,7 +238,7 @@ u64 dynamic_array_capacity_get(void* array)
     return header->capacity;
 }
 
-u64 dynamic_array_stride_get(void* array)
+u64 dynamic_array_get_stride(void* array)
 {
     if(!array)
     {
