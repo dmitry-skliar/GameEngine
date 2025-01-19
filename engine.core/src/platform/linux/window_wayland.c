@@ -190,7 +190,7 @@
         screen_clear(context->width, context->height, 0x77101010);
         // TODO: Временно конец.
 
-        kinfor("Platform window created.");
+        kinfor("Platform window started.");
 
         return true;
     }
@@ -218,7 +218,7 @@
         kmfree(context);
         context = null;
 
-        kinfor("Platform window destroyed.");
+        kinfor("Platform window stopped.");
     }
 
     bool platform_window_dispatch()
@@ -226,9 +226,7 @@
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
 
-        // return wl_display_roundtrip(context->wdisplay) != -1;
-        // TODO: Верхнюю раскомментировать, а нижнюю удалить.
-        return wl_display_dispatch(context->wdisplay) != -1;
+        return wl_display_roundtrip(context->wdisplay) != -1;
     }
 
     void wregistry_add(void* data, struct wl_registry* wregistry, u32 name, const char* interface, u32 version)

@@ -7,14 +7,19 @@
 #include "debug/assert.h"
 #include "platform/window.h"
 #include "platform/memory.h"
+#include "platform/time.h"
+#include "platform/thread.h"
 #include "memory/memory.h"
 #include "input.h"
+#include "clock.h"
+#include "renderer/renderer_frontend.h"
 
 typedef struct application_context {
     application* application;
-    bool is_running;
-    bool is_suspended;
-    f64  last_time;
+    bool  is_running;
+    bool  is_suspended;
+    clock clock;
+    f64   last_time;
 } application_context;
 
 static application_context* context = null;
@@ -40,7 +45,7 @@ bool application_create(application* application)
     context = kmallocate_t(application_context, MEMORY_TAG_APPLICATION);
     if(!context)
     {
-        kerror("Memory for application context not allocated! Aborted.");
+        kerror("Failed to allocated memory for application context. Aborted!");
         return false;
     }
     kmzero_tc(context, application_context, 1);
@@ -51,7 +56,7 @@ bool application_create(application* application)
     window_config config = { application->window_title, application->window_width, application->window_height };
     if(!platform_window_create(&config))
     {
-        kerror("The window was not created. Application aborted!");
+        kerror("Failed to initialize platform window. Aborted!");
         return false;
     }
 
@@ -67,28 +72,33 @@ bool application_create(application* application)
     // Инициализация подсистемы событий.
     if(!event_system_initialize())
     {
-        kerror("The event system was not initialized. Application aborted!");
+        kerror("Failed to initialize event system. Aborted!");
         return false;
     }
 
     // Инициализация подсистемы ввода.
     if(!input_system_initialize())
     {
-        kerror("The input system was not initialized. Application aborted!");
+        kerror("Failed to initialize input system. Aborted!");
         return false;
     }
 
-    // Инициализация игры.
+    // Инициализация редререра.
+    if(!renderer_initialize(application->window_title))
+    {
+        kerror("Failed to initialize renderer. Aborted!");
+        return false;
+    }
+
+    // Инициализация приложения пользователя (игры, 3d приложения).
     if(!application->initialize(application))
     {
-        kerror("Game failed to initialize.");
+        kerror("Failed to initialize user application. Aborted!");
         return false;
     }
 
     // Принудительное обновление размера окна.
     application->on_resize(application, application->window_width, application->window_height);
-
-    context->is_running = true;
 
     return true;
 }
@@ -97,6 +107,16 @@ bool application_run()
 {
     // Проверка вызова функции.
     kassert_debug(context != null, "Application context was not created. Please first call 'application_create'.");
+
+    context->is_running = true;
+
+    clock_start(&context->clock);
+    clock_update(&context->clock);
+    context->last_time = context->clock.elapsed;
+
+    f64 running_time     = 0;
+    u16 frame_count      = 0;
+    f64 frame_limit_time = 1.0f / 60;
 
     while(context->is_running)
     {
@@ -107,23 +127,63 @@ bool application_run()
 
         if(!context->is_suspended)
         {
-            if(!context->application->update(context->application, (f32)0))
+            // Обновляем таймер и получаем дельту!
+            clock_update(&context->clock);
+            f64 current_time = context->clock.elapsed;
+            f64 delta = current_time - context->last_time;
+            f64 frame_start_time = platform_absolute_time_get();
+            
+            if(!context->application->update(context->application, (f32)delta))
             {
                 kerror("Game update failed, shutting down!");
                 context->is_running = false;
                 break;
             }
 
-            if(!context->application->render(context->application, (f32)0))
+            // Пользовательский рендер.
+            if(!context->application->render(context->application, (f32)delta))
             {
                 kerror("Game render failed, shutting down!");
                 context->is_running = false;
                 break;
             }
+
+            // TODO: Провести рефактор render_packet.
+            render_packet packet;
+            packet.delta_time = (f32)delta;
+            renderer_draw_frame(&packet);
+
+            // Расчет времени кадра.
+            f64 frame_end_time = platform_absolute_time_get();
+            f64 frame_elapsed_time = frame_end_time - frame_start_time;
+            running_time += frame_elapsed_time;
+            f64 remaining_secounds = frame_limit_time - frame_elapsed_time;
+
+            if(remaining_secounds > 0)
+            {
+                u64 remaining_ms = remaining_secounds * 1000;
+
+                // Если время еще не вышло, то возвращаем управление операционной системе!
+                // TODO: Вынести лимитер кадров в настройки приложения.
+                bool frame_limit_on = true;
+                if(remaining_ms > 0 && frame_limit_on)
+                {
+                    platform_thread_sleep(remaining_ms - 1);
+                }
+
+                frame_count++;
+
+            }
+
+            // NOTE: Устройства ввода последнее что должно обновляться в кадре!
+            input_system_update(delta);
+
+            context->last_time = current_time;
         }
     }
 
     // Нормальное завершение работы.
+    renderer_shutdown();
     input_system_shutdown();
     event_system_shutdown();
     platform_window_destroy();

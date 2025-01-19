@@ -63,7 +63,7 @@ void input_system_update(f64 delta_time)
     kmcopy_tc(&context->keyboard_previous, &context->keyboard_current, keyboard_state, 1);
     kmcopy_tc(&context->mouse_previous, &context->mouse_current, mouse_state, 1);
 
-    ktrace("Input system updated!");
+    // ktrace("Input system updated!");
 }
 
 void input_update_keyboard_key(key key, bool pressed)

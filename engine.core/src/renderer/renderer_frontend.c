@@ -1,0 +1,82 @@
+// Cобственные подключения.
+#include "renderer/renderer_frontend.h"
+#include "renderer/renderer_backend.h"
+
+// Внутренние подключения.
+#include "logger.h"
+#include "debug/assert.h"
+#include "memory/memory.h"
+
+// Указатель на структуру контекста бэкенда выбранного рендера.
+static renderer_backend* backend = null;
+
+// Сообщения.
+static const char* message_backend_not_created = "Renderer context was not created. Please first call 'renderer_initialize'.";
+
+bool renderer_initialize(const char* application_name)
+{
+    kassert_debug(backend == null, "Trying to call function 'renderer_initialize' more than once!");
+
+    backend = kmallocate_t(renderer_backend, MEMORY_TAG_RENDERER);
+    if(!backend)
+    {
+        kerror("Memory for renderer context not allocated! Aborted.");
+        return false;
+    }
+
+    // TODO: Сделать настраиваемым из приложения!
+    renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, backend);
+
+    if(!backend->initialize(backend, application_name))
+    {
+        kerror("Renderer backend failed to initialize. Shutting down.");
+        return false;
+    }
+
+    return true;
+}
+
+void renderer_shutdown()
+{
+    kassert_debug(backend != null, message_backend_not_created);
+
+    backend->shutdown(backend);
+    kmfree(backend);
+    backend = null;
+}
+
+bool renderer_begin_frame(f32 delta_time)
+{
+    return backend->begin_frame(backend, delta_time);
+}
+
+bool renderer_end_frame(f32 delta_time)
+{
+    bool result = backend->end_frame(backend, delta_time);
+    backend->frame_number++;
+    return result;
+}
+
+bool renderer_draw_frame(render_packet* packet)
+{
+    kassert_debug(backend != null, message_backend_not_created);
+
+    if(renderer_begin_frame(packet->delta_time))
+    {
+        bool result = renderer_end_frame(packet->delta_time);
+
+        if(!result)
+        {
+            kerror("Renderer end frame failed. Shutting down.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void renderer_on_resize(i32 width, i32 height)
+{
+    kassert_debug(backend != null, message_backend_not_created);
+    
+}

@@ -44,6 +44,10 @@ bool game_initialize(application* inst)
 bool game_update(application* inst, f32 delta_time)
 {
     // kdebug("Game update!");
+    if(input_is_keyboard_key_down(KEY_I) && input_was_keyboard_key_up(KEY_I))
+    {
+        kdebug("GAME_UPDATE: Get delta time is %.6f", delta_time);
+    }
     return true;
 }
 
