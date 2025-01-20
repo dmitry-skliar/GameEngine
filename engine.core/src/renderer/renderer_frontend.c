@@ -20,7 +20,7 @@ bool renderer_initialize(const char* application_name)
     backend = kmallocate_t(renderer_backend, MEMORY_TAG_RENDERER);
     if(!backend)
     {
-        kerror("Memory for renderer context not allocated! Aborted.");
+        kerror("Failed to allocate renderer memory context.");
         return false;
     }
 
@@ -29,7 +29,7 @@ bool renderer_initialize(const char* application_name)
 
     if(!backend->initialize(backend, application_name))
     {
-        kerror("Renderer backend failed to initialize. Shutting down.");
+        kerror("Failed to initialize renderer backend.");
         return false;
     }
 
@@ -67,7 +67,7 @@ bool renderer_draw_frame(render_packet* packet)
 
         if(!result)
         {
-            kerror("Renderer end frame failed. Shutting down.");
+            kerror("Failed to complete function 'renderer_end_frame'. Shutting down.");
             return false;
         }
     }

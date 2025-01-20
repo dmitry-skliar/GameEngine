@@ -8,10 +8,13 @@
     #include "debug/assert.h"
     #include "memory/memory.h"
     #include "input_types.h"
+    #include "containers/darray.h"
     #include "window_wayland_xdg.h"
 
     // Внешние подключения.
     #include <wayland-client.h>
+    #include <vulkan/vulkan.h>
+    #include <vulkan/vulkan_wayland.h>
     #include <string.h>
     // TODO: Временно начало.
     #include <sys/mman.h>
@@ -55,7 +58,7 @@
     // Указатель на структура контекста окна.
     static platform_window_context* context = null;
 
-    // Сообщения (оптимизация).
+    // Сообщения.
     static const char* message_context_not_created = "Window context was not created. Please first call 'platform_window_create'.";
     static const char* message_event_not_set       = "Wayland event '%s' not set.";
 
@@ -597,6 +600,11 @@
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_focus = handler;
+    }
+
+    void platform_window_get_vulkan_extentions(const char*** names)
+    {
+        darray_push(*names, &VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
     }
 
 #endif

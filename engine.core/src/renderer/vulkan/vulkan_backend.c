@@ -1,17 +1,29 @@
 // Cобственные подключения.
 #include "renderer/vulkan/vulkan_backend.h"
 #include "renderer/vulkan/vulkan_types.h"
+#include "renderer/vulkan/vulkan_utils.h"
+#include "renderer/vulkan/vulkan_platform.h"
 
 // Внутренние подключения.
 #include "logger.h"
 #include "debug/assert.h"
 #include "memory/memory.h"
+#include "containers/darray.h"
+#include "kstring.h"
 
 // Указатель на контекст vulkan.
 static vulkan_context* context = null;
 
 // Сообщения.
 static const char* message_context_not_initialized = "Vulkan renderer was not initialized. Please first call 'vulkan_renderer_backend_initialize'.";
+
+// Объявления функций.
+VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
+    VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
+    VkDebugUtilsMessageTypeFlagsEXT             type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    void*                                       user_data
+);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* application_name)
 {
@@ -20,38 +32,160 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     context = kmallocate_t(vulkan_context, MEMORY_TAG_RENDERER);
     if(!context)
     {
-        kerror("Failed to allocated memory for vulkan context. Aborted!");
+        kerror("Failed to allocated memory for vulkan context.");
         return false;
     }
     kmzero_tc(context, vulkan_context, 1);
+    ktrace("Vulkan context created.");
 
     // Начальная инициализация.
     //
 
-    // Настройка экземпляра vulkan.
+    // Заполнение информации приложения.
     VkApplicationInfo appinfo        = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
     appinfo.apiVersion               = VK_API_VERSION_1_4;
     appinfo.pApplicationName         = application_name;
     appinfo.applicationVersion       = VK_MAKE_VERSION(1, 0, 0);
-    appinfo.pEngineName              = "Copy Game Engine";
-    appinfo.engineVersion            = VK_MAKE_VERSION(1, 0, 0);
+    appinfo.pEngineName              = "Game Engine";
+    appinfo.engineVersion            = VK_MAKE_VERSION(0, 1, 0);
 
+    // TODO: Переделать! Вынести в отдельный файл.
+    ktrace("Vulkan API version: %d.%d.%d", VK_VERSION_MAJOR(appinfo.apiVersion), VK_VERSION_MINOR(appinfo.apiVersion), VK_VERSION_PATCH(appinfo.apiVersion));
+    ktrace("Engine API version: %d.%d.%d", VK_VERSION_MAJOR(appinfo.engineVersion), VK_VERSION_MINOR(appinfo.engineVersion), VK_VERSION_PATCH(appinfo.engineVersion));
+
+    // Настройка экземпляра vulkan.
     VkInstanceCreateInfo instinfo    = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
     instinfo.pApplicationInfo        = &appinfo;
-    instinfo.enabledExtensionCount   = 0;
-    instinfo.ppEnabledExtensionNames = null;
+
+    // Получение списока запрашиваемых расширений.
+    const char** required_extentions = darray_create(const char*);
+    darray_push(required_extentions, &VK_KHR_SURFACE_EXTENSION_NAME);     // Расширение для использования поверхности.
+    platform_window_get_vulkan_extentions(&required_extentions);          // Платформо-зависимые расширения.
+#if KDEBUG_FLAG
+    darray_push(required_extentions, &VK_EXT_DEBUG_UTILS_EXTENSION_NAME); // Расширение для отладки.
+#endif
+
+    // Получение списока доступных расширений.
+    u32 available_extension_count = 0;
+    vkEnumerateInstanceExtensionProperties(null, &available_extension_count, null);
+    VkExtensionProperties* avaulable_extensions = darray_reserve(VkExtensionProperties, available_extension_count);
+    vkEnumerateInstanceExtensionProperties(null, &available_extension_count, avaulable_extensions);
+
+    // Сопоставление запрашиваемых и доступных расширений.
+    u32 required_extension_count = darray_get_length(required_extentions);
+    ktrace("Vulkan extensions used:");
+    for(u32 i = 0; i < required_extension_count; ++i)
+    {
+        bool found = false;
+
+        for(u32 j = 0; j < available_extension_count; ++j)
+        {
+            if(string_is_equal(required_extentions[i], avaulable_extensions[j].extensionName))
+            {
+                ktrace(" * %s", required_extentions[i]);
+                found = true;
+                break;
+            }
+        }
+
+        if(!found)
+        {
+            kerror("Required extension: '%s' is missing.", required_extentions[i]);
+            return false;
+        }
+    }
+
+    // Запись запрашиваемых расширений.
+    instinfo.enabledExtensionCount   = required_extension_count;
+    instinfo.ppEnabledExtensionNames = required_extentions;
     instinfo.enabledLayerCount       = 0;
     instinfo.ppEnabledLayerNames     = null;
 
-    // TODO: Реализовать аллокатор памяти для vulkan.
-    VkResult result = vkCreateInstance(&instinfo, context->allocator, &context->instance);
-    if(result != VK_SUCCESS)
+#if KDEBUG_FLAG
+    // Получение списка запрашиваемых слоев проверки.
+    const char** required_layers = darray_create(const char*);
+    darray_push(required_layers, &"VK_LAYER_KHRONOS_validation"); // Проверяет правильность использования Vulkan API.
+    // darray_push(required_layers, &"VK_LAYER_LUNARG_api_dump"); // NOTE: Включить при отладке.
+
+    // Получение списка доступных слоев проверки.
+    u32 available_layer_count = 0;
+    vkEnumerateInstanceLayerProperties(&available_layer_count, null);
+    VkLayerProperties* available_layers = darray_reserve(VkLayerProperties, available_layer_count);
+    vkEnumerateInstanceLayerProperties(&available_layer_count, available_layers);
+
+    // Сопоставление запрашиваемых и доступных слоев проверки.
+    u32 required_layer_count = darray_get_length(required_layers);
+    ktrace("Vulkan validation layers used:");
+    for(u32 i = 0; i < required_layer_count; ++i)
     {
-        kerror("Failed to create vulkan instance with result: %u", result);
-        return false;
+        bool found = false;
+
+        for(u32 j = 0; j < available_layer_count; ++j)
+        {
+            if(string_is_equal(required_layers[i], available_layers[j].layerName))
+            {
+                ktrace(" * %s", required_layers[i]);
+                found = true;
+                break;
+            }
+        }
+
+        if(!found)
+        {
+            kerror("Required validation layer: '%s' is missing.", required_layers[i]);
+            return false;
+        }
     }
 
-    kinfor("Renderer vulkan started.");
+    // Запись запрашиваемых слоев проверки.
+    instinfo.enabledLayerCount   = required_layer_count;
+    instinfo.ppEnabledLayerNames = required_layers;
+#endif
+
+    // TODO: Реализовать аллокатор памяти для vulkan.
+    VkResult result = vkCreateInstance(&instinfo, context->allocator, &context->instance);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Failed to create vulkan instance with result: %s.", vulkan_result_get_string(result, true));
+        return false;
+    }
+    ktrace("Vulkan instance created.");
+
+    // Очистка используемой памяти.
+    darray_destroy(required_extentions);
+    darray_destroy(avaulable_extensions);
+#if KDEBUG_FLAG
+    darray_destroy(required_layers);
+    darray_destroy(available_layers);
+#endif
+
+    // Создание отладочного мессенджара Vulkan.
+#if KDEBUG_FLAG
+    VkDebugUtilsMessengerCreateInfoEXT msginfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+    msginfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+                            // | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
+                            // | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    msginfo.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
+                            | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+    msginfo.pfnUserCallback = vulkan_debug_message_handler;
+
+    PFN_vkCreateDebugUtilsMessengerEXT messenger_create =
+        (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkCreateDebugUtilsMessengerEXT");
+
+    result = messenger_create(context->instance, &msginfo, context->allocator, &context->debug_messenger);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Failed to create vulkan debug messenger with result: %s.", vulkan_result_get_string(result, true));
+        return false;
+    }
+    ktrace("Vulkan debug messenger created.");
+#endif
+
+    ktrace("Vulkan renderer initialized successfully.");
+    kinfor("Renderer started.");
     return true;
 }
 
@@ -59,14 +193,25 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
 {
     kassert_debug(context != null, message_context_not_initialized);
 
+    // Уничтожение отладочного мессенджара Vulkan.
+    PFN_vkDestroyDebugUtilsMessengerEXT messenger_destroy =
+        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkDestroyDebugUtilsMessengerEXT");
+
+    messenger_destroy(context->instance, context->debug_messenger, context->allocator);
+    context->debug_messenger = NULL;
+    ktrace("Vulkan debug messenger destroyed.");
+
     // Уничтожение экземпляра vulkan.
     vkDestroyInstance(context->instance, context->allocator);
     context->instance = null;
+    ktrace("Vulkan instance destroyed.");
 
     // Уничтожение контекста vulkan.
     kmfree(context);
     context = null;
-    kinfor("Renderer vulkan stopped.");
+    ktrace("Vulkan context destroyed.");
+
+    kinfor("Renderer stopped.");
 }
 
 void vulkan_renderer_backend_on_resized(renderer_backend* backend, i32 width, i32 height)
@@ -82,4 +227,29 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
 bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time)
 {
     return true;
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
+    VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
+    VkDebugUtilsMessageTypeFlagsEXT             type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    void*                                       user_data)
+{
+    switch(severity)
+    {
+        default:
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+            kerror(callback_data->pMessage);
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+            kwarng(callback_data->pMessage);
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+            kinfor(callback_data->pMessage);
+            break;
+        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+            ktrace(callback_data->pMessage);
+            break;
+    }
+    return VK_FALSE;
 }

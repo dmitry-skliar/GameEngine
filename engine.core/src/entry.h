@@ -34,7 +34,7 @@ int main()
 
     if(!application_create(inst))
     {
-        kerror("The application failed to create!");
+        kerror("Failed to create application!");
         return 1;
     }
 
