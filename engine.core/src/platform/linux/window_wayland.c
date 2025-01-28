@@ -10,6 +10,7 @@
     #include "input_types.h"
     #include "containers/darray.h"
     #include "window_wayland_xdg.h"
+    #include "renderer/vulkan/vulkan_platform.h"
 
     // Внешние подключения.
     #include <wayland-client.h>
@@ -98,7 +99,7 @@
         wl_surface_commit(context->wsurface);
     }
 
-    // Обработчичи событий.
+    // Объявления функций (обработчичи событий).
     static void wregistry_add(void* data, struct wl_registry* wregistry, u32 name, const char* interface, u32 version);
     static void wregistry_remove(void* data, struct wl_registry* wregistry, u32 name);
     static void xbase_ping(void* data, struct xdg_wm_base *xbase, u32 serial);
@@ -605,6 +606,25 @@
     void platform_window_get_vulkan_extentions(const char*** names)
     {
         darray_push(*names, &VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+    }
+
+    VkResult platform_window_create_vulkan_surface(vulkan_context* vcontext)
+    {
+        VkWaylandSurfaceCreateInfoKHR surfinfo = { VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR };
+        surfinfo.display = context->wdisplay;
+        surfinfo.surface = context->wsurface;
+        return vkCreateWaylandSurfaceKHR(vcontext->instance, &surfinfo, vcontext->allocator, &vcontext->surface);
+    }
+
+    void platform_window_destroy_vulkan_surface(vulkan_context* context)
+    {
+        vkDestroySurfaceKHR(context->instance, context->surface, context->allocator);
+        context->surface = null;
+    }
+
+    bool platform_window_get_vulkan_presentation_support(vulkan_context* vcontext, VkPhysicalDevice physical_device, u32 queue_family_index)
+    {
+        return (bool)vkGetPhysicalDeviceWaylandPresentationSupportKHR(physical_device, queue_family_index, context->wdisplay);
     }
 
 #endif

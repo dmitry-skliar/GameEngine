@@ -3,6 +3,7 @@
 #include "renderer/vulkan/vulkan_types.h"
 #include "renderer/vulkan/vulkan_utils.h"
 #include "renderer/vulkan/vulkan_platform.h"
+#include "renderer/vulkan/vulkan_device.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -11,7 +12,7 @@
 #include "containers/darray.h"
 #include "kstring.h"
 
-// Указатель на контекст vulkan.
+// Указатель на контекст Vulkan.
 static vulkan_context* context = null;
 
 // Сообщения.
@@ -104,8 +105,8 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
 #if KDEBUG_FLAG
     // Получение списка запрашиваемых слоев проверки.
     const char** required_layers = darray_create(const char*);
-    darray_push(required_layers, &"VK_LAYER_KHRONOS_validation"); // Проверяет правильность использования Vulkan API.
-    // darray_push(required_layers, &"VK_LAYER_LUNARG_api_dump"); // NOTE: Включить при отладке.
+    darray_push(required_layers, &"VK_LAYER_KHRONOS_validation");          // Проверка правильности использования Vulkan API.
+    // darray_push(required_layers, &"VK_LAYER_LUNARG_api_dump");             // Выводит в консоль вызовы и передаваемые параметры.
 
     // Получение списка доступных слоев проверки.
     u32 available_layer_count = 0;
@@ -146,7 +147,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     VkResult result = vkCreateInstance(&instinfo, context->allocator, &context->instance);
     if(!vulkan_result_is_success(result))
     {
-        kerror("Failed to create vulkan instance with result: %s.", vulkan_result_get_string(result, true));
+        kerror("Failed to create vulkan instance with result: %s", vulkan_result_get_string(result, true));
         return false;
     }
     ktrace("Vulkan instance created.");
@@ -178,13 +179,31 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     result = messenger_create(context->instance, &msginfo, context->allocator, &context->debug_messenger);
     if(!vulkan_result_is_success(result))
     {
-        kerror("Failed to create vulkan debug messenger with result: %s.", vulkan_result_get_string(result, true));
+        kerror("Failed to create vulkan debug messenger with result: %s", vulkan_result_get_string(result, true));
         return false;
     }
     ktrace("Vulkan debug messenger created.");
 #endif
 
-    ktrace("Vulkan renderer initialized successfully.");
+    // Создание поверхности Vulkan-Platform.
+    result = platform_window_create_vulkan_surface(context);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Failed to create vulkan surface with result: %s", vulkan_result_get_string(result, true));
+        return false;
+    }
+    ktrace("Vulkan surfcae created.");
+
+    // Создание физического и логического устройства.
+    // TODO: Провести переделку логики vulkan_device_*!
+    result = vulkan_device_create(context);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Failed to create vulkan device with result: %s", vulkan_result_get_string(result, true));
+        return false;
+    }
+    ktrace("Vulkan physical and logical device created.");
+
     kinfor("Renderer started.");
     return true;
 }
@@ -193,12 +212,20 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
 {
     kassert_debug(context != null, message_context_not_initialized);
 
+    // Уничтожение физического и логического устройства.
+    vulkan_device_destroy(context);
+    ktrace("Vulkan physical device destroyed.");
+
+    // Уничтожение поверхности Vulkan-Platform.
+    platform_window_destroy_vulkan_surface(context);
+    ktrace("Vulkan surface destroyed.");
+
     // Уничтожение отладочного мессенджара Vulkan.
     PFN_vkDestroyDebugUtilsMessengerEXT messenger_destroy =
         (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkDestroyDebugUtilsMessengerEXT");
 
     messenger_destroy(context->instance, context->debug_messenger, context->allocator);
-    context->debug_messenger = NULL;
+    context->debug_messenger = null;
     ktrace("Vulkan debug messenger destroyed.");
 
     // Уничтожение экземпляра vulkan.

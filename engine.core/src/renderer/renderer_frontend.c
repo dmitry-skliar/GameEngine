@@ -29,7 +29,6 @@ bool renderer_initialize(const char* application_name)
 
     if(!backend->initialize(backend, application_name))
     {
-        kerror("Failed to initialize renderer backend.");
         return false;
     }
 

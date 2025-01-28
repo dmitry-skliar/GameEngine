@@ -56,6 +56,9 @@ void memory_system_shutdown()
     {
         // TODO: Вывести сообщение о утечке памяти и где это произошло.
         kwarng("Detecting memory leaks...");
+        const char* meminfo = memory_system_usage_get();
+        kwarng(meminfo);
+        platform_memory_free((void*)meminfo);
     }
 
     platform_memory_free(context);
@@ -101,7 +104,7 @@ const char* memory_system_usage_get()
 
     for(u32 i = 0; i <= MEMORY_TAGS_MAX; ++i)
     {
-        char unit[4] = "Xib";
+        char unit[4] = "XiB";
         f32 amount = 1.0f;
         u64 size = 0;
 
@@ -137,7 +140,7 @@ const char* memory_system_usage_get()
         }
 
         // TODO: Использовать обертку над функцией.
-        i32 length = snprintf(buffer + offset, 8000, "\t%s: %.2f %s\n", memory_tag_strings[i], amount, unit);
+        i32 length = snprintf(buffer + offset, 8000, "\t%s: %7.2f %s\n", memory_tag_strings[i], amount, unit);
         offset += length;
     }
 
@@ -178,7 +181,7 @@ void* memory_allocate(u64 size, memory_tag tag)
         return (void*)((u8*)header + sizeof(memory_header));
     }
 
-    kerror("In function '%s' memory was not allocated. Return null!", __FUNCTION__);
+    kfatal("In function '%s' filed to allocate memory.", __FUNCTION__);
     return null;
 }
 

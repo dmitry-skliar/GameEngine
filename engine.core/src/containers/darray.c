@@ -38,7 +38,7 @@ void* dynamic_array_create(u64 stride, u64 capacity)
         return (void*)((u8*)header + sizeof(dynamic_array_header));
     }
 
-    kerror("In function '%s' memory was not allocated! Return null!", __FUNCTION__);
+    kfatal("In function '%s' failed to allocate memory!", __FUNCTION__);
     return null;
 }
 
