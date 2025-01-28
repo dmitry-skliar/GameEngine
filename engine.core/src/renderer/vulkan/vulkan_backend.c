@@ -4,6 +4,7 @@
 #include "renderer/vulkan/vulkan_utils.h"
 #include "renderer/vulkan/vulkan_platform.h"
 #include "renderer/vulkan/vulkan_device.h"
+#include "renderer/vulkan/vulkan_swapchain.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -20,11 +21,11 @@ static const char* message_context_not_initialized = "Vulkan renderer was not in
 
 // Объявления функций.
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
-    VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
-    VkDebugUtilsMessageTypeFlagsEXT             type,
-    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
-    void*                                       user_data
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data
 );
+
+i32 find_memory_index(u32 type_filter, u32 property_flags);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* application_name)
 {
@@ -40,7 +41,9 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     ktrace("Vulkan context created.");
 
     // Начальная инициализация.
-    //
+    context->find_memory_index = find_memory_index;
+    // TODO: Сделать аллокатор.
+    context->allocator = null;
 
     // Заполнение информации приложения.
     VkApplicationInfo appinfo        = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
@@ -174,7 +177,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     msginfo.pfnUserCallback = vulkan_debug_message_handler;
 
     PFN_vkCreateDebugUtilsMessengerEXT messenger_create =
-        (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkCreateDebugUtilsMessengerEXT");
+        (void*)vkGetInstanceProcAddr(context->instance, "vkCreateDebugUtilsMessengerEXT");
 
     result = messenger_create(context->instance, &msginfo, context->allocator, &context->debug_messenger);
     if(!vulkan_result_is_success(result))
@@ -204,6 +207,10 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     }
     ktrace("Vulkan physical and logical device created.");
 
+    // Создание цепочки обмена.
+    vulkan_swapchain_create(context, context->framebuffer_width, context->framebuffer_height, &context->swapchain);
+    ktrace("Vulkan swapchain created.");
+
     kinfor("Renderer started.");
     return true;
 }
@@ -212,31 +219,52 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
 {
     kassert_debug(context != null, message_context_not_initialized);
 
+    vkDeviceWaitIdle(context->device.logical);
+
+    // Уничтожение цепочки обмена.
+    vulkan_swapchain_destroy(context, &context->swapchain);
+    ktrace("Vulkan swapchain destroyed.");
+
     // Уничтожение физического и логического устройства.
-    vulkan_device_destroy(context);
-    ktrace("Vulkan physical device destroyed.");
+    if(context->device.logical)
+    {
+        vulkan_device_destroy(context);
+        ktrace("Vulkan physical device destroyed.");
+    }
 
     // Уничтожение поверхности Vulkan-Platform.
-    platform_window_destroy_vulkan_surface(context);
-    ktrace("Vulkan surface destroyed.");
+    if(context->surface)
+    {
+        platform_window_destroy_vulkan_surface(context);
+        ktrace("Vulkan surface destroyed.");
+    }
 
     // Уничтожение отладочного мессенджара Vulkan.
-    PFN_vkDestroyDebugUtilsMessengerEXT messenger_destroy =
-        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkDestroyDebugUtilsMessengerEXT");
+    if(context->debug_messenger)
+    {
+        PFN_vkDestroyDebugUtilsMessengerEXT messenger_destroy =
+            (void*)vkGetInstanceProcAddr(context->instance, "vkDestroyDebugUtilsMessengerEXT");
 
-    messenger_destroy(context->instance, context->debug_messenger, context->allocator);
-    context->debug_messenger = null;
-    ktrace("Vulkan debug messenger destroyed.");
+        messenger_destroy(context->instance, context->debug_messenger, context->allocator);
+        context->debug_messenger = null;
+        ktrace("Vulkan debug messenger destroyed.");
+    }
 
     // Уничтожение экземпляра vulkan.
-    vkDestroyInstance(context->instance, context->allocator);
-    context->instance = null;
-    ktrace("Vulkan instance destroyed.");
+    if(context->instance)
+    {
+        vkDestroyInstance(context->instance, context->allocator);
+        context->instance = null;
+        ktrace("Vulkan instance destroyed.");
+    }
 
     // Уничтожение контекста vulkan.
-    kmfree(context);
-    context = null;
-    ktrace("Vulkan context destroyed.");
+    if(context)
+    {
+        kmfree(context);
+        context = null;
+        ktrace("Vulkan context destroyed.");
+    }
 
     kinfor("Renderer stopped.");
 }
@@ -279,4 +307,24 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
             break;
     }
     return VK_FALSE;
+}
+
+i32 find_memory_index(u32 type_filter, u32 property_flags)
+{
+    VkPhysicalDeviceMemoryProperties memory_properties;
+    vkGetPhysicalDeviceMemoryProperties(context->device.physical, &memory_properties);
+
+    for(u32 i = 0; i < memory_properties.memoryTypeCount; ++i)
+    {
+        u32 current_property_flags = memory_properties.memoryTypes[i].propertyFlags & property_flags;
+
+        // Проверка каждого типа памяти на наличие установленного бита.
+        if(type_filter & (1 << i) && current_property_flags == property_flags)
+        {
+            return i;
+        }
+    }
+
+    kwarng("Unable to find suitable memory type!");
+    return -1;
 }

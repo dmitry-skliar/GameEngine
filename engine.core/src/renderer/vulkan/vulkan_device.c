@@ -590,3 +590,36 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
     kerror("No devices which support requirements were found!");
     return VK_ERROR_UNKNOWN;
 }
+
+bool vulkan_device_detect_depth_format(vulkan_device* device)
+{
+    #define CANDIDATE_COUNT 3
+
+    // Предложенные форматы.
+    VkFormat candidates[CANDIDATE_COUNT] = {
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+        VK_FORMAT_D24_UNORM_S8_UINT
+    };
+
+    u32 flags = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    for(u64 i = 0; i < CANDIDATE_COUNT; ++i)
+    {
+        VkFormatProperties properties;
+        vkGetPhysicalDeviceFormatProperties(device->physical, candidates[i], &properties);
+
+        if((properties.linearTilingFeatures & flags) == flags)
+        {
+            device->depth_format = candidates[i];
+            return true;
+        }
+        else if((properties.optimalTilingFeatures & flags) == flags)
+        {
+            device->depth_format = candidates[i];
+            return true;
+        }
+    }
+
+    return false;
+}

@@ -18,3 +18,7 @@ void vulkan_device_query_swapchain_support(VkPhysicalDevice physical, VkSurfaceK
 /*
 */
 void vulkan_device_destroy_swapchian_support(vulkan_device_swapchain_support* swapchain_support);
+
+/*
+*/
+bool vulkan_device_detect_depth_format(vulkan_device* device);

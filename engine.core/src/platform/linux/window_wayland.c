@@ -616,10 +616,10 @@
         return vkCreateWaylandSurfaceKHR(vcontext->instance, &surfinfo, vcontext->allocator, &vcontext->surface);
     }
 
-    void platform_window_destroy_vulkan_surface(vulkan_context* context)
+    void platform_window_destroy_vulkan_surface(vulkan_context* vcontext)
     {
-        vkDestroySurfaceKHR(context->instance, context->surface, context->allocator);
-        context->surface = null;
+        vkDestroySurfaceKHR(vcontext->instance, vcontext->surface, vcontext->allocator);
+        vcontext->surface = null;
     }
 
     bool platform_window_get_vulkan_presentation_support(vulkan_context* vcontext, VkPhysicalDevice physical_device, u32 queue_family_index)

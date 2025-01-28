@@ -65,6 +65,27 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define false 0
 #define true  1
 
+#define U8_MIN  0x00
+#define I8_MIN  0x80
+#define U16_MIN 0x0000
+#define I16_MIN 0x8000
+#define U32_MIN 0x00000000
+#define I32_MIN 0x80000000
+#define U64_MIN 0x0000000000000000
+#define I64_MIN 0x8000000000000000
+
+#define U8_MAX  0xff
+#define I8_MAX  0x7f
+#define U16_MAX 0xffff
+#define I16_MAX 0x7fff
+#define U32_MAX 0xffffffff
+#define I32_MAX 0x7fffffff
+#define U64_MAX 0xffffffffffffffff
+#define I64_MAX 0x7fffffffffffffff
+
+#define INVALID_ID64 U64_MAX
+#define INVALID_ID32 U32_MAX
+
 // Определение нулевого указателя.
 #define null  ((void*)0)
 
@@ -139,3 +160,28 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     @param src Место назначения куда нужно скопировать байты.
 */
 #define KCOPY1BYTE(dest, src) *((u8*)dest) = *((u8*)src)
+
+/*
+    @brief Макрос усечения значения в указанных пределах.
+    @param value Значение, которое нужно усечь.
+    @param min Значение минимального предела включительно.
+    @param max Значение максимального предела включительно.
+    @return Значение в заданных пределах.
+*/
+#define KCLAMP(value, min, max) ((value <= min) ? min : (value >= max) ? max : value)
+
+/*
+    @brief Макрос получения минимального значения из двух заданных.
+    @param v0 Первое значение.
+    @param v1 Второе значение.
+    @return Минимальное значение.
+*/
+#define KMIN(v0,v1) (v0 < v1 ? v0 : v1)
+
+/*
+    @brief Макрос получения максимального значения из двух заданных.
+    @param v0 Первое значение.
+    @param v1 Второе значение.
+    @return Максимальное значение.
+*/
+#define KMAX(v0,v1) (v0 > v1 ? v0 : v1)
