@@ -6,6 +6,7 @@
 #include "renderer/vulkan/vulkan_device.h"
 #include "renderer/vulkan/vulkan_swapchain.h"
 #include "renderer/vulkan/vulkan_renderpass.h"
+#include "renderer/vulkan/vulkan_command_buffer.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -25,8 +26,9 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data
 );
-
 i32 find_memory_index(u32 type_filter, u32 property_flags);
+void command_buffers_create(renderer_backend* backend);
+void command_buffers_destroy(renderer_backend* backend);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* application_name)
 {
@@ -206,7 +208,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
         kerror("Failed to create vulkan device with result: %s", vulkan_result_get_string(result, true));
         return false;
     }
-    ktrace("Vulkan physical and logical device created.");
+    ktrace("Vulkan device created.");
 
     // Создание цепочки обмена.
     vulkan_swapchain_create(context, context->framebuffer_width, context->framebuffer_height, &context->swapchain);
@@ -219,6 +221,10 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     );
     ktrace("Vulkan renderpass created.");
 
+    // Создание буферов команд.
+    command_buffers_create(backend);
+    ktrace("Vulkan command buffers created (Now only graphics!).");
+
     kinfor("Renderer started.");
     return true;
 }
@@ -228,6 +234,10 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     kassert_debug(context != null, message_context_not_initialized);
 
     vkDeviceWaitIdle(context->device.logical);
+
+    // Уничтожение буферов команд.
+    command_buffers_destroy(backend);
+    ktrace("Vulkan command buffers destroyed.");
 
     // Уничтожение визуализатора.
     vulkan_renderpass_destroy(context, &context->main_renderpass);
@@ -241,7 +251,7 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     if(context->device.logical)
     {
         vulkan_device_destroy(context);
-        ktrace("Vulkan physical device destroyed.");
+        ktrace("Vulkan device destroyed.");
     }
 
     // Уничтожение поверхности Vulkan-Platform.
@@ -339,4 +349,41 @@ i32 find_memory_index(u32 type_filter, u32 property_flags)
 
     kwarng("Unable to find suitable memory type!");
     return -1;
+}
+
+void command_buffers_create(renderer_backend* backend)
+{
+    if(!context->graphics_command_buffers)
+    {
+        context->graphics_command_buffers = darray_reserve(vulkan_command_buffer, context->swapchain.image_count);
+        kmzero_tc(context->graphics_command_buffers, vulkan_command_buffer, context->swapchain.image_count);
+    }
+
+    for(u32 i = 0; i < context->swapchain.image_count; ++i)
+    {
+        if(context->graphics_command_buffers[i].handle)
+        {
+            vulkan_command_buffer_free(context, context->device.graphics_queue.command_pool, &context->graphics_command_buffers[i]);
+        }
+
+        vulkan_command_buffer_allocate(context, context->device.graphics_queue.command_pool, true, &context->graphics_command_buffers[i]);
+    }
+}
+
+void command_buffers_destroy(renderer_backend* backend)
+{
+    if(context->graphics_command_buffers)
+    {
+        for(u32 i = 0; i < context->swapchain.image_count; ++i)
+        {
+            // TODO: Все похожие проверки спрятать внутри функции, дабы не создавать лишних проблем!
+            if(context->graphics_command_buffers[i].handle)
+            {
+                vulkan_command_buffer_free(context, context->device.graphics_queue.command_pool, &context->graphics_command_buffers[i]);
+            }
+        }
+
+        darray_destroy(context->graphics_command_buffers);
+        context->graphics_command_buffers = null;
+    }
 }

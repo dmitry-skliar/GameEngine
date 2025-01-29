@@ -73,6 +73,8 @@ typedef struct vulkan_device_requirements {
 typedef struct vulkan_device_queue {
     // @brief Указатель на очередь.
     VkQueue handle;
+    // @brief Указатель на пул команд.
+    VkCommandPool command_pool;
     // @brief Индекс семейства очередей.
     u32 index;
     // @brief Количество очередей в семействе.
@@ -132,6 +134,8 @@ typedef struct vulkan_context {
     vulkan_device device;
     vulkan_swapchain swapchain;
     vulkan_renderpass main_renderpass;
+    // @brief Графические коммандные буферы (используется darray).
+    vulkan_command_buffer* graphics_command_buffers;
     u32 image_index;
     u32 current_frame;
     bool recreating_swapchain;

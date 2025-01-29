@@ -139,16 +139,41 @@ VkResult vulkan_device_create(vulkan_context* context)
     vkGetDeviceQueue(context->device.logical, context->device.transfer_queue.index, 0, &context->device.transfer_queue.handle);
     ktrace("Vulkan queues obtained.");
 
+    // Создание пула команд для очереди графики.
+    VkCommandPoolCreateInfo poolinfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+    poolinfo.queueFamilyIndex = context->device.graphics_queue.index;
+    poolinfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    // TODO: Создать другие пулы команд.
+    result = vkCreateCommandPool(context->device.logical, &poolinfo, context->allocator, &context->device.graphics_queue.command_pool);
+    if(!vulkan_result_is_success(result))
+    {
+        kfatal("Failed to create qraphics command pool with result: %s", vulkan_result_get_string(result, true));
+    }
+    ktrace("Vulkan command pools created (Now only graphics!).");
+
     return VK_SUCCESS;
 }
 
 void vulkan_device_destroy(vulkan_context* context)
 {
+    // Уничтожение пулов команд.
+    vkDestroyCommandPool(context->device.logical, context->device.graphics_queue.command_pool, context->allocator);
+    context->device.graphics_queue.command_pool = null;
+    ktrace("Vulkan command pools destroyed.");
+
+    // Освобождение указателей на очереди.
+    context->device.graphics_queue.handle = null;
+    context->device.present_queue.handle = null;
+    context->device.transfer_queue.handle = null;
+    ktrace("Vulkan queues released.");
+
     // Уничтожение логического устройства.
     if(context->device.logical)
     {
         vkDestroyDevice(context->device.logical, context->allocator);
         context->device.logical = null;
+        ktrace("Vulkan logical device destroyed.");
     }
 
     // Освобождение ресурсов физического устройства.
@@ -163,6 +188,7 @@ void vulkan_device_destroy(vulkan_context* context)
         context->device.compute_queue.index  = -1;
         context->device.present_queue.index  = -1;
         context->device.transfer_queue.index = -1;
+        ktrace("Vulkan physical device released.");
     }
 }
 
