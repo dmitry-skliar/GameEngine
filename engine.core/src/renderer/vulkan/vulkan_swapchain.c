@@ -206,8 +206,6 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
         kfatal("Failed to get swapchain image count with result: %s", vulkan_result_get_string(result, true));
     }
 
-    ktrace("Vulkan swapchain image count: %d (after get!)", swapchain->image_count);
-
     if(!swapchain->images)
     {
         swapchain->images = darray_reserve(VkImage, swapchain->image_count);

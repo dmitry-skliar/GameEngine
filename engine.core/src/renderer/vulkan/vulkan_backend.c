@@ -5,6 +5,7 @@
 #include "renderer/vulkan/vulkan_platform.h"
 #include "renderer/vulkan/vulkan_device.h"
 #include "renderer/vulkan/vulkan_swapchain.h"
+#include "renderer/vulkan/vulkan_renderpass.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -211,6 +212,13 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     vulkan_swapchain_create(context, context->framebuffer_width, context->framebuffer_height, &context->swapchain);
     ktrace("Vulkan swapchain created.");
 
+    // Создание визуализатора.
+    vulkan_renderpass_create(
+        context, &context->main_renderpass, 0, 0, context->framebuffer_width, context->framebuffer_height,
+        0.0f, 0.0f, 0.2f, 1.0f, 1.0f, 0
+    );
+    ktrace("Vulkan renderpass created.");
+
     kinfor("Renderer started.");
     return true;
 }
@@ -220,6 +228,10 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     kassert_debug(context != null, message_context_not_initialized);
 
     vkDeviceWaitIdle(context->device.logical);
+
+    // Уничтожение визуализатора.
+    vulkan_renderpass_destroy(context, &context->main_renderpass);
+    ktrace("Vulkan renderpass destroyed.");
 
     // Уничтожение цепочки обмена.
     vulkan_swapchain_destroy(context, &context->swapchain);

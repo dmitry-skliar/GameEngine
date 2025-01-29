@@ -6,24 +6,59 @@
 
 typedef struct vulkan_image {
     VkImage handle;
-    VkDeviceMemory memory;
     VkImageView view;
+    VkDeviceMemory memory;
     u32 width;
     u32 height;
 } vulkan_image;
 
+typedef enum vulkan_renderpass_state {
+    VULKAN_RENDERPASS_STATE_READY,
+    VULKAN_RENDERPASS_STATE_RECORDING,
+    VULKAN_RENDERPASS_STATE_IN_RENDERPASS,
+    VULKAN_RENDERPASS_STATE_RECORDING_ENDED,
+    VULKAN_RENDERPASS_STATE_SUBMITTED,
+    VULKAN_RENDERPASS_STATE_NOT_ALLOCATED
+} vulkan_renderpass_state;
+
+typedef struct vulkan_renderpass {
+    VkRenderPass handle;
+    f32 x, y, w, h;
+    f32 r, g, b, a;
+    f32 depth;
+    f32 stencil;
+    vulkan_renderpass_state state;
+} vulkan_renderpass;
+
 typedef struct vulkan_swapchain {
     u32 max_frames_in_flight;
+    // @brief Количество используемых изображений.
     u32 image_count;
     // @brief Формат пикселей.
     VkSurfaceFormatKHR image_format;
-    // @brief Память изображений (используется darray).
+    // @brief Изображений (используется darray).
     VkImage* images;
-    // @brief Память обзорных изображений (используется darray).
+    // @brief Представления изображений (используется darray).
     VkImageView* views;
+    // @brief Цепочка обмена.
     VkSwapchainKHR handle;
+    // @brief Буфер глубины.
     vulkan_image depth_attachment;
 } vulkan_swapchain;
+
+typedef enum vulkan_command_buffer_state {
+    VULKAN_COMMAND_BUFFER_STATE_READY,
+    VULKAN_COMMAND_BUFFER_STATE_RECORDING,
+    VULKAN_COMMAND_BUFFER_STATE_IN_RENDERPASS,
+    VULKAN_COMMAND_BUFFER_STATE_RECORDING_ENDED,
+    VULKAN_COMMAND_BUFFER_STATE_SUBMITTED,
+    VULKAN_COMMAND_BUFFER_STATE_NOT_ALLOCATED,
+} vulkan_command_buffer_state;
+
+typedef struct vulkan_command_buffer {
+    VkCommandBuffer handle;
+    vulkan_command_buffer_state state;
+} vulkan_command_buffer;
 
 // TODO: Так же сделать выбор по индексу видеокарты!
 typedef struct vulkan_device_requirements {
@@ -96,6 +131,7 @@ typedef struct vulkan_context {
 #endif
     vulkan_device device;
     vulkan_swapchain swapchain;
+    vulkan_renderpass main_renderpass;
     u32 image_index;
     u32 current_frame;
     bool recreating_swapchain;
