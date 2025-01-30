@@ -30,9 +30,18 @@ typedef struct vulkan_renderpass {
     vulkan_renderpass_state state;
 } vulkan_renderpass;
 
+typedef struct vulkan_framebuffer {
+    VkFramebuffer handle;
+    u32 attachment_count;
+    // @brief Буферы представлений изображений (используется darray).
+    VkImageView* attachments;
+    vulkan_renderpass* renderpass;
+} vulkan_framebuffer;
+
 typedef struct vulkan_swapchain {
+    // @brief Количество кадров для визуализации.
     u32 max_frames_in_flight;
-    // @brief Количество используемых изображений.
+    // @brief Количество кадров цепочки.
     u32 image_count;
     // @brief Формат пикселей.
     VkSurfaceFormatKHR image_format;
@@ -44,6 +53,8 @@ typedef struct vulkan_swapchain {
     VkSwapchainKHR handle;
     // @brief Буфер глубины.
     vulkan_image depth_attachment;
+    // @brief Кадровые буферы для визуализации на экране (используется darray).
+    vulkan_framebuffer* framebuffers;
 } vulkan_swapchain;
 
 typedef enum vulkan_command_buffer_state {
@@ -59,16 +70,6 @@ typedef struct vulkan_command_buffer {
     VkCommandBuffer handle;
     vulkan_command_buffer_state state;
 } vulkan_command_buffer;
-
-// TODO: Так же сделать выбор по индексу видеокарты!
-typedef struct vulkan_device_requirements {
-    // @brief Поддержка определенного типа физического устройства.
-    VkPhysicalDeviceType device_type;
-    // @brief Поддержка расширений физического устройства (используется массив darray).
-    const char** extensions;
-    // @brief Поддержка анизотропии.
-    bool sampler_anisotropy;
-} vulkan_device_requirements;
 
 typedef struct vulkan_device_queue {
     // @brief Указатель на очередь.
@@ -94,6 +95,16 @@ typedef struct vulkan_device_swapchain_support {
     // @brief Режимы изображений представлений (используется массив darray, для получения размера использовать darray_get_capacity).
     VkPresentModeKHR* present_modes;
 } vulkan_device_swapchain_support;
+
+// TODO: Так же сделать выбор по индексу видеокарты!
+typedef struct vulkan_device_requirements {
+    // @brief Поддержка определенного типа физического устройства.
+    VkPhysicalDeviceType device_type;
+    // @brief Поддержка расширений физического устройства (используется массив darray).
+    const char** extensions;
+    // @brief Поддержка анизотропии.
+    bool sampler_anisotropy;
+} vulkan_device_requirements;
 
 typedef struct vulkan_device {
     // @brief Физическое устройство.
@@ -122,9 +133,18 @@ typedef struct vulkan_device {
     VkFormat depth_format;
 } vulkan_device;
 
+typedef struct vulkan_fence {
+    VkFence handle;
+    bool is_signaled;
+} vulkan_fence;
+
 typedef struct vulkan_context {
     u32 framebuffer_width;
     u32 framebuffer_height;
+
+    u64 framebuffer_size_generation;
+    u64 framebuffer_size_last_generation;
+
     VkInstance instance;
     VkAllocationCallbacks* allocator;
     VkSurfaceKHR surface;
@@ -136,6 +156,14 @@ typedef struct vulkan_context {
     vulkan_renderpass main_renderpass;
     // @brief Графические коммандные буферы (используется darray).
     vulkan_command_buffer* graphics_command_buffers;
+    // @brief Готовое для визуализации (используется darray).
+    VkSemaphore* image_available_semaphores;
+    // @brief Завершение визуализации (используется darray).
+    VkSemaphore* queue_complete_semaphores;
+    u32 in_flight_fence_count;
+    vulkan_fence* in_flight_fences;
+    // Содержит указатели на существующие ограждения, принадлежащие кому-то другому.
+    vulkan_fence** images_in_flight;
     u32 image_index;
     u32 current_frame;
     bool recreating_swapchain;

@@ -13,7 +13,7 @@ typedef struct renderer_backend {
 
     u64 frame_number;
 
-    bool (*initialize)(struct renderer_backend* backend, const char* application_name);
+    bool (*initialize)(struct renderer_backend* backend, const char* application_name, u32 width, u32 height);
 
     void (*shutdown)(struct renderer_backend* backend);
 

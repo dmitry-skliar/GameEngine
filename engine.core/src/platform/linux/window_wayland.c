@@ -191,7 +191,7 @@
         wl_display_roundtrip(context->wdisplay);
 
         // TODO: Временно начало. Вынести в отдельную API функцию!
-        screen_clear(context->width, context->height, 0x77101010);
+        // screen_clear(context->width, context->height, 0x77101010);
         // TODO: Временно конец.
 
         kinfor("Platform window started.");
@@ -601,6 +601,12 @@
         // Проверка вызова функции.
         kassert_debug(context != null, message_context_not_created);
         context->on_focus = handler;
+    }
+
+    void platform_window_get_dimentions(u32* width, u32* height)
+    {
+        *width = context->width;
+        *height = context->height;
     }
 
     void platform_window_get_vulkan_extentions(const char*** names)

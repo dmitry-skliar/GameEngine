@@ -2,7 +2,7 @@
 
 #include <renderer/renderer_types.h>
 
-bool renderer_initialize(const char* application_name);
+bool renderer_initialize(const char* application_name, u32 width, u32 height);
 
 void renderer_shutdown();
 

@@ -50,6 +50,7 @@ bool application_create(application* application)
     }
     kmzero_tc(context, application_context, 1);
 
+    // Начальная инициализация.
     context->application = application;
 
     // Инициализация подсистемы окна.
@@ -84,7 +85,7 @@ bool application_create(application* application)
     }
 
     // Инициализация редререра.
-    if(!renderer_initialize(application->window_title))
+    if(!renderer_initialize(application->window_title, application->window_width, application->window_height))
     {
         kerror("Failed to initialize renderer. Aborted!");
         return false;
@@ -230,8 +231,13 @@ void application_on_keyboard_key(u32 keycode, bool pressed)
 
 void application_on_resize(i32 width, i32 height)
 {
+    // Обновление размеров в приложения.
     context->application->on_resize(context->application, width, height);
 
+    // Обновление размеров в визуализаторе.
+    renderer_on_resize(width, height);
+
+    // Создание события на обновление размеров.
     event_context data = { .i32[0] = width, .i32[1] = height };
     event_send(EVENT_CODE_APPLICATION_RESIZE, null, data);
 }

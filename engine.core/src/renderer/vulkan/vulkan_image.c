@@ -1,8 +1,8 @@
-// Собственные включения.
+// Собственные подключения.
 #include "renderer/vulkan/vulkan_image.h"
 #include "renderer/vulkan/vulkan_utils.h"
 
-// Внутренние включения.
+// Внутренние подключения.
 #include "logger.h"
 
 void vulkan_image_create(

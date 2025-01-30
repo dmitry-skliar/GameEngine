@@ -13,7 +13,7 @@ static renderer_backend* backend = null;
 // Сообщения.
 static const char* message_backend_not_created = "Renderer context was not created. Please first call 'renderer_initialize'.";
 
-bool renderer_initialize(const char* application_name)
+bool renderer_initialize(const char* application_name, u32 width, u32 height)
 {
     kassert_debug(backend == null, "Trying to call function 'renderer_initialize' more than once!");
 
@@ -27,7 +27,7 @@ bool renderer_initialize(const char* application_name)
     // TODO: Сделать настраиваемым из приложения!
     renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, backend);
 
-    if(!backend->initialize(backend, application_name))
+    if(!backend->initialize(backend, application_name, width, height))
     {
         return false;
     }
@@ -76,6 +76,7 @@ bool renderer_draw_frame(render_packet* packet)
 
 void renderer_on_resize(i32 width, i32 height)
 {
+    // TODO: Может плохо сыграть, заменить на простые проверки похожие ситуации!
     kassert_debug(backend != null, message_backend_not_created);
-    
+    backend->resized(backend, width, height);
 }

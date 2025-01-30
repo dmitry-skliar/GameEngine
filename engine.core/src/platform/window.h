@@ -80,6 +80,13 @@ KAPI void platform_window_set_on_mouse_wheel_handler(PFN_window_handler_mouse_wh
 */
 KAPI void platform_window_set_on_focus_handler(PFN_window_handler_focus handler);
 
+/*
+    @brief Получает текущие размеры окна.
+    @param width Указатель на переменную для записи ширины окна.
+    @param height Указатель на переменную для записи высоты окна.
+*/
+KAPI void platform_window_get_dimentions(u32* width, u32* height);
+
 // TODO: Реализовать следующее.
 // KAPI void platform_window_title_set(const char* title);
 // KAPI char* platform_window_title_get();

@@ -59,5 +59,5 @@ bool game_render(application* inst, f32 delta_time)
 
 void game_on_resize(application* inst, i32 width, i32 height)
 {
-    ktrace("Game: update screen size %d : %d", width, height);
+    kdebug("Game resized to %d : %d", width, height);
 }

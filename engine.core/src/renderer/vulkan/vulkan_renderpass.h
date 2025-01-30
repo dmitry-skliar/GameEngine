@@ -23,4 +23,3 @@ void vulkan_renderpass_begin(
 /*
 */
 void vulkan_renderpass_end(vulkan_command_buffer* command_buffer, vulkan_renderpass* renderpass);
-

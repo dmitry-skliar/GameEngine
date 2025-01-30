@@ -73,6 +73,9 @@ void vulkan_swapchain_present(
     {
         kfatal("Failed to present swapchain image!");
     }
+
+    // Циклическое увеличение текущего кадра.
+    context->current_frame = (context->current_frame + 1) % swapchain->max_frames_in_flight;
 }
 
 void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* swapchain)
@@ -125,6 +128,8 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     VkExtent2D max = context->device.swapchain_support.capabilities.maxImageExtent;
     swapchain_extent.width = KCLAMP(swapchain_extent.width, min.width, max.width);
     swapchain_extent.height = KCLAMP(swapchain_extent.height, min.height, max.height);
+    ktrace("Vulkan swapchain image width: %d (%d..%d)", swapchain_extent.width, min.width, max.width);
+    ktrace("Vulkan swapchain image height: %d (%d..%d)", swapchain_extent.height, min.height, max.height);
 
     u32 image_count_min = context->device.swapchain_support.capabilities.minImageCount;
     u32 image_count_max = context->device.swapchain_support.capabilities.maxImageCount;
@@ -181,7 +186,6 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
 
     swapchaininfo.preTransform = context->device.swapchain_support.capabilities.currentTransform;
     // Указывает использовать ли альфа-канал для смешивания с другими окнами в оконной системе.
-    // Может потребоваться для дополненой реальности.
     swapchaininfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchaininfo.presentMode = present_mode;
     // Обрезка скрытых пикселей другим окном, увеличивает производительность.

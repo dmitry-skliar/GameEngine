@@ -3,7 +3,7 @@
 #include <defines.h>
 #include <renderer/renderer_types.h>
 
-bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* application_name);
+bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* application_name, u32 width, u32 height);
 
 void vulkan_renderer_backend_shutdown(renderer_backend* backend);
 
