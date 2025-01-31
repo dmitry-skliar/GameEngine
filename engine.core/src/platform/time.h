@@ -6,4 +6,4 @@
     @brief Возвращает текущее значение таймера системы.
     @return Текущее значение таймера в секундах.
 */
-KAPI f64 platform_absolute_time_get();
+KAPI f64 platform_time_get_absolute();

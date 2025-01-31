@@ -132,7 +132,7 @@ bool application_run()
             clock_update(&context->clock);
             f64 current_time = context->clock.elapsed;
             f64 delta = current_time - context->last_time;
-            f64 frame_start_time = platform_absolute_time_get();
+            f64 frame_start_time = platform_time_get_absolute();
             
             if(!context->application->update(context->application, (f32)delta))
             {
@@ -155,7 +155,7 @@ bool application_run()
             renderer_draw_frame(&packet);
 
             // Расчет времени кадра.
-            f64 frame_end_time = platform_absolute_time_get();
+            f64 frame_end_time = platform_time_get_absolute();
             f64 frame_elapsed_time = frame_end_time - frame_start_time;
             running_time += frame_elapsed_time;
             f64 remaining_secounds = frame_limit_time - frame_elapsed_time;

@@ -161,6 +161,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 */
 #define KCOPY1BYTE(dest, src) *((u8*)dest) = *((u8*)src)
 
+// TODO: Перенести в kmath от
 /*
     @brief Макрос усечения значения в указанных пределах.
     @param value Значение, которое нужно усечь.
@@ -185,3 +186,4 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     @return Максимальное значение.
 */
 #define KMAX(v0,v1) (v0 > v1 ? v0 : v1)
+// TODO: Перенести в kmath до

@@ -404,7 +404,7 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     vulkan_command_buffer_reset(command_buffer);
     vulkan_command_buffer_begin(command_buffer, false, false, false);
 
-    VkViewport viewport = {};
+    VkViewport viewport = {0};
     viewport.x = 0.0f;
     viewport.y = (f32)context->framebuffer_height;
     viewport.width = (f32)context->framebuffer_width;
@@ -412,7 +412,7 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
-    VkRect2D scissor = {};
+    VkRect2D scissor = {0};
     scissor.offset.x = scissor.offset.y = 0;
     scissor.extent.width = context->framebuffer_width;
     scissor.extent.height = context->framebuffer_height;

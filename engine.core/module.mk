@@ -8,4 +8,4 @@ module_common_flags     =
 module_define_flags     =
 module_include_flags    =
 module_object_flags     =
-module_linker_flags     = -lvulkan
+module_linker_flags     = -lvulkan -lm
