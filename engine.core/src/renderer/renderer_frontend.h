@@ -1,8 +1,9 @@
 #pragma once
 
 #include <renderer/renderer_types.h>
+#include <platform/window.h>
 
-bool renderer_initialize(const char* application_name, u32 width, u32 height);
+bool renderer_initialize(window* window_state);
 
 void renderer_shutdown();
 

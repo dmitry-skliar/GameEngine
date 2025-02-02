@@ -4,8 +4,6 @@
 
 #if KPLATFORM_LINUX_FLAG
 
-    // Внутренние подключения.
-
     // Внешние подключения.
     #include <math.h>
     #include <stdlib.h>
@@ -72,7 +70,7 @@
     {
         if(!rand_seeded)
         {
-            srand((u32)platform_time_get_absolute());
+            srand((u32)platform_time_absolute());
             rand_seeded = true;
         }
         return rand();

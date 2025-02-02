@@ -3,9 +3,8 @@
 
 // Внутренние подключения.
 #include "logger.h"
-#include "debug/assert.h"
-#include "memory/memory.h"
 #include "event.h"
+#include "memory/memory.h"
 
 typedef struct keyboard_state {
     bool keys[KEYS_MAX + 1];
@@ -14,6 +13,7 @@ typedef struct keyboard_state {
 typedef struct mouse_state {
     i32 x;
     i32 y;
+    i32 z_delta;
     bool buttons[BTNS_MAX];
 } mouse_state;
 
@@ -22,53 +22,56 @@ typedef struct input_system_state {
     keyboard_state keyboard_previous;
     mouse_state mouse_current;
     mouse_state mouse_previous;
-} input_system_context;
+} input_system_state;
 
-// Указатель на состояние системы ввода.
-static input_system_context* context = null;
+static input_system_state* state_ptr = null;
+static const char* message_not_initialized =
+    "Function '%s' requires the input system to be initialized. Call 'input_system_initialize' first.";
 
-// Сообщения.
-static const char* message_context_not_initialized = "Input system was not initialized. Please first call 'input_system_initialize'.";
-
-bool input_system_initialize()
+void input_system_initialize(u64* memory_requirement, void* memory)
 {
-    kassert_debug(context == null, "Trying to call function 'input_system_initialize' more than once!");
-
-    context = kmallocate_t(input_system_context, MEMORY_TAG_SYSTEM);
-    if(!context)
+    if(state_ptr)
     {
-        kerror("Memory for input system was not allocated.");
-        return false;
+        kwarng("Function '%s' was called more than once!", __FUNCTION__);
+        return;
     }
-    kmzero_tc(context, input_system_context, 1);
 
-    kinfor("Input system started.");
-    return true;
+    *memory_requirement = sizeof(struct input_system_state);
+    if(!memory) return;
+
+    kzero(memory, *memory_requirement);
+    state_ptr = memory;
 }
 
 void input_system_shutdown()
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    if(!state_ptr)
+    {
+        kfatal(message_not_initialized, __FUNCTION__);
+    }
 
-    kmfree(context);
-    context = null;
-
-    kinfor("Input system stopped.");
+    state_ptr = null;
 }
 
 void input_system_update(f64 delta_time)
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
 
-    kmcopy_tc(&context->keyboard_previous, &context->keyboard_current, keyboard_state, 1);
-    kmcopy_tc(&context->mouse_previous, &context->mouse_current, mouse_state, 1);
-
-    // ktrace("Input system updated!");
+    kcopy_tc(&state_ptr->keyboard_previous, &state_ptr->keyboard_current, keyboard_state, 1);
+    kcopy_tc(&state_ptr->mouse_previous, &state_ptr->mouse_current, mouse_state, 1);
 }
 
 void input_update_keyboard_key(key key, bool pressed)
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
 
     if(key >= KEYS_MAX || key == KEY_UNKNOWN)
     {
@@ -76,18 +79,22 @@ void input_update_keyboard_key(key key, bool pressed)
         return;
     }
 
-    if(context->keyboard_current.keys[key] != pressed)
+    if(state_ptr->keyboard_current.keys[key] != pressed)
     {
-        context->keyboard_current.keys[key] = pressed;
+        state_ptr->keyboard_current.keys[key] = pressed;
 
-        event_context data = { .u32[0] = key };
-        event_send(pressed ? EVENT_CODE_KEYBOARD_KEY_PRESSED : EVENT_CODE_KEYBOARD_KEY_RELEASED, null, data);
+        event_context context = { .u32[0] = key };
+        event_send(pressed ? EVENT_CODE_KEYBOARD_KEY_PRESSED : EVENT_CODE_KEYBOARD_KEY_RELEASED, null, &context);
     }
 }
 
 void input_update_mouse_button(button button, bool pressed)
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
 
     if(button >= BTNS_MAX || button == BTN_UNKNOWN)
     {
@@ -95,107 +102,183 @@ void input_update_mouse_button(button button, bool pressed)
         return;
     }
 
-    if(context->mouse_current.buttons[button] != pressed)
+    if(state_ptr->mouse_current.buttons[button] != pressed)
     {
-        context->mouse_current.buttons[button] = pressed;
+        state_ptr->mouse_current.buttons[button] = pressed;
 
-        event_context data = { .u32[0] = button };
-        event_send(pressed ? EVENT_CODE_MOUSE_BUTTON_PRESSED : EVENT_CODE_MOUSE_BUTTON_RELEASED, null, data);
+        event_context context = { .u32[0] = button };
+        event_send(pressed ? EVENT_CODE_MOUSE_BUTTON_PRESSED : EVENT_CODE_MOUSE_BUTTON_RELEASED, null, &context);
     }
 }
 
 void input_update_mouse_move(i32 x, i32 y)
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
 
-    if(context->mouse_current.x != x || context->mouse_current.y != y)
+    if(state_ptr->mouse_current.x != x || state_ptr->mouse_current.y != y)
     {
         // NOTE: Включить при отладке!
         // kdebug("Current mouse position %X : %X", x, y);
 
-        context->mouse_current.x = x;
-        context->mouse_current.y = y;
+        state_ptr->mouse_current.x = x;
+        state_ptr->mouse_current.y = y;
 
-        event_context data = { .i32[0] = x, .i32[1] = y };
-        event_send(EVENT_CODE_MOUSE_MOVED, null, data);
+        event_context context = { .i32[0] = x, .i32[1] = y };
+        event_send(EVENT_CODE_MOUSE_MOVED, null, &context);
     }
 }
 
 void input_update_mouse_wheel(i32 z_delta)
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
 
-    // Нет внутреннего состояния!
+    if(state_ptr->mouse_current.z_delta != z_delta)
+    {
+        state_ptr->mouse_current.z_delta = z_delta;
+    }
 
-    event_context data = { .i32[0] = z_delta };
-    event_send(EVENT_CODE_MOUSE_WHEEL, null, data);
+    event_context context = { .i32[0] = z_delta };
+    event_send(EVENT_CODE_MOUSE_WHEEL, null, &context);
 }
 
 bool input_is_keyboard_key_down(key key)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->keyboard_current.keys[key] == true;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return false;
+    }
+    return state_ptr->keyboard_current.keys[key] == true;
 }
 
 bool input_is_keyboard_key_up(key key)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->keyboard_current.keys[key] == false;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return true;
+    }
+    return state_ptr->keyboard_current.keys[key] == false;
 }
 
 bool input_was_keyboard_key_down(key key)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->keyboard_previous.keys[key] == true;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return false;
+    }
+    return state_ptr->keyboard_previous.keys[key] == true;
 }
 
 bool input_was_keyboard_key_up(key key)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->keyboard_previous.keys[key] == false;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return true;
+    }
+    return state_ptr->keyboard_previous.keys[key] == false;
 }
 
 bool input_is_mouse_button_down(button button)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->mouse_current.buttons[button] == true;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return false;
+    }
+    return state_ptr->mouse_current.buttons[button] == true;
 }
 
 bool input_is_mouse_button_up(button button)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->mouse_current.buttons[button] == false;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return true;
+    }
+    return state_ptr->mouse_current.buttons[button] == false;
 }
 
 bool input_was_mouse_button_down(button button)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->mouse_previous.buttons[button] == true;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return false;
+    }
+    return state_ptr->mouse_previous.buttons[button] == true;
 }
 
 bool input_was_mouse_button_up(button button)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    return context->mouse_previous.buttons[button] == false;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return true;
+    }
+    return state_ptr->mouse_previous.buttons[button] == false;
 }
 
-void input_get_current_mouse_position(i32* x, i32* y)
+void input_current_mouse_position(i32* x, i32* y)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    *x = context->mouse_current.x;
-    *y = context->mouse_current.y;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
+
+    *x = state_ptr->mouse_current.x;
+    *y = state_ptr->mouse_current.y;
 }
 
-void input_get_previous_mouse_position(i32* x, i32* y)
+void input_previous_mouse_position(i32* x, i32* y)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    *x = context->mouse_previous.x;
-    *y = context->mouse_previous.y;
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
+
+    *x = state_ptr->mouse_previous.x;
+    *y = state_ptr->mouse_previous.y;
 }
 
-const char* input_get_keyboard_key_name(key key)
+void input_current_mouse_wheel(i32* z_delta)
 {
-    static const char* key_names[KEYS_MAX] = {
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
+
+    *z_delta = state_ptr->mouse_current.z_delta;
+}
+
+void input_previous_mouse_wheel(i32* z_delta)
+{
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
+
+    *z_delta = state_ptr->mouse_previous.z_delta;
+}
+
+
+const char* input_keyboard_key_str(key key)
+{
+    static const char* names[KEYS_MAX] = {
         [KEY_UNKNOWN]   = "UNKNOWN",          [KEY_BACKSPACE]   = "BACKSPACE",      [KEY_TAB]          = "TAB",
         [KEY_ENTER]     = "ENTER",            [KEY_PAUSE]       = "PAUSE",          [KEY_CAPSLOCK]     = "CAPSLOCK",
         [KEY_ESCAPE]    = "ESCAPE",           [KEY_SPACE]       = "SPACE",          [KEY_PAGEUP]       = "PAGEUP",
@@ -241,23 +324,23 @@ const char* input_get_keyboard_key_name(key key)
 
     if(key >= KEYS_MAX)
     {
-        return key_names[KEY_UNKNOWN];
+        return names[KEY_UNKNOWN];
     }
 
-    return key_names[key];
+    return names[key];
 }
 
-const char* input_get_mouse_button_name(button button)
+const char* input_mouse_button_str(button button)
 {
-    static const char* button_names[] = {
+    static const char* names[] = {
         [BTN_UNKNOWN]   = "UNKNOWN",          [BTN_LEFT]        = "BTN_LEFT",       [BTN_RIGHT]        = "BTN_RIGHT",
         [BTN_MIDDLE]    = "BTN_MIDDLE",       [BTN_BACKWARD]    = "BTN_BACKWARD",   [BTN_FORWARD]      = "BTN_FORWARD"
     };
 
     if(button >= BTNS_MAX)
     {
-        return button_names[BTN_UNKNOWN];
+        return names[BTN_UNKNOWN];
     }
 
-    return button_names[button];
+    return names[button];
 }

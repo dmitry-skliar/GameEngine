@@ -15,7 +15,7 @@ void vulkan_framebuffer_create(
     // Делаем копию вложений.
     out_framebuffer->attachments = darray_reserve(VkImageView, attachment_count);
     out_framebuffer->attachment_count = attachment_count;
-    kmcopy_tc(out_framebuffer->attachments, attachments, VkImageView, attachment_count);
+    kcopy_tc(out_framebuffer->attachments, attachments, VkImageView, attachment_count);
 
     // Делаем копию указателя визуализатора.
     out_framebuffer->renderpass = renderpass;

@@ -42,32 +42,36 @@ void sync_objects_create();
 void sync_objects_destroy();
 bool swapchain_recreate(renderer_backend* backend);
 
-bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* application_name, u32 width, u32 height)
+bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 {
     kassert_debug(context == null, "Trying to call function 'vulkan_renderer_backend_initialize' more than once!");
 
-    context = kmallocate_t(vulkan_context, MEMORY_TAG_RENDERER);
+    context = kallocate_tc(vulkan_context, 1, MEMORY_TAG_RENDERER);
     if(!context)
     {
         kerror("Failed to allocated memory for vulkan context.");
         return false;
     }
-    kmzero_tc(context, vulkan_context, 1);
+    kzero_tc(context, vulkan_context, 1);
 
     // Начальная инициализация.
     context->find_memory_index = find_memory_index;
     // TODO: Сделать аллокатор.
     context->allocator = null;
 
-    // TODO: Получаем размеры окна (временный способ!).
-    kdebug("Vulkan initialize framebuffer width %d and height %d", width, height);
-    context->framebuffer_width = (width != 0) ? width : 800;
-    context->framebuffer_height = (height != 0) ? height : 600;
+    cached_framebuffer_width = backend->window_state->width;
+    cached_framebuffer_height = backend->window_state->height;
+
+    kdebug("Vulkan initialize framebuffer width %d and height %d", cached_framebuffer_width, cached_framebuffer_height);
+    context->framebuffer_width = (cached_framebuffer_width != 0) ? cached_framebuffer_width : 800;
+    context->framebuffer_height = (cached_framebuffer_height != 0) ? cached_framebuffer_height : 600;
+    cached_framebuffer_width = 0;
+    cached_framebuffer_height = 0;
 
     // Заполнение информации приложения.
     VkApplicationInfo appinfo        = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
     appinfo.apiVersion               = VK_API_VERSION_1_4;
-    appinfo.pApplicationName         = application_name;
+    appinfo.pApplicationName         = backend->window_state->title;
     appinfo.applicationVersion       = VK_MAKE_VERSION(1, 0, 0);
     appinfo.pEngineName              = "Game Engine";
     appinfo.engineVersion            = VK_MAKE_VERSION(0, 1, 0);
@@ -90,8 +94,8 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
 
     // Получение списока запрашиваемых расширений.
     const char** required_extentions = darray_create(const char*);
-    darray_push(required_extentions, &VK_KHR_SURFACE_EXTENSION_NAME);     // Расширение для использования поверхности.
-    platform_window_get_vulkan_extentions(&required_extentions);          // Платформо-зависимые расширения.
+    darray_push(required_extentions, &VK_KHR_SURFACE_EXTENSION_NAME);                    // Расширение для использования поверхности.
+    platform_window_get_vulkan_extentions(backend->window_state, &required_extentions);  // Платформо-зависимые расширения.
 #if KDEBUG_FLAG
     darray_push(required_extentions, &VK_EXT_DEBUG_UTILS_EXTENSION_NAME); // Расширение для отладки.
 #endif
@@ -103,7 +107,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     vkEnumerateInstanceExtensionProperties(null, &available_extension_count, avaulable_extensions);
 
     // Сопоставление запрашиваемых и доступных расширений.
-    u32 required_extension_count = darray_get_length(required_extentions);
+    u32 required_extension_count = darray_length(required_extentions);
     ktrace("Vulkan extensions used:");
     for(u32 i = 0; i < required_extension_count; ++i)
     {
@@ -111,7 +115,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
 
         for(u32 j = 0; j < available_extension_count; ++j)
         {
-            if(string_is_equal(required_extentions[i], avaulable_extensions[j].extensionName))
+            if(string_equal(required_extentions[i], avaulable_extensions[j].extensionName))
             {
                 ktrace(" * %s", required_extentions[i]);
                 found = true;
@@ -145,7 +149,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
     vkEnumerateInstanceLayerProperties(&available_layer_count, available_layers);
 
     // Сопоставление запрашиваемых и доступных слоев проверки.
-    u32 required_layer_count = darray_get_length(required_layers);
+    u32 required_layer_count = darray_length(required_layers);
     ktrace("Vulkan validation layers used:");
     for(u32 i = 0; i < required_layer_count; ++i)
     {
@@ -153,7 +157,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
 
         for(u32 j = 0; j < available_layer_count; ++j)
         {
-            if(string_is_equal(required_layers[i], available_layers[j].layerName))
+            if(string_equal(required_layers[i], available_layers[j].layerName))
             {
                 ktrace(" * %s", required_layers[i]);
                 found = true;
@@ -216,7 +220,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
 #endif
 
     // Создание поверхности Vulkan-Platform.
-    result = platform_window_create_vulkan_surface(context);
+    result = platform_window_create_vulkan_surface(backend->window_state, context);
     if(!vulkan_result_is_success(result))
     {
         kerror("Failed to create vulkan surface with result: %s", vulkan_result_get_string(result, true));
@@ -226,7 +230,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const char* a
 
     // Создание физического и логического устройства.
     // TODO: Провести переделку логики vulkan_device_*!
-    result = vulkan_device_create(context);
+    result = vulkan_device_create(backend, context);
     if(!vulkan_result_is_success(result))
     {
         kerror("Failed to create vulkan device with result: %s", vulkan_result_get_string(result, true));
@@ -290,14 +294,14 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     // Уничтожение физического и логического устройства.
     if(context->device.logical)
     {
-        vulkan_device_destroy(context);
+        vulkan_device_destroy(backend, context);
         ktrace("Vulkan device destroyed.");
     }
 
     // Уничтожение поверхности Vulkan-Platform.
     if(context->surface)
     {
-        platform_window_destroy_vulkan_surface(context);
+        platform_window_destroy_vulkan_surface(backend->window_state, context);
         ktrace("Vulkan surface destroyed.");
     }
 
@@ -323,7 +327,7 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     // Уничтожение контекста vulkan.
     if(context)
     {
-        kmfree(context);
+        kfree_tc(context, vulkan_context, 1, MEMORY_TAG_RENDERER);
         context = null;
         ktrace("Vulkan context destroyed.");
     }
@@ -534,7 +538,7 @@ void command_buffers_create(renderer_backend* backend)
     if(!context->graphics_command_buffers)
     {
         context->graphics_command_buffers = darray_reserve(vulkan_command_buffer, context->swapchain.image_count);
-        kmzero_tc(context->graphics_command_buffers, vulkan_command_buffer, context->swapchain.image_count);
+        kzero_tc(context->graphics_command_buffers, vulkan_command_buffer, context->swapchain.image_count);
     }
 
     for(u32 i = 0; i < context->swapchain.image_count; ++i)
@@ -569,7 +573,7 @@ void command_buffers_destroy(renderer_backend* backend)
 void framebuffers_create(renderer_backend* backend, vulkan_swapchain* swapchain)
 {
     swapchain->framebuffers = darray_reserve(vulkan_framebuffer, context->swapchain.image_count);
-    kmzero_tc(swapchain->framebuffers, vulkan_framebuffer, context->swapchain.image_count);
+    kzero_tc(swapchain->framebuffers, vulkan_framebuffer, context->swapchain.image_count);
     framebuffers_regenerate(backend, swapchain, &context->main_renderpass);
 }
 
@@ -633,7 +637,7 @@ void sync_objects_create()
 
     // В полете ограждения еще не должны существовать на этом этапе, поэтому очистите список указателей.
     context->images_in_flight = darray_reserve(vulkan_fence*, context->swapchain.image_count);
-    kmzero_tc(context->images_in_flight, vulkan_fence*, context->swapchain.image_count);
+    kzero_tc(context->images_in_flight, vulkan_fence*, context->swapchain.image_count);
 }
 
 void sync_objects_destroy()
@@ -688,7 +692,7 @@ bool swapchain_recreate(renderer_backend* backend)
 
     // Ожидание завершения операций.
     vkDeviceWaitIdle(context->device.logical);
-    kmzero_tc(context->images_in_flight, vulkan_fence*, context->swapchain.image_count);
+    kzero_tc(context->images_in_flight, vulkan_fence*, context->swapchain.image_count);
 
     vulkan_swapchain_recreate(context, cached_framebuffer_width, cached_framebuffer_height, &context->swapchain);
 

@@ -3,13 +3,10 @@
 
 #if KPLATFORM_LINUX_FLAG
 
-    // Внутренние подключения.
-    // ...
-
     // Внешние подключения.
     #include <time.h>
 
-    f64 platform_time_get_absolute()
+    f64 platform_time_absolute()
     {
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);

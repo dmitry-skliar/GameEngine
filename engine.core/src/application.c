@@ -4,25 +4,45 @@
 // Внутренние подключения.
 #include "logger.h"
 #include "event.h"
-#include "debug/assert.h"
 #include "platform/window.h"
 #include "platform/memory.h"
 #include "platform/time.h"
 #include "platform/thread.h"
 #include "memory/memory.h"
+#include "memory/allocators/linear_allocator.h"
 #include "input.h"
 #include "clock.h"
 #include "renderer/renderer_frontend.h"
 
-typedef struct application_context {
-    application* application;
+typedef struct application_state {
+    game* game_inst;
     bool  is_running;
     bool  is_suspended;
     clock clock;
     f64   last_time;
-} application_context;
 
-static application_context* context = null;
+    // TODO: Сделать явным указателем!
+    linear_allocator systems_allocator;
+
+    u64 memory_system_memory_requirement;
+    void* memory_system_state;
+
+    u64 input_system_memory_requirement;
+    void* input_system_state;
+
+    u64 event_system_memory_requirement;
+    void* event_system_state;
+
+    u64 platform_window_memory_requirement;
+    window* platform_window_state;
+
+    u64 renderer_system_memory_requirement;
+    void* renderer_system_state;
+
+} application_state;
+
+// Состояие приложения.
+static application_state* app_state = null;
 
 void application_on_focus(bool focused);
 void application_on_mouse_wheel(i32 zdelta);
@@ -32,74 +52,84 @@ void application_on_keyboard_key(u32 keycode, bool pressed);
 void application_on_resize(i32 width, i32 height);
 void application_on_close();
 
-bool application_create(application* application)
+bool application_create(game* game_inst)
 {
-    kassert_debug(context == null, "Trying to call function 'application_create' more than once!");
-
-    if(!application)
+    if(!game_inst)
     {
-        kerror("Function '%s' requires an application structure!", __FUNCTION__);
+        kerror("Function '%s' require a game structure!", __FUNCTION__);
         return false;
     }
 
-    context = kmallocate_t(application_context, MEMORY_TAG_APPLICATION);
-    if(!context)
+    if(app_state)
     {
-        kerror("Failed to allocated memory for application context. Aborted!");
-        return false;
-    }
-    kmzero_tc(context, application_context, 1);
-
-    // Начальная инициализация.
-    context->application = application;
-
-    // Инициализация подсистемы окна.
-    window_config config = { application->window_title, application->window_width, application->window_height };
-    if(!platform_window_create(&config))
-    {
-        kerror("Failed to initialize platform window. Aborted!");
+        kerror("Function '%s' was called more than once!", __FUNCTION__);
         return false;
     }
 
-    // Обработчики событий окна.
-    platform_window_set_on_close_handler(application_on_close);
-    platform_window_set_on_resize_handler(application_on_resize);
-    platform_window_set_on_keyboard_key_handler(application_on_keyboard_key);
-    platform_window_set_on_mouse_move_handler(application_on_mouse_move);
-    platform_window_set_on_mouse_button_handler(application_on_mouse_button);
-    platform_window_set_on_mouse_wheel_handler(application_on_mouse_wheel);
-    platform_window_set_on_focus_handler(application_on_focus);
+    // Создание контекста приложения.
+    app_state = kallocate_tc(application_state, 1, MEMORY_TAG_APPLICATION);
+    kzero_tc(app_state, application_state, 1);
+    app_state->game_inst = game_inst;
+    game_inst->application_state = app_state;
 
-    // Инициализация подсистемы событий.
-    if(!event_system_initialize())
+    u64 systems_allocator_total_size = 64 * 1024 * 1024; // 64 Mb
+    app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size);
+
+    // Подсистема контроля памяти.
+    memory_system_initialize(&app_state->memory_system_memory_requirement, null);
+    app_state->memory_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->memory_system_memory_requirement);
+    memory_system_initialize(&app_state->memory_system_memory_requirement, app_state->memory_system_state);
+    kinfor("Memory system started.");
+
+    // Подсистема событий (должно быть инициализировано до создания окна приложения).
+    event_system_initialize(&app_state->event_system_memory_requirement, null);
+    app_state->event_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->event_system_memory_requirement);
+    event_system_initialize(&app_state->event_system_memory_requirement, app_state->event_system_state);
+    kinfor("Event system started.");
+
+    // TODO: Отвязать от системы событий!
+    // Подсистема ввода (должно быть инициализировано до создания окна приложения, но после системы событий - связаны).
+    input_system_initialize(&app_state->input_system_memory_requirement, null);
+    app_state->input_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->input_system_memory_requirement);
+    input_system_initialize(&app_state->input_system_memory_requirement, app_state->input_system_state);
+    kinfor("Input system started.");
+
+    // Создание окна приложения.
+    window_config wconfig = { game_inst->window_title, game_inst->window_width, game_inst->window_height };
+    platform_window_create(&app_state->platform_window_memory_requirement, null, null);
+    app_state->platform_window_state = linear_allocator_allocate(app_state->systems_allocator, app_state->platform_window_memory_requirement);
+    if(!platform_window_create(&app_state->platform_window_memory_requirement, app_state->platform_window_state, &wconfig))
     {
-        kerror("Failed to initialize event system. Aborted!");
+        kerror("Failed to create window. Aborted!");
         return false;
     }
+    kinfor("Platform window created.");
 
-    // Инициализация подсистемы ввода.
-    if(!input_system_initialize())
-    {
-        kerror("Failed to initialize input system. Aborted!");
-        return false;
-    }
+    // Установка обработчиков событий окна.
+    platform_window_set_on_close_handler(app_state->platform_window_state, application_on_close);
+    platform_window_set_on_resize_handler(app_state->platform_window_state, application_on_resize);
+    platform_window_set_on_keyboard_key_handler(app_state->platform_window_state, application_on_keyboard_key);
+    platform_window_set_on_mouse_move_handler(app_state->platform_window_state, application_on_mouse_move);
+    platform_window_set_on_mouse_button_handler(app_state->platform_window_state, application_on_mouse_button);
+    platform_window_set_on_mouse_wheel_handler(app_state->platform_window_state, application_on_mouse_wheel);
+    platform_window_set_on_focus_handler(app_state->platform_window_state, application_on_focus);
 
     // Инициализация редререра.
-    if(!renderer_initialize(application->window_title, application->window_width, application->window_height))
+    if(!renderer_initialize(app_state->platform_window_state))
     {
         kerror("Failed to initialize renderer. Aborted!");
         return false;
     }
 
     // Инициализация приложения пользователя (игры, 3d приложения).
-    if(!application->initialize(application))
+    if(!game_inst->initialize(game_inst))
     {
         kerror("Failed to initialize user application. Aborted!");
         return false;
     }
 
     // Принудительное обновление размера окна.
-    application->on_resize(application, application->window_width, application->window_height);
+    game_inst->on_resize(game_inst, game_inst->window_width, game_inst->window_height);
 
     return true;
 }
@@ -107,45 +137,45 @@ bool application_create(application* application)
 bool application_run()
 {
     // Проверка вызова функции.
-    kassert_debug(context != null, "Application context was not created. Please first call 'application_create'.");
+    // kassert_debug(context != null, "Application context was not created. Please first call 'application_create'.");
 
-    context->is_running = true;
+    app_state->is_running = true;
 
-    clock_start(&context->clock);
-    clock_update(&context->clock);
-    context->last_time = context->clock.elapsed;
+    clock_start(&app_state->clock);
+    clock_update(&app_state->clock);
+    app_state->last_time = app_state->clock.elapsed;
 
     f64 running_time     = 0;
     u16 frame_count      = 0;
     f64 frame_limit_time = 1.0f / 60;
 
-    while(context->is_running)
+    while(app_state->is_running)
     {
-        if(!platform_window_dispatch())
+        if(!platform_window_dispatch(app_state->platform_window_state))
         {
-            context->is_running = false;
+            app_state->is_running = false;
         }
 
-        if(!context->is_suspended)
+        if(!app_state->is_suspended)
         {
             // Обновляем таймер и получаем дельту!
-            clock_update(&context->clock);
-            f64 current_time = context->clock.elapsed;
-            f64 delta = current_time - context->last_time;
-            f64 frame_start_time = platform_time_get_absolute();
+            clock_update(&app_state->clock);
+            f64 current_time = app_state->clock.elapsed;
+            f64 delta = current_time - app_state->last_time;
+            f64 frame_start_time = platform_time_absolute();
             
-            if(!context->application->update(context->application, (f32)delta))
+            if(!app_state->game_inst->update(app_state->game_inst, (f32)delta))
             {
                 kerror("Game update failed, shutting down!");
-                context->is_running = false;
+                app_state->is_running = false;
                 break;
             }
 
             // Пользовательский рендер.
-            if(!context->application->render(context->application, (f32)delta))
+            if(!app_state->game_inst->render(app_state->game_inst, (f32)delta))
             {
                 kerror("Game render failed, shutting down!");
-                context->is_running = false;
+                app_state->is_running = false;
                 break;
             }
 
@@ -155,7 +185,7 @@ bool application_run()
             renderer_draw_frame(&packet);
 
             // Расчет времени кадра.
-            f64 frame_end_time = platform_time_get_absolute();
+            f64 frame_end_time = platform_time_absolute();
             f64 frame_elapsed_time = frame_end_time - frame_start_time;
             running_time += frame_elapsed_time;
             f64 remaining_secounds = frame_limit_time - frame_elapsed_time;
@@ -179,17 +209,32 @@ bool application_run()
             // NOTE: Устройства ввода последнее что должно обновляться в кадре!
             input_system_update(delta);
 
-            context->last_time = current_time;
+            app_state->last_time = current_time;
         }
     }
 
     // Нормальное завершение работы.
     renderer_shutdown();
+
+    platform_window_destroy(app_state->platform_window_state);
+    kinfor("Platform window destroyed.");
+
     input_system_shutdown();
+    kinfor("Input system stopped.");
+
     event_system_shutdown();
-    platform_window_destroy();
-    kmfree(context);
-    context = null;
+    kinfor("Event system stopped.");
+
+    memory_system_shutdown();
+    kinfor("Memory system stopped.");
+
+    linear_allocator_free_all(app_state->systems_allocator);
+    linear_allocator_destroy(app_state->systems_allocator);
+    app_state->systems_allocator = null;
+    app_state->game_inst->application_state = null;
+
+    kfree_tc(app_state, application_state, 1, MEMORY_TAG_APPLICATION);
+    app_state = null;
 
     return true;
 }
@@ -218,10 +263,10 @@ void application_on_mouse_move(i32 x, i32 y)
 
 void application_on_keyboard_key(u32 keycode, bool pressed)
 {
-    if(keycode == KEY_Q && pressed) context->is_running = false;
+    if(keycode == KEY_Q && pressed) app_state->is_running = false;
     if(keycode == KEY_I && pressed)
     {
-        const char* meminfo = memory_system_usage_get();
+        const char* meminfo = memory_system_usage_str();
         kinfor(meminfo);
         platform_memory_free((void*)meminfo);
     }
@@ -232,20 +277,18 @@ void application_on_keyboard_key(u32 keycode, bool pressed)
 void application_on_resize(i32 width, i32 height)
 {
     // Обновление размеров в приложения.
-    context->application->on_resize(context->application, width, height);
+    app_state->game_inst->on_resize(app_state->game_inst, width, height);
 
     // Обновление размеров в визуализаторе.
     renderer_on_resize(width, height);
 
     // Создание события на обновление размеров.
-    event_context data = { .i32[0] = width, .i32[1] = height };
-    event_send(EVENT_CODE_APPLICATION_RESIZE, null, data);
+    event_context context = { .i32[0] = width, .i32[1] = height };
+    event_send(EVENT_CODE_APPLICATION_RESIZE, null, &context);
 }
 
 void application_on_close()
 {
-    context->is_running = false;
-
-    event_context data = {0};
-    event_send(EVENT_CODE_APPLICATION_QUIT, null, data);
+    app_state->is_running = false;
+    event_send(EVENT_CODE_APPLICATION_QUIT, null, null);
 }

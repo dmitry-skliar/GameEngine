@@ -21,27 +21,27 @@ void* dynamic_array_create(u64 stride, u64 capacity)
 {
     if(stride == 0 || capacity == 0)
     {
-        kerror("Function '%s' requires stride and capacity more than 0.", __FUNCTION__);
+        kerror("Function '%s' requires stride and capacity more than zero. Return null!", __FUNCTION__);
         return null;
     }
 
     u64 array_size = stride * capacity;
-    u64 total_size = sizeof(dynamic_array_header) + array_size;
-    dynamic_array_header* header = kmallocate(total_size, MEMORY_TAG_DARRAY);
-
+    u64 total_size = sizeof(struct dynamic_array_header) + array_size;
+    dynamic_array_header* header = kallocate(total_size, MEMORY_TAG_DARRAY);
     if(header)
     {
-        kmzero_tc(header, dynamic_array_header, 1);
+        kzero_tc(header, dynamic_array_header, 1);
         header->capacity = capacity;
         header->length = 0;
         header->stride = stride;
-        return (void*)((u8*)header + sizeof(dynamic_array_header));
+        return (void*)((u8*)header + sizeof(struct dynamic_array_header));
     }
 
     kfatal("In function '%s' failed to allocate memory!", __FUNCTION__);
     return null;
 }
 
+// TODO: Сделать внутренний ресайз!
 void* dynamic_array_resize(void* array, u64 capacity)
 {
     if(!array)
@@ -50,7 +50,7 @@ void* dynamic_array_resize(void* array, u64 capacity)
         return null;
     }
 
-    dynamic_array_header* old_array = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* old_array = (void*)((u8*)array - sizeof(struct dynamic_array_header));
 
     if(capacity == 0 || capacity <= old_array->capacity)
     {
@@ -58,16 +58,20 @@ void* dynamic_array_resize(void* array, u64 capacity)
         return array;
     }
 
-    old_array->capacity = capacity;
-    u64 new_total_size = capacity * old_array->stride + sizeof(dynamic_array_header);
-    void* new_array = kmallocate(new_total_size, MEMORY_TAG_DARRAY);
+    u64 old_array_total_size = sizeof(struct dynamic_array_header) + old_array->stride * old_array->capacity;
+    u64 new_array_total_size = sizeof(struct dynamic_array_header) + old_array->stride * capacity;
 
+    void* new_array = kallocate(new_array_total_size, MEMORY_TAG_DARRAY);
     if(new_array)
     {
-        u64 old_data_size = old_array->stride * old_array->length + sizeof(dynamic_array_header);
-        kmcopy(new_array, old_array, old_data_size);
-        kmfree(old_array);
-        return (void*)((u8*)new_array + sizeof(dynamic_array_header));
+        // Подготовка к копированию из старого в новый.
+        u64 old_array_data_size = sizeof(struct dynamic_array_header) + old_array->stride * old_array->length;
+        old_array->capacity = capacity; // Заранее обновляем емкость.
+
+        kcopy(new_array, old_array, old_array_data_size);
+        kfree(old_array, old_array_total_size, MEMORY_TAG_DARRAY);
+
+        return (void*)((u8*)new_array + sizeof(struct dynamic_array_header));
     }
 
     kerror("In function '%s' memory was not allocated! Returne old array!", __FUNCTION__);
@@ -78,8 +82,9 @@ void dynamic_array_destroy(void* array)
 {
     if(array)
     {
-        array = (void*)((u8*)array - sizeof(dynamic_array_header));
-        kmfree(array);
+        dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
+        u64 total_size = sizeof(struct dynamic_array_header) + header->stride * header->capacity;
+        kfree(header, total_size, MEMORY_TAG_DARRAY);
     }
     else
     {
@@ -95,16 +100,16 @@ void* dynamic_array_push(void* array, const void* element)
         return null;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
 
     if(header->length >= header->capacity)
     {
         array = dynamic_array_resize(array, header->capacity * DARRAY_RESIZE_FACTOR);
-        header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+        header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
     }
 
     u8* addr = (u8*)array + (header->stride * header->length);
-    kmcopy(addr, element, header->stride);
+    kcopy(addr, element, header->stride);
     header->length += 1;
 
     return array;
@@ -118,7 +123,7 @@ void* dynamic_array_insert_at(void* array, u64 index, const void* element)
         return null;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
 
     if(index >= header->length)
     {
@@ -129,12 +134,12 @@ void* dynamic_array_insert_at(void* array, u64 index, const void* element)
     if(header->length >= header->capacity)
     {
         array = dynamic_array_resize(array, header->capacity * DARRAY_RESIZE_FACTOR);
-        header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+        header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
     }
 
     u8* addr = (u8*)array + (header->stride * index);
-    kmmove(addr + header->stride, addr, header->stride * (header->length - index));
-    kmcopy(addr, element, header->stride);
+    kmove(addr + header->stride, addr, header->stride * (header->length - index));
+    kcopy(addr, element, header->stride);
     header->length += 1;
 
     return array;
@@ -148,7 +153,7 @@ void dynamic_array_pop(void* array, void* dest)
         return;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
 
     if(header->length < 1)
     {
@@ -159,7 +164,7 @@ void dynamic_array_pop(void* array, void* dest)
     if(dest)
     {
         u8* addr = (u8*)array + (header->stride * (header->length - 1));
-        kmcopy(dest, addr, header->stride);
+        kcopy(dest, addr, header->stride);
     }
 
     header->length -= 1;
@@ -173,7 +178,7 @@ void dynamic_array_pop_at(void* array, u64 index, void* dest)
         return;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
 
     if(header->length < 1)
     {
@@ -191,12 +196,12 @@ void dynamic_array_pop_at(void* array, u64 index, void* dest)
 
     if(dest)
     {
-        kmcopy(dest, addr, header->stride);
+        kcopy(dest, addr, header->stride);
     }
 
     if(index != (header->length - 1))
     {
-        kmmove(addr, addr + header->stride, header->stride * (header->length - (index + 1)));
+        kmove(addr, addr + header->stride, header->stride * (header->length - (index + 1)));
     }
 
     header->length -= 1;
@@ -210,11 +215,11 @@ void dynamic_array_clear(void* array)
         return;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
     header->length = 0;
 }
 
-u64 dynamic_array_get_length(void* array)
+u64 dynamic_array_length(void* array)
 {
     if(!array)
     {
@@ -222,11 +227,11 @@ u64 dynamic_array_get_length(void* array)
         return 0;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
     return header->length;    
 }
 
-u64 dynamic_array_get_capacity(void* array)
+u64 dynamic_array_capacity(void* array)
 {
     if(!array)
     {
@@ -234,11 +239,11 @@ u64 dynamic_array_get_capacity(void* array)
         return 0;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
     return header->capacity;
 }
 
-u64 dynamic_array_get_stride(void* array)
+u64 dynamic_array_stride(void* array)
 {
     if(!array)
     {
@@ -246,7 +251,7 @@ u64 dynamic_array_get_stride(void* array)
         return 0;
     }
 
-    dynamic_array_header* header = (dynamic_array_header*)((u8*)array - sizeof(dynamic_array_header));
+    dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
     return header->stride;
 }
 

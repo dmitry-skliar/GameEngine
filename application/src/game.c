@@ -1,63 +1,53 @@
 #include "game.h"
-#include <logger.h>
-#include <event.h>
+
 #include <input.h>
+#include <memory/memory.h>
 
-bool game_on_key(event_code code, void* sender, void* listener, event_context data)
+bool game_create(game* inst)
 {
-    if(code == EVENT_CODE_KEYBOARD_KEY_PRESSED)
-    {
-        kdebug("Keyboard key '%s' pressed.", input_get_keyboard_key_name(data.u32[0]));
-    }
-    else
-    {
-        kdebug("Keyboard key '%s' released.", input_get_keyboard_key_name(data.u32[0]));
-    }
+    inst->window_title  = "Game Application";
+    inst->window_width  = 1024;
+    inst->window_height = 768;
 
-    return false;
-}
+    inst->initialize = game_initialize;
+    inst->update     = game_update;
+    inst->render     = game_render;
+    inst->on_resize  = game_on_resize;
 
-bool game_on_button(event_code code, void* sender, void* listener, event_context data)
-{
-    if(code == EVENT_CODE_MOUSE_BUTTON_PRESSED)
-    {
-        kdebug("Mouse button '%s' pressed.", input_get_mouse_button_name(data.u32[0]));
-    }
-    else
-    {
-        kdebug("Mouse button '%s' released.", input_get_mouse_button_name(data.u32[0]));
-    }
+    // inst->state = kallocate_tc(game_state, 1, MEMORY_TAG_GAME);
 
-    return false;
-}
-
-bool game_initialize(application* inst)
-{
-    // kdebug("Game init!");
-    event_register(EVENT_CODE_KEYBOARD_KEY_PRESSED, null, game_on_key);
-    event_register(EVENT_CODE_KEYBOARD_KEY_RELEASED, null, game_on_key);
-    event_register(EVENT_CODE_MOUSE_BUTTON_PRESSED, null, game_on_button);
-    event_register(EVENT_CODE_MOUSE_BUTTON_RELEASED, null, game_on_button);
     return true;
 }
 
-bool game_update(application* inst, f32 delta_time)
+void game_destroy(game* inst)
 {
-    // kdebug("Game update!");
-    if(input_is_keyboard_key_down(KEY_I) && input_was_keyboard_key_up(KEY_I))
+    // kfree_tc(inst->state, game_state, 1, MEMORY_TAG_GAME);
+}
+
+bool game_initialize(game* inst)
+{
+    return true;
+}
+
+bool game_update(game* inst, f32 delta_time)
+{
+    static u64 alloc_count = 0;
+    u64 prev_alloc_count = alloc_count;
+    alloc_count = memory_system_alloc_count();
+
+    if(input_keyboard_key_pressed('M'))
     {
-        kdebug("GAME_UPDATE: Get delta time is %.6f", delta_time);
+        kdebug("Allocations: %llu (%llu this frame)", alloc_count, alloc_count - prev_alloc_count);
     }
+    
     return true;
 }
 
-bool game_render(application* inst, f32 delta_time)
+bool game_render(game* inst, f32 delta_time)
 {
-    // kdebug("Game render!");
     return true;
 }
 
-void game_on_resize(application* inst, i32 width, i32 height)
+void game_on_resize(game* inst, i32 width, i32 height)
 {
-    kdebug("Game resized to %d : %d", width, height);
 }

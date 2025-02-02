@@ -17,8 +17,8 @@ __editions                  := Release Debug
 #	направо - для модулей одного типа, и сверху вниз для всех типов модулей. Прописываются имена 
 #	директорий. Одна директория - один модуль. Исключение: postbuild. 
 __libraries                 := engine.core
-__applications              := application
-__postbuild                 := assets
+__applications              := application engine.core.tests
+# __postbuild                 := assets
 
 # Конечные директории.
 #	Директории куда записывать файлы в процессе выполнения и по завершению. Исключение: postbuild.

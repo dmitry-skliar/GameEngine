@@ -1,6 +1,7 @@
 #pragma once
 
 #include <defines.h>
+#include <platform/window.h>
 
 // @brief Тип рендера.
 typedef enum renderer_backend_type {
@@ -13,7 +14,9 @@ typedef struct renderer_backend {
 
     u64 frame_number;
 
-    bool (*initialize)(struct renderer_backend* backend, const char* application_name, u32 width, u32 height);
+    window* window_state;
+
+    bool (*initialize)(struct renderer_backend* backend);
 
     void (*shutdown)(struct renderer_backend* backend);
 

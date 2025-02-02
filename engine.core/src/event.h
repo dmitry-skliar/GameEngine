@@ -8,16 +8,15 @@
     @param code Код события.
     @param sender Указатель на отправителя события, может быть null.
     @param listener Указатель на слушателя события, может быть null.
-    @param data Контекст события, данные передаваемые с событием.
-    @return Завершить обработку события другими слушателями - true, в противном случае - false.
+    @param context Указатель на контекст события, может быть null.
+    @return True останавливает дальнейшую обработку события другими слушателями, false продолжает.
 */
-typedef bool (*PFN_event_handler)(event_code code, void* sender, void* listener, event_context data);
+typedef bool (*PFN_event_handler)(event_code code, void* sender, void* listener, event_context* context);
 
 /*
     @brief Запускает систему событий.
-    @return В случае успеха - true, в случае ошибок - false.
 */
-bool event_system_initialize();
+void event_system_initialize(u64* memory_requirement, void* memory);
 
 /*
     @brief Останавливает систему событий.
@@ -29,7 +28,7 @@ void event_system_shutdown();
     @param code Код события.
     @param listener Указатель на слушателя события, может быть null.
     @param handler Функция обработчик события.
-    @return При успешном добавлении слушателя - true, если слушатель уже существует - false.
+    @return True при успешном добавлении слушателя, false если слушатель уже существует.
 */
 KAPI bool event_register(event_code code, void* listener, PFN_event_handler handler);
 
@@ -38,7 +37,7 @@ KAPI bool event_register(event_code code, void* listener, PFN_event_handler hand
     @param code Код события.
     @param listener Указатель на слушателя события, может быть null.
     @param handler Функция обработчик события.
-    @return При успешном удалении слушателя - true, если слушатель не существует - false.
+    @return True при успешном удалении слушателя, false если слушатель не существует.
 */
 KAPI bool event_unregister(event_code code, void* listener, PFN_event_handler handler);
 
@@ -46,14 +45,14 @@ KAPI bool event_unregister(event_code code, void* listener, PFN_event_handler ha
     @brief Создает событие с заданным кодом события и его контекстом.
     @param code Код события.
     @param sender Указатель на отправителя события, может быть null.
-    @param data Контекст события, данные передаваемые с событием.
-    @return В случае обработки события - true, если событие не было обработано - false.
+    @param context Указатель на контекст события, может быть null.
+    @return True в случае обработки события, false не определено.
 */
-KAPI bool event_send(event_code code, void* sender, event_context data);
+KAPI bool event_send(event_code code, void* sender, event_context* context);
 
 /*
     @brief По коду события возвращает символьную строку.
     @param code Код события.
     @return Символьная строка.
 */
-KAPI const char* event_get_code_name(event_code code);
+KAPI const char* event_code_str(event_code code);

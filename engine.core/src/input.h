@@ -5,9 +5,8 @@
 
 /*
     @brief Запускает систему ввода.
-    @return В случае успеха - true, в случае ошибок - false.
 */
-bool input_system_initialize();
+void input_system_initialize(u64* memory_requirement, void* memory);
 
 /*
     @brief Останавливает систему ввода.
@@ -113,25 +112,49 @@ KAPI bool input_was_mouse_button_up(button button);
     @param x Значение координаты X.
     @param y Значение координаты Y.
 */
-KAPI void input_get_current_mouse_position(i32* x, i32* y);
+KAPI void input_current_mouse_position(i32* x, i32* y);
 
 /*
     @brief Получает предыдущее положение координат мышки.
     @param x Значение координаты X.
     @param y Значение координаты Y.
 */
-KAPI void input_get_previous_mouse_position(i32* x, i32* y);
+KAPI void input_previous_mouse_position(i32* x, i32* y);
+
+/*
+    @brief Получает текушее значение колесика мышки.
+    @param z_delta Значение колесика.
+*/
+KAPI void input_current_mouse_wheel(i32* z_delta);
+
+/*
+    @brief Получает предыдущее значение колесика мышки.
+    @param z_delta Значение колесика.
+*/
+KAPI void input_previous_mouse_wheel(i32* z_delta);
 
 /*
     @brief По коду клавиши клавиатуры возвращает символьную строку.
     @param key Код клавиши.
     @return Символьная строка.
 */
-KAPI const char* input_get_keyboard_key_name(key key);
+KAPI const char* input_keyboard_key_str(key key);
 
 /*
     @brief По коду кнопки мышки возвращает символьную строку.
     @param button Код кнопки.
     @return Символьная строка.
 */
-KAPI const char* input_get_mouse_button_name(button button);
+KAPI const char* input_mouse_button_str(button button);
+
+/*
+    @brief Однократная регистрация нажатия клавиши клавиатуры.
+    @param key Код клавиши.
+*/
+#define input_keyboard_key_pressed(key) (input_is_keyboard_key_down(key) && input_was_keyboard_key_up(key))
+
+/*
+    @brief Однократная регистрация освобождение клавиши клавиатуры.
+    @param key Код клавиши.
+*/
+#define input_keyboard_key_released(key) (input_is_keyboard_key_up(key) && input_was_keyboard_key_down(key))

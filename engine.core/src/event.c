@@ -3,7 +3,6 @@
 
 // Внутренние подключения.
 #include "logger.h"
-#include "debug/assert.h"
 #include "memory/memory.h"
 #include "containers/darray.h"
 
@@ -13,141 +12,181 @@ typedef struct registered_listener {
 } registered_listener;
 
 typedef struct event {
-    // Представляет динамический массив.
+    // Использует динамический массив.
     registered_listener* listeners;
 } event;
 
-typedef struct event_system_context {
+typedef struct event_system_state {
     event events[EVENT_CODES_MAX];
-} event_system_context;
+} event_system_state;
 
-// Указатель на контекст системы событий.
-static event_system_context* context = null;
+static event_system_state* state_ptr = null;
+static const char* message_not_initialized =
+    "Function '%s' requires the event system to be initialized. Call 'event_system_initialize' first.";
+static const char* message_code_out_of_bounds = "Function '%s': Event code is out of bounds. Return false!";
+static const char* message_handler_not_present = "Function '%s' requires a handler function pointer. Return false!";
 
-// Сообщения.
-static const char* message_context_not_initialized = "Event system was not initialized. Please first call 'event_system_initialize'.";
-static const char* message_has_no_listeners = "In function '%s' event code (%s) has no listeners.";
-static const char* message_number_out_of_bounds = "Event code is out of bounds.";
-static const char* message_handler_not_installed = "Handler not installed.";
-
-bool event_system_initialize()
+void event_system_initialize(u64* memory_requirement, void* memory)
 {
-    kassert_debug(context == null, "Trying to call function 'event_system_initialize' more than once!");
-
-    context = kmallocate_t(event_system_context, MEMORY_TAG_SYSTEM);
-    if(!context)
+    if(state_ptr)
     {
-        kerror("Memory for event system was not allocated.");
-        return false;
+        kwarng("Function '%s' was called more than once!", __FUNCTION__);
+        return;
     }
-    kmzero_tc(context, event_system_context, 1);
 
-    kinfor("Event system started.");
-    return true;
+    *memory_requirement = sizeof(struct event_system_state);
+    if(!memory) return;
+
+    kzero(memory, *memory_requirement);
+    state_ptr = memory;
 }
 
 void event_system_shutdown()
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    if(!state_ptr)
+    {
+        kfatal(message_not_initialized, __FUNCTION__);
+    }
 
+    // Уничтожаем все созданые массивы!
     for(i32 i = 0; i < EVENT_CODES_MAX; ++i)
     {
-        if(context->events[i].listeners != null)
+        if(state_ptr->events[i].listeners != null)
         {
-            darray_destroy(context->events[i].listeners);
-            context->events[i].listeners = null;
+            kdebug("Event shutdown -> darray destroy -> event %d, listeners addr %p", i, state_ptr->events[i].listeners);
+            darray_destroy(state_ptr->events[i].listeners);
+            state_ptr->events[i].listeners = null;
         }
     }
 
-    kmfree(context);
-    context = null;
-
-    kinfor("Event system stopped.");
+    state_ptr = null;
 }
 
 bool event_register(event_code code, void* listener, PFN_event_handler handler)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    kassert_debug(code < EVENT_CODES_MAX, message_number_out_of_bounds);
-    kassert_debug(handler != null, message_handler_not_installed);
-
-    if(context->events[code].listeners == null)
+    if(!state_ptr)
     {
-        context->events[code].listeners = darray_create(registered_listener);
+        kerror(message_not_initialized, __FUNCTION__);
+        return false;
     }
 
-    u64 registered_count = darray_get_length(context->events[code].listeners);
+    if(!handler)
+    {
+        kerror(message_handler_not_present, __FUNCTION__);
+        return false;
+    }
+
+    if(code >= EVENT_CODES_MAX)
+    {
+        kerror(message_code_out_of_bounds, __FUNCTION__);
+        return false;
+    }
+
+    if(state_ptr->events[code].listeners == null)
+    {
+        state_ptr->events[code].listeners = darray_create(registered_listener);
+    }
+
+    u64 registered_count = darray_length(state_ptr->events[code].listeners);
 
     for(u64 i = 0; i < registered_count; ++i)
     {
-        if(context->events[code].listeners[i].instance == listener
-        && context->events[code].listeners[i].handler == handler)
+        if(state_ptr->events[code].listeners[i].instance == listener
+        && state_ptr->events[code].listeners[i].handler == handler)
         {
-            kwarng("Event has alreay been registered with the code (%s).", event_get_code_name(code));
+            kwarng(
+                "Function '%s': Event registered with code (%s), listener or/and function handler. Return false!",
+                __FUNCTION__, event_code_str(code)
+            );
             return false;
         }
     }
 
-    registered_listener record;
-    record.instance = listener;
-    record.handler  = handler;
-    darray_push(context->events[code].listeners, record);
-
+    registered_listener r = { .instance = listener, .handler = handler };
+    darray_push(state_ptr->events[code].listeners, r);
     return true;
 }
 
 bool event_unregister(event_code code, void* listener, PFN_event_handler handler)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    kassert_debug(code < EVENT_CODES_MAX, message_number_out_of_bounds);
-    kassert_debug(handler != null, message_handler_not_installed);
-
-    if(context->events[code].listeners == null)
+    if(!state_ptr)
     {
-        kwarng(message_has_no_listeners, __FUNCTION__, event_get_code_name(code));
+        kerror(message_not_initialized, __FUNCTION__);
         return false;
     }
 
-    u64 registered_count = darray_get_length(context->events[code].listeners);
+    if(!handler)
+    {
+        kerror(message_handler_not_present, __FUNCTION__);
+        return false;
+    }
+
+    if(code >= EVENT_CODES_MAX)
+    {
+        kerror(message_code_out_of_bounds, __FUNCTION__);
+        return false;
+    }
+
+    if(state_ptr->events[code].listeners == null)
+    {
+        kwarng("Function '%s': Event code (%s) has no listeners. Return false!", __FUNCTION__, event_code_str(code));
+        return false;
+    }
+
+    u64 registered_count = darray_length(state_ptr->events[code].listeners);
 
     for(u64 i = 0; i < registered_count; ++i)
     {
-        registered_listener record = context->events[code].listeners[i];
+        registered_listener r = state_ptr->events[code].listeners[i];
 
-        if(record.instance == listener && record.handler == handler)
+        if(r.instance == listener && r.handler == handler)
         {
-            darray_pop_at(context->events[code].listeners, i, null);
+            darray_pop_at(state_ptr->events[code].listeners, i, null);
             return true;
         }
     }
 
-    ktrace("In function '%s' event code (%s) has no listener!", __FUNCTION__, event_get_code_name(code));
+    kwarng(
+        "Function '%s': Event code (%s) does not have a listener or/and function handler. Return false!",
+        __FUNCTION__, event_code_str(code)
+    );
     return false;
 }
 
-bool event_send(event_code code, void* sender, event_context data)
+bool event_send(event_code code, void* sender, event_context* context)
 {
-    kassert_debug(context != null, message_context_not_initialized);
-    kassert_debug(code < EVENT_CODES_MAX, message_number_out_of_bounds);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return false;
+    }
 
-    if(context->events[code].listeners == null)
+    if(code >= EVENT_CODES_MAX)
+    {
+        kerror(message_code_out_of_bounds, __FUNCTION__);
+        return false;
+    }
+
+    if(state_ptr->events[code].listeners == null)
     {
         // NOTE: Включить при отладке!
-        // ktrace(message_has_no_listeners, __FUNCTION__, event_get_code_name(code));
-
+        // ktrace("Function '%s': Event code (%s) has no listeners.", __FUNCTION__, event_code_str(code));
         return false;
     }
 
-    u64 registered_count = darray_get_length(context->events[code].listeners);
+    u64 registered_count = darray_length(state_ptr->events[code].listeners);
 
     for(u64 i = 0; i < registered_count; ++i)
     {
-        registered_listener record = context->events[code].listeners[i];
+        registered_listener r = state_ptr->events[code].listeners[i];
 
-        if(record.handler(code, sender, record.instance, data))
+        if(r.handler(code, sender, r.instance, context))
         {
             // Сообщение было обработано, другие слушатели пропускаются.
-            ktrace("In function '%s' was handled.", __FUNCTION__);
+            ktrace(
+                "Function '%s' has processed an event. Other listeners are skipped (Current %llu, Total %llu).",
+                __FUNCTION__, i, registered_count
+            );
             return true;
         }
     }
@@ -155,9 +194,9 @@ bool event_send(event_code code, void* sender, event_context data)
     return false;
 }
 
-const char* event_get_code_name(event_code code)
+const char* event_code_str(event_code code)
 {
-    static const char* code_name[EVENT_CODES_MAX] = {
+    static const char* names[EVENT_CODES_MAX] = {
         [EVENT_CODE_NULL]                  = "EVENT_CODE_NULL",
         [EVENT_CODE_APPLICATION_QUIT]      = "EVENT_CODE_APPLICATION_QUIT",
         [EVENT_CODE_APPLICATION_RESIZE]    = "EVENT_CODE_APPLICATION_RESIZE",
@@ -171,8 +210,7 @@ const char* event_get_code_name(event_code code)
 
     if(code >= EVENT_CODES_MAX)
     {
-        return code_name[EVENT_CODE_NULL];
+        return names[EVENT_CODE_NULL];
     }
-
-    return code_name[code];
+    return names[code];
 }

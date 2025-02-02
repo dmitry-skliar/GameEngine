@@ -12,7 +12,7 @@ void vulkan_command_buffer_allocate(
 {
     if(out_command_buffer)
     {
-        kmzero_tc(out_command_buffer, vulkan_command_buffer, 1);
+        kzero_tc(out_command_buffer, vulkan_command_buffer, 1);
     }
 
     VkCommandBufferAllocateInfo allocateinfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };

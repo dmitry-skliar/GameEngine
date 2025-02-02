@@ -10,12 +10,12 @@
 #include "kstring.h"
 
 // Объявления функций.
-VkResult vulkan_create_devices_info(vulkan_context* context, vulkan_device** out_devices);
-void vulkan_destroy_devices_info(vulkan_context* context, vulkan_device* devices);
-void vulkan_logged_devices_info(vulkan_context* context, vulkan_device* devices);
+VkResult vulkan_create_devices_info(renderer_backend* backend, vulkan_context* context, vulkan_device** out_devices);
+void vulkan_destroy_devices_info(renderer_backend* backend, vulkan_context* context, vulkan_device* devices);
+void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices);
 VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, vulkan_device_requirements* requirements);
 
-VkResult vulkan_device_create(vulkan_context* context)
+VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context)
 {
     // Начальная инициализация.
     context->device.graphics_queue.index = -1;
@@ -32,7 +32,7 @@ VkResult vulkan_device_create(vulkan_context* context)
 
     // Поиск всех устройств и сбор по ним информации.
     vulkan_device* devices = null;
-    VkResult result = vulkan_create_devices_info(context, &devices);
+    VkResult result = vulkan_create_devices_info(backend, context, &devices);
     if(!vulkan_result_is_success(result))
     {
         return result;
@@ -47,7 +47,7 @@ VkResult vulkan_device_create(vulkan_context* context)
     ktrace("Vulkan physical device obtained.");
 
     // Вывести отладочную информацию по найденым устройствам.
-    vulkan_logged_devices_info(context, devices);
+    vulkan_logging_devices_info(context, devices);
 
     // NOTE: Для пропуска совместных очередей с общим индексом.
     bool present_shares_graphics_queue = context->device.graphics_queue.index == context->device.present_queue.index;
@@ -114,7 +114,7 @@ VkResult vulkan_device_create(vulkan_context* context)
     deviceinfo.queueCreateInfoCount = index;
     deviceinfo.pQueueCreateInfos = queueinfo;
     deviceinfo.pEnabledFeatures = &features;
-    deviceinfo.enabledExtensionCount = darray_get_length(requirements.extensions);
+    deviceinfo.enabledExtensionCount = darray_length(requirements.extensions);
     deviceinfo.ppEnabledExtensionNames = requirements.extensions;
 
     // Устарело и не используется!
@@ -131,7 +131,7 @@ VkResult vulkan_device_create(vulkan_context* context)
 
     // Освобождение используемой памяти.
     darray_destroy(requirements.extensions); // NOTE: Обнуление указателей и данных не нужно, они в стеке!
-    vulkan_destroy_devices_info(context, devices);
+    vulkan_destroy_devices_info(backend, context, devices);
 
     u32 present_queue_index = present_must_share_graphics ? 0 : (present_shares_graphics_queue ? 1 : 0);
     vkGetDeviceQueue(context->device.logical, context->device.graphics_queue.index, 0, &context->device.graphics_queue.handle);
@@ -155,7 +155,7 @@ VkResult vulkan_device_create(vulkan_context* context)
     return VK_SUCCESS;
 }
 
-void vulkan_device_destroy(vulkan_context* context)
+void vulkan_device_destroy(renderer_backend* backend, vulkan_context* context)
 {
     // Уничтожение пулов команд.
     vkDestroyCommandPool(context->device.logical, context->device.graphics_queue.command_pool, context->allocator);
@@ -183,7 +183,7 @@ void vulkan_device_destroy(vulkan_context* context)
         vulkan_device_destroy_swapchian_support(&context->device.swapchain_support);
 
         // Уничтожение информации об устройстве.
-        kmzero_tc(&context->device, vulkan_device, 1);
+        kzero_tc(&context->device, vulkan_device, 1);
         context->device.graphics_queue.index = -1;
         context->device.compute_queue.index  = -1;
         context->device.present_queue.index  = -1;
@@ -256,10 +256,10 @@ void vulkan_device_destroy_swapchian_support(vulkan_device_swapchain_support* sw
         darray_destroy(swapchain_support->present_modes);
     }
 
-    kmzero_tc(swapchain_support, vulkan_device_swapchain_support, 1);
+    kzero_tc(swapchain_support, vulkan_device_swapchain_support, 1);
 }
 
-VkResult vulkan_create_devices_info(vulkan_context* context, vulkan_device** out_devices)
+VkResult vulkan_create_devices_info(renderer_backend* backend, vulkan_context* context, vulkan_device** out_devices)
 {
     u32 physical_device_count = 0;
     VkResult result = vkEnumeratePhysicalDevices(context->instance, &physical_device_count, null);
@@ -279,7 +279,7 @@ VkResult vulkan_create_devices_info(vulkan_context* context, vulkan_device** out
 
     // Создание массива с информацие об устройствах.
     vulkan_device* devices = darray_reserve(vulkan_device, physical_device_count);
-    kmzero_tc(devices, vulkan_device, physical_device_count);
+    kzero_tc(devices, vulkan_device, physical_device_count);
 
     // Сбор информации по каждому устройству.
     for(u32 i = 0; i < physical_device_count; ++i)
@@ -294,7 +294,7 @@ VkResult vulkan_create_devices_info(vulkan_context* context, vulkan_device** out
         u32 queue_family_count = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &queue_family_count, null);
         VkQueueFamilyProperties* queue_families = darray_reserve(VkQueueFamilyProperties, queue_family_count);
-        kmzero_tc(queue_families, VkQueueFamilyProperties, queue_family_count);
+        kzero_tc(queue_families, VkQueueFamilyProperties, queue_family_count);
         vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &queue_family_count, queue_families);
 
         u32 graphics_family_index = -1;
@@ -322,7 +322,7 @@ VkResult vulkan_create_devices_info(vulkan_context* context, vulkan_device** out
                 ++current_transfer_score;
 
                 // Очередь представления изображений?
-                if(platform_window_get_vulkan_presentation_support(context, physical_devices[i], j))
+                if(platform_window_get_vulkan_presentation_support(backend->window_state, physical_devices[i], j))
                 {
                     present_family_index = j;
                     present_family_count = family_count;
@@ -352,7 +352,9 @@ VkResult vulkan_create_devices_info(vulkan_context* context, vulkan_device** out
 
             // Очередь представления изображений?
             // NOTE: Если графическа очередь не поддерживает ищем первую попавшуюся!
-            if(present_family_index == -1 && platform_window_get_vulkan_presentation_support(context, physical_devices[i], j))
+            bool present_support_by_platform =
+                platform_window_get_vulkan_presentation_support(backend->window_state, physical_devices[i], j);
+            if(present_family_index == -1 && present_support_by_platform)
             {
                 present_family_index = j;
                 present_family_count = family_count;
@@ -397,9 +399,9 @@ VkResult vulkan_create_devices_info(vulkan_context* context, vulkan_device** out
     return VK_SUCCESS;
 }
 
-void vulkan_destroy_devices_info(vulkan_context* context, vulkan_device* devices)
+void vulkan_destroy_devices_info(renderer_backend* backend, vulkan_context* context, vulkan_device* devices)
 {
-    u32 physical_device_count = darray_get_capacity(devices);
+    u32 physical_device_count = darray_capacity(devices);
 
     for(u32 i = 0; i < physical_device_count; ++i)
     {
@@ -417,10 +419,10 @@ void vulkan_destroy_devices_info(vulkan_context* context, vulkan_device* devices
     ktrace("Vulkan physical devices info destroyed.");
 }
 
-void vulkan_logged_devices_info(vulkan_context* context, vulkan_device* devices)
+void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices)
 {
     // NOTE: Массив devices заполнялся без использования функций darray_push и darray_push_at!
-    u32 device_count = darray_get_capacity(devices);
+    u32 device_count = darray_capacity(devices);
     const char* gpu_names[] = { "unknown", "integrated", "discrete", "virtual", "host cpu" };
     const char* is_support[] = { "YES", "NO" };
     u32 gpu_index = -1;
@@ -485,7 +487,7 @@ void vulkan_logged_devices_info(vulkan_context* context, vulkan_device* devices)
 VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, vulkan_device_requirements* requirements)
 {
     // NOTE: Массив devices заполнялся без использования функций darray_push и darray_push_at!
-    u32 physical_device_count = darray_get_capacity(devices);
+    u32 physical_device_count = darray_capacity(devices);
     u32 best_score_device     = 0;
     u32 index_physical_device = -1;
 
@@ -549,7 +551,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
             VkExtensionProperties* available_extensions = darray_reserve(VkExtensionProperties, available_extension_count);
             vkEnumerateDeviceExtensionProperties(devices[i].physical, null, &available_extension_count, available_extensions);
 
-            u32 required_extension_count = darray_get_length(requirements->extensions);
+            u32 required_extension_count = darray_length(requirements->extensions);
             bool required_extension_not_supported = false;
 
             // TODO: Выделить в отдельную функцию сравнения динамических массивов и статических!
@@ -560,7 +562,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
 
                 for(u32 k = 0; k < available_extension_count; ++k)
                 {
-                    if(string_is_equal(requirements->extensions[j], available_extensions[k].extensionName))
+                    if(string_equal(requirements->extensions[j], available_extensions[k].extensionName))
                     {
                         found = true;
                         break;
@@ -609,7 +611,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
     // TODO: Заменить на константу U32_MAX_VALUE что-то в этом роде.
     if(index_physical_device != -1)
     {
-        kmcopy_tc(&context->device, &devices[index_physical_device], vulkan_device, 1);
+        kcopy_tc(&context->device, &devices[index_physical_device], vulkan_device, 1);
         return VK_SUCCESS;
     }
 

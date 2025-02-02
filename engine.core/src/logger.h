@@ -17,43 +17,35 @@
 
 // @brief Уровни логирования.
 typedef enum log_level {
-
     // @brief Уровень фатальных ошибок, при котором дальнейшая работа приложения невозможна.
     LOG_LEVEL_FATAL,
-
     // @brief Уровнь критических ошибок, при котором можно нормально завершить приложение.
     LOG_LEVEL_ERROR,
-
     // @brief Уровень не критических ошибок, при котором приложение может продолжать работу.
     LOG_LEVEL_WARNG,
-
     // @brief Уровень информирования, не влияет на работу приложения.
     LOG_LEVEL_INFOR,
-
     // @brief Уровень отладки, выводит отладочную информацию.
     LOG_LEVEL_DEBUG,
-
     // @brief Уровень отладки с подробной информацией.
     LOG_LEVEL_TRACE,
-
     // @brief Количество уровней логирования!
     LOG_LEVELS_MAX
-
 } log_level;
 
 // @brief Указатель на функцию обработки сообщения.
 typedef void (*PFN_console_write)(log_level level, const char* message);
 
 /*
-    @brief Задает указатель на функцию обработки сообщения. По умолчанию выводит в консоль.
+    @brief Задает указатель на пользовательскую функцию обработки сообщения. По умолчанию выводит в консоль.
     @param hook Указатель на функцию обработки сообщения. Для отбрасывания сообщений установить в 'null'.
 */
-KAPI void log_output_hook_set(PFN_console_write hook);
+KAPI void log_output_set_custom_hook(PFN_console_write hook);
 
 /*
     @brief Восстанавливает значение по умолчанию (вывод сообщений в консоль). 
 */
-KAPI void log_output_hook_set_default();
+KAPI void log_output_set_default_hook();
 
 /*
     @brief Функция отправки сообщения с заданным уровнем для дальнейшего логирования в системе.

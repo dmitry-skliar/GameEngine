@@ -2,74 +2,135 @@
 #include "memory/memory.h"
 
 // Внутренние подключения.
-#include "platform/memory.h"
-#include "debug/assert.h"
 #include "logger.h"
+#include "platform/memory.h"
 
 // Внешние подключения.
 // TODO: Удалить после создания обертки над функциями.
 #include <string.h>
 #include <stdio.h>
 
-// Контрольно число для проверки заголовка.
-#define CHECK_NUMBER 0x4d454d00
-
-typedef struct memory_system_context {
-    // Статистика использования памяти.
+typedef struct memory_stats {
     u64 total_allocated;
     u64 tagged_allocated[MEMORY_TAGS_MAX];
-} memory_system_context;
+} memory_stats;
 
-typedef struct memory_header {
-    // Число для проверки повреждения памяти.
-    u32 check;
-    // Метка выделенного участка памяти.
-    memory_tag tag;
-    // Размер выделенного участа памяти.
-    u64 size;
-} memory_header;
+typedef struct memory_system_state {
+    // Статистика по используемой памяти.
+    memory_stats stats;
+    // Счетчик вызова функции выделения памяти.
+    u64 alloc_count;
+} memory_system_state;
 
-// Указатель на контекст системы памяти.
-static memory_system_context* context = null;
+static memory_system_state* state_ptr = null;
+static const char* message_not_initialized =
+    "Function '%s' requires the memory system to be initialized. Call 'memory_system_initialize' first.";
 
-// Сообщения.
-static const char* message_requires_a_context = "Memory system was not initialized. Please first call 'memory_system_initialize'.";
-static const char* message_requires_a_pointer = "Function '%s' requires a non-null memory pointer.";
-static const char* message_header_invalid = "Function '%s' could not check the header number, or the memory pointer is invalid!";
-
-void memory_system_initialize()
+void memory_system_initialize(u64* memory_requirement, void* memory)
 {
-    kassert_debug(context == null, "Trying to call function 'memory_system_initialize' more than once!");
+    if(state_ptr)
+    {
+        kwarng("Function '%s' was called more than once!", __FUNCTION__);
+        return;
+    }
 
-    context = platform_memory_allocate(sizeof(memory_system_context));
-    kassert(context != null, "Memory system context was not allocated!");
-    platform_memory_zero(context, sizeof(memory_system_context));
+    *memory_requirement = sizeof(struct memory_system_state);
+    if(!memory) return;
 
-    kinfor("Memory system started.");
+    platform_memory_zero(memory, *memory_requirement);
+    state_ptr = memory;
 }
 
 void memory_system_shutdown()
 {
-    kassert_debug(context != null, message_requires_a_context);
-
-    if(context->total_allocated > 0)
+    if(!state_ptr)
     {
-        // TODO: Вывести сообщение о утечке памяти и где это произошло.
+        kfatal(message_not_initialized, __FUNCTION__);
+    }
+
+    if(state_ptr->stats.total_allocated > 0)
+    {
         kwarng("Detecting memory leaks...");
-        const char* meminfo = memory_system_usage_get();
+        const char* meminfo = memory_system_usage_str();
         kwarng(meminfo);
         platform_memory_free((void*)meminfo);
     }
 
-    platform_memory_free(context);
-    context = null;
-
-    kinfor("Memory system stopped.");
+    state_ptr = null;
 }
 
-const char* memory_system_usage_get()
+void* memory_allocate(u64 size, memory_tag tag)
 {
-    kassert_debug(context != null, message_requires_a_context);
+    if(!size)
+    {
+        kerror("Function '%s' requires a size greater than zero. Return null!", __FUNCTION__);
+        return null;
+    }
+
+    if(tag >= MEMORY_TAGS_MAX)
+    {
+        kerror("Function '%s': Tag is out of bounds. Return null!", __FUNCTION__);
+        return null;
+    }
+
+    if(tag == MEMORY_TAG_UNKNOWN)
+    {
+        kwarng("Memory allocation with MEMORY_TAG_UNKNOWN. Re-class this allocation.");
+    }
+
+    void* block = platform_memory_allocate(size);
+
+    if(!block)
+    {
+        kwarng("Function '%s' could not allocate memory and returned null.", __FUNCTION__);
+    }
+
+    if(state_ptr && block)
+    {
+        state_ptr->stats.tagged_allocated[tag] += size;
+        state_ptr->stats.total_allocated += size;
+        state_ptr->alloc_count++;
+    }
+
+    return block;
+}
+
+void memory_free(void* block, u64 size, memory_tag tag)
+{
+    if(!block)
+    {
+        kerror("Function '%s' requires a non-null memory pointer. Just return!", __FUNCTION__);
+        return;
+    }
+
+    if(!size)
+    {
+        kerror("Function '%s' requires a size greater than zero. Just return!", __FUNCTION__);
+        return;
+    }
+
+    if(tag >= MEMORY_TAGS_MAX)
+    {
+        kerror("Function '%s': Tag is out of bounds. Just return!", __FUNCTION__);
+        return;
+    }
+
+    if(state_ptr)
+    {
+        state_ptr->stats.tagged_allocated[tag] -= size;
+        state_ptr->stats.total_allocated -= size;
+    }
+
+    platform_memory_free(block);
+}
+
+const char* memory_system_usage_str()
+{
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return "<void>";
+    }
 
     static const char* memory_tag_strings[MEMORY_TAGS_MAX + 1] = {
         "UNKNOWN          ",
@@ -110,11 +171,11 @@ const char* memory_system_usage_get()
 
         if(i < MEMORY_TAGS_MAX)
         {
-            size = context->tagged_allocated[i];
+            size = state_ptr->stats.tagged_allocated[i];
         }
         else
         {
-            size = context->total_allocated;
+            size = state_ptr->stats.total_allocated;
         }
 
         if(size >= gib)
@@ -148,119 +209,11 @@ const char* memory_system_usage_get()
     return strdup(buffer);
 }
 
-void* memory_allocate(u64 size, memory_tag tag)
+u64 memory_system_alloc_count()
 {
-    kassert_debug(context != null, message_requires_a_context);
-    kassert_debug(tag < MEMORY_TAGS_MAX, "Tag value is out of bounds.");
-
-    if(!size)
+    if(state_ptr)
     {
-        kerror("Function '%s' requires size more than 0. Return null!", __FUNCTION__);
-        return null;
+        return state_ptr->alloc_count;
     }
-
-    if(tag == MEMORY_TAG_UNKNOWN)
-    {
-        kwarng("Memory allocation with MEMORY_TAG_UNKNOWN. Re-class this allocation.");
-    }
-
-    u64 total_size = sizeof(memory_header) + size;
-    memory_header* header = platform_memory_allocate(total_size);
-
-    if(header)
-    {
-        platform_memory_zero(header, sizeof(memory_header));
-
-        header->check = CHECK_NUMBER;
-        header->size  = total_size;
-        header->tag   = tag;
-
-        context->tagged_allocated[tag] += total_size;
-        context->total_allocated += total_size;
-
-        return (void*)((u8*)header + sizeof(memory_header));
-    }
-
-    kfatal("In function '%s' filed to allocate memory.", __FUNCTION__);
-    return null;
-}
-
-void memory_free(void* block)
-{
-    kassert_debug(context != null, message_requires_a_context);
-
-    if(!block)
-    {
-        kfatal(message_requires_a_pointer, __FUNCTION__);
-    }
-
-    memory_header* header = (memory_header*)((u8*)block - sizeof(memory_header));
-
-    if(header->check != CHECK_NUMBER)
-    {
-        kfatal(message_header_invalid, __FUNCTION__);
-    }
-
-    context->tagged_allocated[header->tag] -= header->size;
-    context->total_allocated -= header->size;
-
-    platform_memory_free(header);
-}
-
-void memory_zero(void* block, u64 size)
-{
-    platform_memory_zero(block, size);
-}
-
-void memory_set(void* block, u64 size, i32 value)
-{
-    platform_memory_set(block, size, value);
-}
-
-void memory_copy(void* dest, const void* src, u64 size)
-{
-    platform_memory_copy(dest, src, size);
-}
-
-void memory_move(void* dest, const void* src, u64 size)
-{
-    platform_memory_move(dest, src, size);
-}
-
-u64 memory_size_get(void* block)
-{
-    kassert_debug(context != null, message_requires_a_context);
-
-    if(!block)
-    {
-        kfatal(message_requires_a_pointer, __FUNCTION__);
-    }
-
-    memory_header* header = (memory_header*)((u8*)block - sizeof(memory_header));
-
-    if(header->check != CHECK_NUMBER)
-    {
-        kfatal(message_header_invalid, __FUNCTION__);
-    }
-
-    return header->size - sizeof(memory_header);
-}
-
-memory_tag memory_tag_get(void* block)
-{
-    kassert_debug(context != null, message_requires_a_context);
-
-    if(!block)
-    {
-        kfatal(message_requires_a_pointer, __FUNCTION__);
-    }
-
-    memory_header* header = (memory_header*)((u8*)block - sizeof(memory_header));
-
-    if(header->check != CHECK_NUMBER)
-    {
-        kfatal(message_header_invalid, __FUNCTION__);
-    }
-
-    return header->tag;
+    return 0;
 }

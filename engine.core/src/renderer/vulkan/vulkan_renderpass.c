@@ -135,7 +135,7 @@ void vulkan_renderpass_begin(
     begininfo.renderArea.extent.height = renderpass->h;
 
     VkClearValue clear_values[2];
-    kmzero_tc(clear_values, VkClearValue, 2);
+    kzero_tc(clear_values, VkClearValue, 2);
     // Color.
     clear_values[0].color.float32[0] = renderpass->r;
     clear_values[0].color.float32[1] = renderpass->g;

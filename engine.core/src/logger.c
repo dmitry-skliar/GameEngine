@@ -11,7 +11,7 @@
 #include <stdio.h>
 
 // Функиця обработки сообщения по умолчанию.
-void log_output_hook_default(log_level level, const char* message);
+void log_output_default_hook(log_level level, const char* message);
 
 // Размер буфера данных.
 #define LOG_BUFFER_SIZE   0xffff
@@ -27,7 +27,7 @@ void log_output_hook_default(log_level level, const char* message);
 static char buffer[LOG_BUFFER_SIZE];
 
 // Указатель на функцию в которую будет передаваться сообщение.
-static PFN_console_write log_output_hook = log_output_hook_default;
+static PFN_console_write log_output_hook = log_output_default_hook;
 
 void log_output(log_level level, const char* message, ...)
 {
@@ -52,7 +52,7 @@ void log_output(log_level level, const char* message, ...)
     }
 }
 
-void log_output_hook_default(log_level level, const char* message)
+void log_output_default_hook(log_level level, const char* message)
 {
     const char* levels[LOG_LEVELS_MAX] = {
         "[FATAL] ", "[ERROR] ", "[WARNG] ", "[INFOR] ", "[DEBUG] ", "[TRACE] "
@@ -75,14 +75,14 @@ void log_output_hook_default(log_level level, const char* message)
     }
 }
 
-void log_output_hook_set(PFN_console_write hook)
+void log_output_set_custom_hook(PFN_console_write hook)
 {
     log_output_hook = hook;
 }
 
-void log_output_hook_set_default()
+void log_output_set_default_hook()
 {
-    log_output_hook = log_output_hook_default;
+    log_output_hook = log_output_default_hook;
 }
 
 void report_assertion_failure(const char* expression, const char* message, const char* file, i32 line)

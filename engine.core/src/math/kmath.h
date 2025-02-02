@@ -2,6 +2,7 @@
 
 #include <defines.h>
 #include <math/math_types.h>
+#include <platform/math.h>
 
 // Приблизительное представление числа ПИ.
 #define K_PI 3.14159265358979323846f
@@ -80,70 +81,70 @@ KINLINE f32 kstep(f32 edge, f32 x)
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 ksin(f32 x);
+#define ksin(x) platform_math_sin(x)
 
 /*
     @brief Вычисляет косинус числа.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 kcos(f32 x);
+#define kcos(x) platform_math_cos(x)
 
 /*
     @brief Вычисляет тангенс числа.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 ktan(f32 x);
+#define ktan(x) platform_math_tan(x)
 
 /*
     @brief Вычисляет арктангенс числа.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 katan(f32 x);
+#define katan(x) platform_math_atan(x)
 
 /*
     @brief Вычисляет арккосинус числа.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 kacos(f32 x);
+#define kacos(x) platform_math_acos(x)
 
 /*
     @brief Вычисляет квадратный корень числа.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 ksqrt(f32 x);
+#define ksqrt(x) platform_math_sqrt(x)
 
 /*
     @brief Вычисляет абсолютное значение числа.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 kabs(f32 x);
+#define kabs(x) platform_math_abs(x)
 
 /*
     @brief Возвращает наибольшее целое значение, меньшее или равное числу.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 kfloor(f32 x);
+#define kfloor(x) platform_math_floor(x)
 
 /*
     @brief Возвращает наименьшее целое значение, большее или равное числу.
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 kceil(f32 x);
+#define kceil(x) platform_math_ceil(x)
 
 /*
     @brief Вычисляет логарифм числа по основанию 2 (т.е. сколько раз x можно разделить на 2).
     @param x Число.
     @return Результирующее значение.
 */
-KAPI f32 klog2(f32 x);
+#define klog2(x) platform_math_log2(x)
 
 /*
     @brief Вычисляет значение возведенного в степень.
@@ -151,7 +152,7 @@ KAPI f32 klog2(f32 x);
     @param p Степерь.
     @return Результирующее значение.
 */
-KAPI f32 kpow(f32 x, f32 p);
+#define kpow(x, p) platform_math_pow(x, p)
 
 /*
     @brief Указывает, является ли значение степенью числа 2.
@@ -168,7 +169,7 @@ KINLINE bool is_power_of_2(u64 value)
     @brief Генерирует случайное целое число.
     @return Случайное целое число.
 */
-KAPI i32 krandom();
+#define krandom() platform_math_random()
 
 /*
     @brief Генерирует случайное целое число, находящееся в указанном диапазоне (включительно).
@@ -176,13 +177,13 @@ KAPI i32 krandom();
     @param max Максимум диапазона.
     @return Случайное целое число.
 */
-KAPI i32 krandom_in_range(i32 min, i32 max);
+#define krandom_in_range(min, max) platform_math_random_in_range(min, max)
 
 /*
     @brief Генерирует случайное число с плавающей точкой.
     @return Случайное число c плавающей точкой.
 */
-KAPI f32 kfrandom();
+#define kfrandom() platform_math_frandom()
 
 /*
     @brief Генерирует случайное число с плавающей точкой, находящееся в указанном диапазоне (включительно).
@@ -190,7 +191,7 @@ KAPI f32 kfrandom();
     @param max Максимум диапазона.
     @return Случайное число c плавающей точкой.
 */
-KAPI f32 kfrandom_in_range(f32 min, f32 max);
+#define kfrandom_in_range(min, max) platform_math_frandom_in_range(min, max)
 
 /*
     @brief Выполняет интерполяцию Эрмита между двумя значениями.

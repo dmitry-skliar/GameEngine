@@ -2,12 +2,25 @@
 
 #include <defines.h>
 
-// @brief Конфигурация окна.
+// @brief Начальная конфигурация окна.
 typedef struct window_config {
+    // @brief Заголовок окна.
     char* title;
+    // @brief Ширина окна в пикселях.
     i32 width;
+    // @brief Высота окна в пикселях.
     i32 height;
 } window_config;
+
+// @brief Экземпляр контекста окна.
+typedef struct window {
+  // @brief Заголовок окна.
+  const char* title;
+  // @brief Ширина окна в пикселях.
+  i32 width;
+  // @brief Высота окна в пикселях.
+  i32 height;
+} window;
 
 // Указатели на функции обработчики событий окна (слушателей).
 typedef void (*PFN_window_handler_close)();
@@ -19,73 +32,76 @@ typedef void (*PFN_window_handler_mouse_wheel)(i32 zdelta);
 typedef void (*PFN_window_handler_focus)(bool focused);
 
 /*
-    @brief Создает окно приложения.
-    NOTE: Если окно было успешно создано, то при повторном вызове возвращает false.
-    @param config Конфигурация создаваемого окна.
-    @return В случае успеха - true, в случае повторного вызова или ошибки - false.
+    @brief Создает экземпляр оконного приложения.
+    @param memory_requirement Указатель на переменную для получения требований к памяти.
+    @param instance Указатель на выделенную память экземпляра, для получения требований к памяти передать null.
+    @param config Указатель на конфигурацию создаваемого окна.
+    @return True экземпляр успешно создан, false в случае ошибкок или при получении требований к памяти.
 */
-KAPI bool platform_window_create(window_config* config);
+KAPI bool platform_window_create(u64* memory_requirement, window* instance, window_config* config);
 
 /*
     @brief Завершает работу окна.
+    @param instance Указатель на выделенную память экземпляра окна.
 */
-KAPI void platform_window_destroy();
+KAPI void platform_window_destroy(window* instance);
 
 /*
-    @brief Обрабатывает событиий окна.
+    @brief Обрабатывает события окна.
     NOTE: Обязательно добавить в обработку кадра!
-    @return В случае успеха - true, в случае ошибки - false.
+    @param instance Указатель на выделенную память экземпляра окна.
+    @return True в случае успеха, false при возникновении ошибки.
 */
-KAPI bool platform_window_dispatch();
+KAPI bool platform_window_dispatch(window* instance);
 
 /*
     @brief Задает обработчик на закрытие окна.
+    @param instance Указатель на выделенную память экземпляра окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_set_on_close_handler(PFN_window_handler_close handler);
+KAPI void platform_window_set_on_close_handler(window* instance, PFN_window_handler_close handler);
 
 /*
     @brief Задает обработчик на изменение размеров окна.
+    @param instance Указатель на выделенную память экземпляра окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_set_on_resize_handler(PFN_window_handler_resize handler);
+KAPI void platform_window_set_on_resize_handler(window* instance, PFN_window_handler_resize handler);
 
 /*
     @brief Задает обработчик на нажатия клавиш клавиатуры.
+    @param instance Указатель на выделенную память экземпляра окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_set_on_keyboard_key_handler(PFN_window_handler_keyboard_key handler);
+KAPI void platform_window_set_on_keyboard_key_handler(window* instance, PFN_window_handler_keyboard_key handler);
 
 /*
     @brief Задает обработчик на перемещения курсора мышки.
+    @param instance Указатель на выделенную память экземпляра окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_set_on_mouse_move_handler(PFN_window_handler_mouse_move handler);
+KAPI void platform_window_set_on_mouse_move_handler(window* instance, PFN_window_handler_mouse_move handler);
 
 /*
     @brief Задает обработчик на нажатие клавиш мышки.
+    @param instance Указатель на выделенную память экземпляра окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_set_on_mouse_button_handler(PFN_window_handler_mouse_button handler);
+KAPI void platform_window_set_on_mouse_button_handler(window* instance, PFN_window_handler_mouse_button handler);
 
 /*
     @brief Задает обработчик на прокрутку колесика мышки.
+    @param instance Указатель на выделенную память экземпляра окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_set_on_mouse_wheel_handler(PFN_window_handler_mouse_wheel handler);
+KAPI void platform_window_set_on_mouse_wheel_handler(window* instance, PFN_window_handler_mouse_wheel handler);
 
 /*
     @brief Задает обработчик на фокусировку окна курсором мышки.
+    @param instance Указатель на выделенную память экземпляра окна.
     @param handler Обработчик который будет вызван по событию, может быть null.
 */
-KAPI void platform_window_set_on_focus_handler(PFN_window_handler_focus handler);
-
-/*
-    @brief Получает текущие размеры окна.
-    @param width Указатель на переменную для записи ширины окна.
-    @param height Указатель на переменную для записи высоты окна.
-*/
-KAPI void platform_window_get_dimentions(u32* width, u32* height);
+KAPI void platform_window_set_on_focus_handler(window* instance, PFN_window_handler_focus handler);
 
 // TODO: Реализовать следующее.
 // KAPI void platform_window_title_set(const char* title);

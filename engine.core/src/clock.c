@@ -8,7 +8,7 @@
 
 void clock_start(clock* clock)
 {
-    clock->start_time = platform_time_get_absolute();
+    clock->start_time = platform_time_absolute();
     clock->elapsed = 0;
 }
 
@@ -21,6 +21,6 @@ void clock_update(clock* clock)
 {
     if(clock->start_time)
     {
-        clock->elapsed = platform_time_get_absolute() - clock->start_time;
+        clock->elapsed = platform_time_absolute() - clock->start_time;
     }
 }

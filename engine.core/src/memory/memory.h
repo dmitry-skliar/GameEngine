@@ -1,6 +1,7 @@
 #pragma once
 
 #include <defines.h>
+#include <platform/memory.h>
 
 // @brief Маркеры участков памяти.
 typedef enum memory_tag {
@@ -29,148 +30,111 @@ typedef enum memory_tag {
 /*
     @brief Запускает систему менеджмента и контроля памяти.
 */
-KAPI void memory_system_initialize();
+void memory_system_initialize(u64* memory_requirement, void* memory);
 
 /*
     @brief Останавливает систему менеджмента и контроля памяти.
 */
-KAPI void memory_system_shutdown();
+void memory_system_shutdown();
 
 /*
-    @brief Получить данные об использовании памяти в виде строки.
+    @brief Запрашивает данные об использовании памяти в виде строки.
     NOTE: После использования удалить строку с помощью функции 'string_free'.
     @return Данные об использовании памяти в виде строки.
 */
-KAPI const char* memory_system_usage_get();
+KAPI const char* memory_system_usage_str();
 
 /*
-    @brief Запрашивает память у системы заданного размера и помечает маркером для анализа.
-    @param size Количество байт памяти которую необходимо получить.
-    @param tag Маркер которым нужно пометить запрашиваемую память.
+    @brief Запрашивает количество операций выделения памяти.
+    @return Количество операций выделения памяти.
+*/
+KAPI u64 memory_system_alloc_count();
+
+/*
+    @brief Запрашивает память у системы.
+    NOTE: Не обнуляет память!
+    @param size Количество байт памяти.
+    @param tag Маркер памяти.
     @return Указатель на запрашиваемый участок памяти.
 */
 KAPI void* memory_allocate(u64 size, memory_tag tag);
 
 /*
-    @brief Возвращает память системе заданный указателем. 
-    NOTE: Применять к указателю, который был выделен функцией 'memory_allocate'.
-    А так же указатель необходимо обнулить самостоятельно!
-    @param block Указатель на память, которую нужно вернуть системе.
-*/
-KAPI void memory_free(void* block);
-
-/*
-    @brief Обнуляет байты указанного участа памяти заданного размера.
-    @param block Указатель на участок памяти для обнуления.
-    @param size Количество байт памяти для обнуления.
-*/
-KAPI void memory_zero(void* block, u64 size);
-
-/*
-    @brief Заполняет байты указаного участка памяти заданного размером и значением.
-    @param block Указатель на участок памяти для заполнение значением.
-    @param size Количество байт памяти для заполнения значением.
-    @param value Значение, которым нужно наполнить память.
-*/
-KAPI void memory_set(void* block, u64 size, i32 value);
-
-/*
-    @brief Копирует заданное количество байт из одного участка памяти в другой.
-    NOTE: Адреса участков памяти не должны пересекаться!
-    @param dest Указатель на участок памяти куда копировать.
-    @param src Указатель на участок памяти откуда копировать.
-    @param size Количествой байт которое необходимо скопировать.
-*/
-KAPI void memory_copy(void* dest, const void* src, u64 size);
-
-/*
-    @brief Копирует заданное количество байт из одного участка памяти в другой.
-    NOTE: Адреса участков памяти могут пересекаться, но операция выполняется дольше!
-    @param dest Указатель на участок памяти куда копировать.
-    @param src Указатель на участок памяти откуда копировать.
-    @param size Количествой байт которое необходимо скопировать.
-*/
-KAPI void memory_move(void* dest, const void* src, u64 size);
-
-/*
-    @brief Получить размер участка памяти.
-    NOTE: Применять к указателю, который был выделен функцией 'memory_allocate'.
+    @brief Возвращает память системе. 
+    NOTE: Указатель необходимо обнулить самостоятельно!
     @param block Указатель на память.
-    @return Размер памяти.
+    @param size Количество байт памяти.
+    @param tag Маркер памяти.
 */
-KAPI u64 memory_size_get(void* block);
+KAPI void memory_free(void* block, u64 size, memory_tag tag);
 
 /*
-    @brief Получить метку участка памяти.
+    @brief Запрашивает память у системы.
+    @param size Количество байт памяти.
+    @param tag Маркер памяти.
+    @return Указатель на запрашиваемый участок памяти.
+*/
+#define kallocate(size, tag) memory_allocate(size, tag)
+
+/*
+    @brief Запрашивает память у системы.
+    @param type Тип элемента.
+    @param count Количество элементов.
+    @param tag Маркер памяти.
+    @return Указатель на запрашиваемый участок памяти.
+*/
+#define kallocate_tc(type, count, tag) (type*)memory_allocate(sizeof(type) * count, tag)
+
+/*
+    @brief Возвращает память системе.
+    NOTE: Указатель необходимо обнулить самостоятельно!
     @param block Указатель на память.
-    @return Метка памяти.
+    @param size Количество байт памяти.
+    @param tag Маркер памяти.
 */
-KAPI memory_tag memory_tag_get(void* block);
+#define kfree(block, size, tag) memory_free((void*)block, size, tag)
 
 /*
-    @brief Запрашивает память у системы заданного размера и помечает маркером для анализа.
-    @param size Количество байт памяти которую необходимо получить.
-    @param tag Маркер которым нужно пометить запрашиваемую память.
-    @return Указатель на запрашиваемый участок памяти.
+    @brief Возвращает память системе.
+    NOTE: Указатель необходимо обнулить самостоятельно!
+    @param block Указатель на память.
+    @param type Тип элемента.
+    @param count Количество элементов.
+    @param tag Маркер памяти.
 */
-#define kmallocate(size, tag) memory_allocate(size, tag)
+#define kfree_tc(block, type, count, tag) memory_free((void*)block, sizeof(type) * count, tag)
 
 /*
-    @brief Запрашивает память у системы заданного типом элемента и помечает маркером.
-    @param type Тип элемента участка памяти.
-    @param tag Маркер которым нужно пометить запрашиваемую память.
-    @return Указатель на запрашиваемый участок памяти.
+    @brief Обнуляет байты указанного участа памяти.
+    @param block Указатель на участок памяти.
+    @param size Количество байт памяти.
 */
-#define kmallocate_t(type, tag) (type*)memory_allocate(sizeof(type), tag)
+#define kzero(block, size) platform_memory_zero((void*)block, size)
 
 /*
-    @brief Запрашивает память у системы заданного типом элемента, его ыколичеством и помечает маркером.
-    @param type Тип элемента участка памяти.
-    @param count Количество элементов заданного типа.
-    @param tag Маркер которым нужно пометить запрашиваемую память.
-    @return Указатель на запрашиваемый участок памяти.
+    @brief Обнуляет байты указанного участа памяти.
+    @param block Указатель на участок памяти.
+    @param type Тип элемента.
+    @param count Количество элементов.
 */
-#define kmallocate_tc(type, count, tag) (type*)memory_allocate(sizeof(size) * count, tag)
+#define kzero_tc(block, type, count) platform_memory_zero((void*)block, sizeof(type) * count)
 
 /*
-    @brief Возвращает память системе заданный указателем. 
-    NOTE: Применять к указателю, который был выделен функцией 'memory_allocate' 
-    или его псевдонимами 'kmallocate*'. А так же указатель необходимо обнулить самостоятельно!
-    @param block Указатель на память, которую нужно вернуть системе.
-*/
-#define kmfree(block) memory_free((void*)block)
-
-/*
-    @brief Обнуляет байты указанного участа памяти заданного размера.
-    @param block Указатель на участок памяти для обнуления.
-    @param size Количество байт памяти для обнуления.
-*/
-#define kmzero(block, size) memory_zero((void*)block, size)
-
-/*
-    @brief Обнуляет байты указанного участа памяти заданного типом элемента и его количеством.
-    @param block Указатель на участок памяти для обнуления.
-    @param type Тип элемента участка памяти.
-    @param count Количество элементов заданного типа.
-*/
-#define kmzero_tc(block, type, count) memory_zero((void*)block, sizeof(type) * count)
-
-/*
-    @brief Заполняет байты указаного участка памяти заданного размером и значением.
-    @param block Указатель на участок памяти для заполнение значением.
-    @param size Количество байт памяти для заполнения значением.
+    @brief Заполняет байты указаного участка памяти значением.
+    @param block Указатель на участок памяти.
+    @param size Количество байт памяти.
     @param value Значение, которым нужно наполнить память.
 */
-#define kmset(block, size, value) memory_set((void*)block, size, value)
+#define kset(block, size, value) platform_memory_set((void*)block, size, value)
 
 /*
-    @brief Заполняет байты указаного участка памяти заданного типом элемента, его количеством и значением.
-    @param block Указатель на участок памяти для заполнение значением.
-    @param type Тип элемента участка памяти.
-    @param count Количество элементов заданного типа.
+    @brief Заполняет байты указаного участка памяти значением.
+    @param block Указатель на участок памяти.
+    @param type Тип элемента.
+    @param count Количество элементов.
     @param value Значение, которым нужно наполнить память.
 */
-#define kmset_tc(block, type, count, value) memory_set((void*)block, sizeof(size) * count, value)
+#define kset_tc(block, type, count, value) platform_memory_set((void*)block, sizeof(size) * count, value)
 
 /*
     @brief Копирует заданное количество байт из одного участка памяти в другой.
@@ -179,7 +143,7 @@ KAPI memory_tag memory_tag_get(void* block);
     @param src Указатель на участок памяти откуда копировать.
     @param size Количествой байт которое необходимо скопировать.
 */
-#define kmcopy(dest, src, size) memory_copy((void*)dest, (void*)src, size)
+#define kcopy(dest, src, size) platform_memory_copy((void*)dest, (void*)src, size)
 
 /*
     @brief Копирует заданное количество байт из одного участка памяти в другой.
@@ -189,7 +153,7 @@ KAPI memory_tag memory_tag_get(void* block);
     @param type Тип элемента участка памяти.
     @param count Количество элементов заданного типа.
 */
-#define kmcopy_tc(dest, src, type, count) memory_copy((void*)dest, (void*)src, sizeof(type) * count)
+#define kcopy_tc(dest, src, type, count) platform_memory_copy((void*)dest, (void*)src, sizeof(type) * count)
 
 /*
     @brief Копирует заданное количество байт из одного участка памяти в другой.
@@ -198,7 +162,7 @@ KAPI memory_tag memory_tag_get(void* block);
     @param src Указатель на участок памяти откуда копировать.
     @param size Количествой байт которое необходимо скопировать.
 */
-#define kmmove(dest, src, size) memory_move((void*)dest, (void*)src, size)
+#define kmove(dest, src, size) platform_memory_move((void*)dest, (void*)src, size)
 
 /*
     @brief Копирует заданное количество байт из одного участка памяти в другой.
@@ -208,4 +172,4 @@ KAPI memory_tag memory_tag_get(void* block);
     @param type Тип элемента участка памяти.
     @param count Количество элементов заданного типа.
 */
-#define kmmove_tc(dest, src, type, count) memory_move((void*)dest, (void*)src, sizeof(type) * count)
+#define kmove_tc(dest, src, type, count) platform_memory_move((void*)dest, (void*)src, sizeof(type) * count)

@@ -2,37 +2,34 @@
 
 #include <logger.h>
 #include <application.h>
-#include <memory/memory.h>
 
 // @brief Внешняя функция для создания игры.
-extern bool create_game(application* inst);
+extern bool game_create(game* inst);
+extern void game_destroy(game* inst);
 
 int main()
 {
-    memory_system_initialize();
+    game game_inst = {0};
 
-    application* inst = kmallocate_t(application, MEMORY_TAG_GAME);
-    kmzero_tc(inst, application, 1);
-
-    if(!create_game(inst))
+    if(!game_create(&game_inst))
     {
         kerror("Could not create game!");
         return -1;
     }
 
-    if(!inst->initialize || !inst->update || !inst->render || !inst->on_resize)
+    if(!game_inst.initialize || !game_inst.update || !game_inst.render || !game_inst.on_resize)
     {
         kerror("The application's function pointers must be assigned!");
         return -2;
     }
 
-    if(!inst->window_width || !inst->window_height || !inst->window_title)
+    if(!game_inst.window_width || !game_inst.window_height || !game_inst.window_title)
     {
         kerror("The application configuration requires the window width, height, and title.");
         return -3;
     }
 
-    if(!application_create(inst))
+    if(!application_create(&game_inst))
     {
         kerror("Failed to create application!");
         return 1;
@@ -44,10 +41,7 @@ int main()
         return 2;
     }
 
-    kmfree(inst->state);
-    kmfree(inst);
-
-    memory_system_shutdown();
+    game_destroy(&game_inst);
 
     return 0;
 }

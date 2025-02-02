@@ -11,13 +11,13 @@
 static renderer_backend* backend = null;
 
 // Сообщения.
-static const char* message_backend_not_created = "Renderer context was not created. Please first call 'renderer_initialize'.";
+static const char* message_backend_not_created = "Renderer context was not created. Call 'renderer_initialize' first.";
 
-bool renderer_initialize(const char* application_name, u32 width, u32 height)
+bool renderer_initialize(window* window_state)
 {
     kassert_debug(backend == null, "Trying to call function 'renderer_initialize' more than once!");
 
-    backend = kmallocate_t(renderer_backend, MEMORY_TAG_RENDERER);
+    backend = kallocate_tc(renderer_backend, 1, MEMORY_TAG_RENDERER);
     if(!backend)
     {
         kerror("Failed to allocate renderer memory context.");
@@ -26,8 +26,8 @@ bool renderer_initialize(const char* application_name, u32 width, u32 height)
 
     // TODO: Сделать настраиваемым из приложения!
     renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, backend);
-
-    if(!backend->initialize(backend, application_name, width, height))
+    backend->window_state = window_state;
+    if(!backend->initialize(backend))
     {
         return false;
     }
@@ -40,7 +40,7 @@ void renderer_shutdown()
     kassert_debug(backend != null, message_backend_not_created);
 
     backend->shutdown(backend);
-    kmfree(backend);
+    kfree_tc(backend, renderer_backend, 1, MEMORY_TAG_RENDERER);
     backend = null;
 }
 

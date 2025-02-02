@@ -5,11 +5,11 @@
 
 /*
 */
-VkResult vulkan_device_create(vulkan_context* context);
+VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context);
 
 /*
 */
-void vulkan_device_destroy(vulkan_context* context);
+void vulkan_device_destroy(renderer_backend* backend, vulkan_context* context);
 
 /*
 */

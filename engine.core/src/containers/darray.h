@@ -77,21 +77,21 @@ KAPI void dynamic_array_clear(void* array);
     @param array Указатель на массив.
     @return Текущее количество элементов.
 */
-KAPI u64 dynamic_array_get_length(void* array);
+KAPI u64 dynamic_array_length(void* array);
 
 /*
     @brief Получает зарезервированное количество элементов массив.
     @param array Указатель на массив.
     @return Зарезервированное количество элементов.
 */
-KAPI u64 dynamic_array_get_capacity(void* array);
+KAPI u64 dynamic_array_capacity(void* array);
 
 /*
     @brief Размер элемента массива.
     @param array Указатель на массив.
     @return Размер элемента.
 */
-KAPI u64 dynamic_array_get_stride(void* array);
+KAPI u64 dynamic_array_stride(void* array);
 
 /*
     @brief Создает динамический массив.
@@ -177,18 +177,18 @@ KAPI u64 dynamic_array_get_stride(void* array);
     @param array Указатель на массив.
     @return Текущее количество элементов.
 */
-#define darray_get_length(array) dynamic_array_get_length(array)
+#define darray_length(array) dynamic_array_length(array)
 
 /*
     @brief Получает зарезервированное количество элементов массив.
     @param array Указатель на массив.
     @return Зарезервированное количество элементов.
 */
-#define darray_get_capacity(array) dynamic_array_get_capacity(array)
+#define darray_capacity(array) dynamic_array_capacity(array)
 
 /*
     @brief Размер элемента массива.
     @param array Указатель на массив.
     @return Размер элемента.
 */
-#define darray_get_stride(array) dynamic_array_get_stride(array)
+#define darray_stride(array) dynamic_array_stride(array)

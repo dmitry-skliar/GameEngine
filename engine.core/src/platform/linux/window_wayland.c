@@ -1,11 +1,11 @@
 // Cобственные подключения.
 #include "platform/window.h"
+#include "platform/string.h"
 
 #if KPLATFORM_LINUX_WAYLAND_FLAG
 
     // Внутренние подключения.
     #include "logger.h"
-    #include "debug/assert.h"
     #include "memory/memory.h"
     #include "input_types.h"
     #include "containers/darray.h"
@@ -16,23 +16,13 @@
     #include <wayland-client.h>
     #include <vulkan/vulkan.h>
     #include <vulkan/vulkan_wayland.h>
-    #include <string.h>
-    // TODO: Временно начало.
-    #include <sys/mman.h>
-    #include <fcntl.h>
-    #include <unistd.h>
-    // TODO: Временно конец.
 
-    typedef struct platform_window_context {
+    typedef struct window_state {
         // Для работы с окном приложения.
         struct wl_display*    wdisplay;
         struct wl_registry*   wregistry;
         struct wl_compositor* wcompositor;
         struct wl_surface*    wsurface;
-        // TODO: Временно начало.
-        struct wl_shm*        wshm;
-        struct wl_buffer*     wbuffer;
-        // TODO: Временно конец.
         struct xdg_wm_base*   xbase;
         struct xdg_surface*   xsurface;
         struct xdg_toplevel*  xtoplevel;
@@ -50,54 +40,7 @@
         PFN_window_handler_focus        on_focus;
         // Флаги состояний.
         bool  do_resize;
-        // Кеширование значений.
-        char* title;
-        i32   width;
-        i32   height;
-    } platform_window_context;
-
-    // Указатель на структура контекста окна.
-    static platform_window_context* context = null;
-
-    // Сообщения.
-    static const char* message_context_not_created = "Window context was not created. Please first call 'platform_window_create'.";
-    static const char* message_event_not_set       = "Wayland event '%s' not set.";
-
-    // TODO: Временно. Вынести в отдельную API функцию!
-    static void screen_clear(i32 width, i32 heigth, u32 color)
-    {
-        i32 stride  = width * 4;
-        i32 size    = stride * heigth;
-        char name[] = "/platform_window_linux_wayland_shm_xxxxxx";
-
-        shm_unlink(name);
-        i32 fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0777);
-        kassert(fd >= 0, "Unable to open shared memory object.");
-
-        i32 result = ftruncate(fd, size);;
-        kassert(result >= 0, "Error truncating shared memory object.");
-
-        void* mem = mmap(null, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        kassert(mem != MAP_FAILED, "Memory map failed.");
-        shm_unlink(name);
-
-        // Рисуем в буфер.
-        for(i32 i = 0; i < size; i += 4)
-        {
-            *((u32*)(mem + i)) = color;
-        }
-
-        struct wl_shm_pool* pool = wl_shm_create_pool(context->wshm, fd, size);
-        context->wbuffer = wl_shm_pool_create_buffer(pool, 0, width, heigth, stride, WL_SHM_FORMAT_ARGB8888);
-        wl_shm_pool_destroy(pool);
-
-        // Так как wl_buffer и файл(fd) сопоставленны, то можно закрыть дескриптор.
-        close(fd);
-
-        // Выполняем захват кадра и подтверждение изменений.
-        wl_surface_attach(context->wsurface, context->wbuffer, 0, 0);
-        wl_surface_commit(context->wsurface);
-    }
+    } window_state;
 
     // Объявления функций (обработчичи событий).
     static void wregistry_add(void* data, struct wl_registry* wregistry, u32 name, const char* interface, u32 version);
@@ -140,123 +83,214 @@
         pt_axis_value120, pt_axis_relative_direction
     };
 
-    bool platform_window_create(window_config* config)
+    static const char* message_missing_instance = "Function '%s' requires an instance of window. Just return!";
+
+    bool platform_window_create(u64* memory_requirement, window* instance, window_config* config)
     {
-        // Проверка вызова функции.
-        kassert_debug(context == null, "Trying to call function 'platform_window_create' more than once!");
-        kassert_debug(config != null, "Function 'platform_window_create' requires configuration!");
+        *memory_requirement = sizeof(struct window) + sizeof(struct window_state);
+        if(!instance) return false;
 
-        context = kmallocate_t(platform_window_context, MEMORY_TAG_APPLICATION);
-        if(!context)
-        {
-            kerror("Memory for window context was not allocated!");
-            return false;
-        }
-        kmzero_tc(context, platform_window_context, 1);
+        kzero(instance, *memory_requirement);
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
 
-        // Инициализация конфигурации окна платформы.
-        context->height = config->height;
-        context->width  = config->width;
-        // TODO: Добавить context->title!
+        // Инициализация окна.
+        instance->width = config->width;
+        instance->height = config->height;
+        instance->title = config->title;
 
         // Инициализация WAYLAND клиента.
-        context->wdisplay = wl_display_connect(null);
-        if(!context->wdisplay)
+        if(!(state->wdisplay = wl_display_connect(null)))
         {
-            kerror("Failed to connect to Wayland display!");
+            kerror("Function '%s': Failed to connect to wayland display. Return false!", __FUNCTION__);
             return false;
         }
 
-        context->wregistry = wl_display_get_registry(context->wdisplay);
-        wl_registry_add_listener(context->wregistry, &wregistry_listeners, null);
-        wl_display_roundtrip(context->wdisplay);
+        state->wregistry = wl_display_get_registry(state->wdisplay);
+        wl_registry_add_listener(state->wregistry, &wregistry_listeners, instance);
+        kdebug("Supported Wayland interfaces:");
+        wl_display_roundtrip(state->wdisplay);
+
+        // Проверка поддержки интерфейсов.
+        if(!state->wcompositor)
+        {
+            kerror("Function '%s': Failed to bind 'wl_compositor' interface.", __FUNCTION__);
+            return false;
+        }
+
+        if(!state->xbase)
+        {
+            kerror("Function '%s': Failed to bind 'xdg_wm_base' interface.", __FUNCTION__);
+            return false;
+        }
+
+        if(!state->wseat)
+        {
+            kerror("Function '%s': Failed to bind 'seat' interface.", __FUNCTION__);
+            return false;
+        }
 
         // Инициализация поверхности окна.
-        context->wsurface = wl_compositor_create_surface(context->wcompositor);
-        context->xsurface = xdg_wm_base_get_xdg_surface(context->xbase, context->wsurface);
-        xdg_surface_add_listener(context->xsurface, &xsurface_listeners, null);
+        state->wsurface = wl_compositor_create_surface(state->wcompositor);
+        state->xsurface = xdg_wm_base_get_xdg_surface(state->xbase, state->wsurface);
+        xdg_surface_add_listener(state->xsurface, &xsurface_listeners, instance);
 
-        context->xtoplevel = xdg_surface_get_toplevel(context->xsurface);
-        xdg_toplevel_add_listener(context->xtoplevel, &xtoplevel_listeners, null);
+        state->xtoplevel = xdg_surface_get_toplevel(state->xsurface);
+        xdg_toplevel_add_listener(state->xtoplevel, &xtoplevel_listeners, instance);
 
-        // TODO: Заменить на context->title!
-        xdg_toplevel_set_title(context->xtoplevel, config->title);
-        xdg_toplevel_set_app_id(context->xtoplevel, config->title);
+        xdg_toplevel_set_title(state->xtoplevel, instance->title);
+        xdg_toplevel_set_app_id(state->xtoplevel, instance->title);
 
         // NOTE: Для полноэкранного режима по умолчанию, раскомментируете ниже.
         // xdg_toplevel_set_fullscreen(context->xtoplevel, null);
+        // xdg_toplevel_set_maximized();
 
         // NOTE: Первая настройка поверхности, а потому до нее захват буфера работать не будет!
-        wl_surface_commit(context->wsurface);
-        wl_display_roundtrip(context->wdisplay);
-
-        // TODO: Временно начало. Вынести в отдельную API функцию!
-        // screen_clear(context->width, context->height, 0x77101010);
-        // TODO: Временно конец.
-
-        kinfor("Platform window started.");
+        wl_surface_commit(state->wsurface);
+        wl_display_roundtrip(state->wdisplay);
 
         return true;
     }
 
-    void platform_window_destroy()
+    void platform_window_destroy(window* instance)
     {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
+        if(!instance)
+        {
+            kfatal(message_missing_instance, __FUNCTION__);
+        }
 
-        if(context->wpointer)    { wl_pointer_destroy(context->wpointer); context->wpointer = null;          }
-        if(context->wkeyboard)   { wl_keyboard_destroy(context->wkeyboard); context->wkeyboard = null;       }
-        if(context->wseat)       { wl_seat_destroy(context->wseat); context->wseat = null;                   }
-        if(context->xtoplevel)   { xdg_toplevel_destroy(context->xtoplevel); context->xtoplevel = null;      }
-        if(context->xsurface)    { xdg_surface_destroy(context->xsurface); context->xsurface = null;         }
-        if(context->xbase)       { xdg_wm_base_destroy(context->xbase); context->xbase = null;               }
-        if(context->wsurface)    { wl_surface_destroy(context->wsurface); context->wsurface = null;          }
-        if(context->wcompositor) { wl_compositor_destroy(context->wcompositor); context->wcompositor = null; }
-        // TODO: Временно начало.
-        if(context->wbuffer)     { wl_buffer_destroy(context->wbuffer); context->wbuffer = null;             }
-        if(context->wshm)        { wl_shm_destroy(context->wshm); context->wshm = null;                      }
-        // TODO: Временно конец.
-        if(context->wregistry)   { wl_registry_destroy(context->wregistry); context->wregistry = null;       }
-        if(context->wdisplay)    { wl_display_disconnect(context->wdisplay); context->wdisplay = null;       }
-
-        kmfree(context);
-        context = null;
-
-        kinfor("Platform window stopped.");
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        wl_pointer_destroy(state->wpointer);
+        wl_keyboard_destroy(state->wkeyboard);
+        wl_seat_destroy(state->wseat);
+        xdg_toplevel_destroy(state->xtoplevel);
+        xdg_surface_destroy(state->xsurface);
+        xdg_wm_base_destroy(state->xbase);
+        wl_surface_destroy(state->wsurface);
+        wl_compositor_destroy(state->wcompositor);
+        wl_registry_destroy(state->wregistry);
+        wl_display_disconnect(state->wdisplay);
     }
 
-    bool platform_window_dispatch()
+    bool platform_window_dispatch(window* instance)
     {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
+        if(!instance)
+        {
+            kerror("Function '%s' requires an instance of window. Return false!", __FUNCTION__);
+            return false;
+        }
 
-        return wl_display_roundtrip(context->wdisplay) != -1;
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        return wl_display_roundtrip(state->wdisplay) != -1;
+    }
+
+    void platform_window_set_on_close_handler(window* instance, PFN_window_handler_close handler)
+    {
+        if(!instance)
+        {
+            kwarng(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        state->on_close = handler;
+    }
+
+    void platform_window_set_on_resize_handler(window* instance, PFN_window_handler_resize handler)
+    {
+        if(!instance)
+        {
+            kwarng(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        state->on_resize = handler;
+    }
+
+    void platform_window_set_on_keyboard_key_handler(window* instance, PFN_window_handler_keyboard_key handler)
+    {
+        if(!instance)
+        {
+            kwarng(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        state->on_keyboard_key = handler;
+    }
+
+    void platform_window_set_on_mouse_move_handler(window* instance, PFN_window_handler_mouse_move handler)
+    {
+        if(!instance)
+        {
+            kwarng(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        state->on_mouse_move = handler;
+    }
+
+    void platform_window_set_on_mouse_button_handler(window* instance, PFN_window_handler_mouse_button handler)
+    {
+        if(!instance)
+        {
+            kwarng(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        state->on_mouse_button = handler;
+    }
+
+    void platform_window_set_on_mouse_wheel_handler(window* instance, PFN_window_handler_mouse_wheel handler)
+    {
+        if(!instance)
+        {
+            kwarng(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        state->on_mouse_wheel = handler;
+    }
+
+    void platform_window_set_on_focus_handler(window* instance, PFN_window_handler_focus handler)
+    {
+        if(!instance)
+        {
+            kwarng(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        state->on_focus = handler;
     }
 
     void wregistry_add(void* data, struct wl_registry* wregistry, u32 name, const char* interface, u32 version)
     {
-        if(strcmp(interface, wl_compositor_interface.name) == 0)
+        window_state* state = (void*)((u8*)data + sizeof(struct window));
+        
+        if(platform_string_equal(interface, wl_compositor_interface.name))
         {
-            context->wcompositor = wl_registry_bind(wregistry, name, &wl_compositor_interface, 1);
-            if(!context->wcompositor) kfatal("Wayland interface 'compositor' is not supported!");
+            state->wcompositor = wl_registry_bind(wregistry, name, &wl_compositor_interface, 1);
         }
-        else if(strcmp(interface, xdg_wm_base_interface.name) == 0)
+        else if(platform_string_equal(interface, xdg_wm_base_interface.name))
         {
-            context->xbase = wl_registry_bind(wregistry, name, &xdg_wm_base_interface, 1);
-            if(!context->xbase) kfatal("Wayland interface 'xdg-shell' is not supported!");
-            xdg_wm_base_add_listener(context->xbase, &xbase_listeners, null);
+            if((state->xbase = wl_registry_bind(wregistry, name, &xdg_wm_base_interface, 1)))
+            {
+                xdg_wm_base_add_listener(state->xbase, &xbase_listeners, data);
+            }
         }
-        else if(strcmp(interface, wl_seat_interface.name) == 0)
+        else if(platform_string_equal(interface, wl_seat_interface.name))
         {
-            context->wseat = wl_registry_bind(wregistry, name, &wl_seat_interface, 1);
-            if(!context->wseat) kfatal("Wayland interface 'seat' is not supported!");
-            wl_seat_add_listener(context->wseat, &wseat_listeners, null);
+            if((state->wseat = wl_registry_bind(wregistry, name, &wl_seat_interface, 1)))
+            {
+                wl_seat_add_listener(state->wseat, &wseat_listeners, data);
+            }
         }
-        else if(strcmp(interface, wl_shm_interface.name) == 0)
-        {
-            context->wshm = wl_registry_bind(wregistry, name, &wl_shm_interface, 1);
-            if(!context->wshm) kfatal("Wayland interface 'shm' is not supported!");
-        }
+
+        kdebug("[%2d] %s (version %d)", name, interface, version);
     }
 
     void wregistry_remove(void* data, struct wl_registry* wregistry, u32 name)
@@ -270,45 +304,44 @@
 
     void xsurface_configure(void* data, struct xdg_surface* xsurface, u32 serial)
     {
+        window* instance = data;
+        window_state* state = (void*)((u8*)data + sizeof(struct window));
+
         xdg_surface_ack_configure(xsurface, serial);
 
-        if(context->do_resize)
+        if(state->do_resize)
         {
-            if(context->on_resize)
+            if(state->on_resize)
             {
-                context->on_resize(context->width, context->height);
-            }
-            else
-            {
-                ktrace(message_event_not_set, "on_resize");
+                state->on_resize(instance->width, instance->height);
             }
 
             // FIX: Этим достигается плавность изменения размера.
-            wl_surface_commit(context->wsurface);
-
-            context->do_resize = false;
+            wl_surface_commit(state->wsurface);
+            state->do_resize = false;
         }
     }
 
     void xtoplevel_configure(void* data, struct xdg_toplevel* xtoplevel, i32 width, i32 height, struct wl_array* states)
     {
-        if(width != 0 && height != 0 && (context->width != width || context->height != height))
+        window* instance = data;
+        window_state* state = (void*)((u8*)data + sizeof(struct window));
+
+        if(width != 0 && height != 0 && (instance->width != width || instance->height != height))
         {
-            context->do_resize = true;
-            context->width     = width;
-            context->height    = height;
+            state->do_resize = true;
+            instance->width  = width;
+            instance->height = height;
         }
     }
 
     void xtoplevel_close(void* data, struct xdg_toplevel* xtoplevel)
     {
-        if(context->on_close)
+        window_state* state = (void*)((u8*)data + sizeof(struct window));
+
+        if(state->on_close)
         {
-            context->on_close();
-        }
-        else
-        {
-            ktrace(message_event_not_set, "on_close");
+            state->on_close();
         }
     }
 
@@ -322,34 +355,36 @@
 
     void wseat_capabilities(void* data, struct wl_seat* wseat, u32 capabilities)
     {
+        window_state* state = (void*)((u8*)data + sizeof(struct window));
+
         if(capabilities & WL_SEAT_CAPABILITY_KEYBOARD)
         {
-            if(context->wkeyboard)
+            if(state->wkeyboard)
             {
-                wl_keyboard_release(context->wkeyboard);
-                context->wkeyboard = null;
-                ktrace("Wayland seat: the keyboard is lost.");
+                wl_keyboard_release(state->wkeyboard);
+                state->wkeyboard = null;
+                kwarng("Wayland seat: the keyboard is lost.");
             }
             else
             {
-                context->wkeyboard = wl_seat_get_keyboard(wseat);
-                wl_keyboard_add_listener(context->wkeyboard, &keyboard_listeners, null);
+                state->wkeyboard = wl_seat_get_keyboard(wseat);
+                wl_keyboard_add_listener(state->wkeyboard, &keyboard_listeners, data);
                 ktrace("Wayland seat: the keyboard is found.");
             }
         }
 
         if(capabilities & WL_SEAT_CAPABILITY_POINTER)
         {
-            if(context->wpointer)
+            if(state->wpointer)
             {
-                wl_pointer_release(context->wpointer);
-                context->wpointer = null;
-                ktrace("Wayland seat: the pointer is lost.");
+                wl_pointer_release(state->wpointer);
+                state->wpointer = null;
+                kwarng("Wayland seat: the pointer is lost.");
             }
             else
             {
-                context->wpointer = wl_seat_get_pointer(wseat);
-                wl_pointer_add_listener(context->wpointer, &pointer_listeners, null);
+                state->wpointer = wl_seat_get_pointer(wseat);
+                wl_pointer_add_listener(state->wpointer, &pointer_listeners, data);
                 ktrace("Wayland seat: the pointer is found.");
             }
         }
@@ -399,9 +434,9 @@
             [0xD2] = KEY_PRINT
         };
 
-        if(codes[key_code] == KEY_UNKNOWN || key_code > KEYS_MAX)
+        if(codes[key_code] == KEY_UNKNOWN || key_code >= KEYS_MAX)
         {
-            kwarng("In Linux, the key code %X is translated as KEY_UNKNOWN", key_code);
+            kwarng("In Linux, the key code %X is translated as KEY_UNKNOWN.", key_code);
             return KEY_UNKNOWN;
         }
 
@@ -422,15 +457,12 @@
 
     void kb_key(void* data, struct wl_keyboard* wkeyboard, u32 serial, u32 time, u32 key, u32 state)
     {
-        if(context->on_keyboard_key)
+        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+
+        if(wstate->on_keyboard_key)
         {
-            context->on_keyboard_key(
-                kb_translate_keycode(key), state == WL_KEYBOARD_KEY_STATE_PRESSED ? true : false
-            );
-        }
-        else
-        {
-            ktrace(message_event_not_set, "on_keyboard_key");
+            bool pressed = state == WL_KEYBOARD_KEY_STATE_PRESSED ? true : false;
+            wstate->on_keyboard_key(kb_translate_keycode(key), pressed);
         }
     }
 
@@ -442,7 +474,7 @@
     {
     }
 
-    u32 pt_translate_button_code(u32 button_code)
+    u32 pt_translate_btncode(u32 button_code)
     {
         #define BTNS_START 0x110
         #define BTNS_END   0x114
@@ -453,9 +485,9 @@
             [0x00] = BTN_LEFT, [0x01] = BTN_RIGHT, [0x02] = BTN_MIDDLE, [0x03] = BTN_BACKWARD, [0x04] = BTN_FORWARD
         };
 
-        if(button_code < BTNS_START || button_code > BTNS_END)
+        if(button_code < BTNS_START || button_code >= BTNS_END)
         {
-            kwarng("In Linux, the key code %X is translated as KEY_UNKNOWN", button_code);
+            kwarng("In Linux, the button code %X is translated as BTN_UNKNOWN.", button_code);
         }
 
         return codes[button_code - BTNS_START];
@@ -463,70 +495,62 @@
 
     void pt_enter(void* data, struct wl_pointer* wpointer, u32 serial, struct wl_surface* wsurface, wl_fixed_t x, wl_fixed_t y)
     {
-        if(context->on_focus)
+        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+
+        if(wstate->on_focus)
         {
-            context->on_focus(true);
+            wstate->on_focus(true);
         }
-        else
-        {
-            ktrace(message_event_not_set, "on_focus");
-        }
+
+        // TODO: Сокрытие курсора!
+        // wl_pointer_set_cursor(context->wpointer, serial, null, 0, 0);
     }
 
     void pt_leave(void* data, struct wl_pointer* wpointer, u32 serial, struct wl_surface* wsurface)
     {
-        if(context->on_focus)
+        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+
+        if(wstate->on_focus)
         {
-            context->on_focus(false);
-        }
-        else
-        {
-            ktrace(message_event_not_set, "on_focus");
+            wstate->on_focus(false);
         }
     }
 
     void pt_motion(void* data, struct wl_pointer* wpointer, u32 time, wl_fixed_t x, wl_fixed_t y)
     {
+        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+        
         // Преобразование координат.
         x = wl_fixed_to_int(x);
         y = wl_fixed_to_int(y);
 
-        if(context->on_mouse_move)
+        if(wstate->on_mouse_move)
         {
-            context->on_mouse_move(x, y);
-        }
-        else
-        {
-            ktrace(message_event_not_set, "on_mouse_move");
+            wstate->on_mouse_move(x, y);
         }
     }
 
     void pt_button(void* data, struct wl_pointer* wpointer, u32 serial, u32 time, u32 button, u32 state)
     {
-        if(context->on_mouse_button)
+        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+
+        if(wstate->on_mouse_button)
         {
-            context->on_mouse_button(
-                pt_translate_button_code(button), state == WL_POINTER_BUTTON_STATE_PRESSED ? true : false
-            );
-        }
-        else
-        {
-            ktrace(message_event_not_set, "on_mouse_button");
+            bool pressed = state == WL_POINTER_BUTTON_STATE_PRESSED ? true : false;
+            wstate->on_mouse_button(pt_translate_btncode(button), pressed);
         }
     }
 
     void pt_axis(void* data, struct wl_pointer* wpointer, u32 time, u32 axis, wl_fixed_t value)
     {
+        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+
         // Преобразование значения.
         value = wl_fixed_to_int(value);
 
-        if(context->on_mouse_wheel)
+        if(wstate->on_mouse_wheel)
         {
-            context->on_mouse_wheel(value);
-        }
-        else
-        {
-            ktrace(message_event_not_set, "on_mouse_wheel");
+            wstate->on_mouse_wheel(value);
         }
     }
 
@@ -554,83 +578,55 @@
     {
     }
 
-    void platform_window_set_on_close_handler(PFN_window_handler_close handler)
+    void platform_window_get_vulkan_extentions(window* instance, const char*** names)
     {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
-        context->on_close = handler;
-    }
+        if(!instance)
+        {
+            kerror(message_missing_instance, __FUNCTION__);
+            return;
+        }
 
-    void platform_window_set_on_resize_handler(PFN_window_handler_resize handler)
-    {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
-        context->on_resize = handler;
-    }
-
-    void platform_window_set_on_keyboard_key_handler(PFN_window_handler_keyboard_key handler)
-    {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
-        context->on_keyboard_key = handler;
-    }
-
-    void platform_window_set_on_mouse_move_handler(PFN_window_handler_mouse_move handler)
-    {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
-        context->on_mouse_move = handler;
-    }
-
-    void platform_window_set_on_mouse_button_handler(PFN_window_handler_mouse_button handler)
-    {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
-        context->on_mouse_button = handler;
-    }
-
-    void platform_window_set_on_mouse_wheel_handler(PFN_window_handler_mouse_wheel handler)
-    {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
-        context->on_mouse_wheel = handler;
-    }
-
-    void platform_window_set_on_focus_handler(PFN_window_handler_focus handler)
-    {
-        // Проверка вызова функции.
-        kassert_debug(context != null, message_context_not_created);
-        context->on_focus = handler;
-    }
-
-    void platform_window_get_dimentions(u32* width, u32* height)
-    {
-        *width = context->width;
-        *height = context->height;
-    }
-
-    void platform_window_get_vulkan_extentions(const char*** names)
-    {
         darray_push(*names, &VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
     }
 
-    VkResult platform_window_create_vulkan_surface(vulkan_context* vcontext)
+    VkResult platform_window_create_vulkan_surface(window* instance, vulkan_context* context)
     {
+        if(!instance)
+        {
+            kerror("Function '%s' requires an instance of window. Return VK_ERROR_SURFACE_LOST_KHR!", __FUNCTION__);
+            return VK_ERROR_SURFACE_LOST_KHR;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+
         VkWaylandSurfaceCreateInfoKHR surfinfo = { VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR };
-        surfinfo.display = context->wdisplay;
-        surfinfo.surface = context->wsurface;
-        return vkCreateWaylandSurfaceKHR(vcontext->instance, &surfinfo, vcontext->allocator, &vcontext->surface);
+        surfinfo.display = state->wdisplay;
+        surfinfo.surface = state->wsurface;
+        return vkCreateWaylandSurfaceKHR(context->instance, &surfinfo, context->allocator, &context->surface);
     }
 
-    void platform_window_destroy_vulkan_surface(vulkan_context* vcontext)
+    void platform_window_destroy_vulkan_surface(window* instance, vulkan_context* context)
     {
-        vkDestroySurfaceKHR(vcontext->instance, vcontext->surface, vcontext->allocator);
-        vcontext->surface = null;
+        if(!instance)
+        {
+            kerror(message_missing_instance, __FUNCTION__);
+            return;
+        }
+
+        vkDestroySurfaceKHR(context->instance, context->surface, context->allocator);
+        context->surface = null;
     }
 
-    bool platform_window_get_vulkan_presentation_support(vulkan_context* vcontext, VkPhysicalDevice physical_device, u32 queue_family_index)
+    bool platform_window_get_vulkan_presentation_support(window* instance, VkPhysicalDevice physical_device, u32 queue_family_index)
     {
-        return (bool)vkGetPhysicalDeviceWaylandPresentationSupportKHR(physical_device, queue_family_index, context->wdisplay);
+        if(!instance)
+        {
+            kerror("Function '%s' requires an instance of window. Return false!", __FUNCTION__);
+            return false;
+        }
+
+        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        return (bool)vkGetPhysicalDeviceWaylandPresentationSupportKHR(physical_device, queue_family_index, state->wdisplay);
     }
 
 #endif
