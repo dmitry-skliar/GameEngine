@@ -148,9 +148,7 @@ typedef struct vulkan_context {
     VkInstance instance;
     VkAllocationCallbacks* allocator;
     VkSurfaceKHR surface;
-#if KDEBUG_FLAG
     VkDebugUtilsMessengerEXT debug_messenger;
-#endif
     vulkan_device device;
     vulkan_swapchain swapchain;
     vulkan_renderpass main_renderpass;

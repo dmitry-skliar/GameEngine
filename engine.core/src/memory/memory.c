@@ -45,7 +45,8 @@ void memory_system_shutdown()
 {
     if(!state_ptr)
     {
-        kfatal(message_not_initialized, __FUNCTION__);
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
     }
 
     if(state_ptr->stats.total_allocated > 0)
@@ -211,9 +212,6 @@ const char* memory_system_usage_str()
 
 u64 memory_system_alloc_count()
 {
-    if(state_ptr)
-    {
-        return state_ptr->alloc_count;
-    }
-    return 0;
+    if(!state_ptr) return 0;
+    return state_ptr->alloc_count;
 }

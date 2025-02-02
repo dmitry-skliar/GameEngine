@@ -4,30 +4,35 @@
 
 // Внутренние подключения.
 #include "logger.h"
-#include "debug/assert.h"
 #include "memory/memory.h"
 
-// Указатель на структуру контекста бэкенда выбранного рендера.
-static renderer_backend* backend = null;
+typedef struct renderer_system_state {
+    renderer_backend backend;
+} renderer_system_state;
 
-// Сообщения.
-static const char* message_backend_not_created = "Renderer context was not created. Call 'renderer_initialize' first.";
+static renderer_system_state* state_ptr = null;
+static const char* message_not_initialized =
+    "Function '%s' requires the renderer system to be initialized. Call 'renderer_system_initialize' first.!";
 
-bool renderer_initialize(window* window_state)
+bool renderer_system_initialize(u64* memory_requirement, void* memory, window* window_state)
 {
-    kassert_debug(backend == null, "Trying to call function 'renderer_initialize' more than once!");
-
-    backend = kallocate_tc(renderer_backend, 1, MEMORY_TAG_RENDERER);
-    if(!backend)
+    if(state_ptr)
     {
-        kerror("Failed to allocate renderer memory context.");
+        kwarng("Function '%s' was called more than once. Return false!", __FUNCTION__);
         return false;
     }
 
+    *memory_requirement = sizeof(struct renderer_system_state);
+    if(!memory) return true;
+
+    kzero(memory, *memory_requirement);
+    state_ptr = memory;
+
     // TODO: Сделать настраиваемым из приложения!
-    renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, backend);
-    backend->window_state = window_state;
-    if(!backend->initialize(backend))
+    renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, &state_ptr->backend);
+    state_ptr->backend.window_state = window_state;
+
+    if(!state_ptr->backend.initialize(&state_ptr->backend))
     {
         return false;
     }
@@ -35,30 +40,37 @@ bool renderer_initialize(window* window_state)
     return true;
 }
 
-void renderer_shutdown()
+void renderer_system_shutdown()
 {
-    kassert_debug(backend != null, message_backend_not_created);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
 
-    backend->shutdown(backend);
-    kfree_tc(backend, renderer_backend, 1, MEMORY_TAG_RENDERER);
-    backend = null;
+    state_ptr->backend.shutdown(&state_ptr->backend);
+    state_ptr = null;
 }
 
 bool renderer_begin_frame(f32 delta_time)
 {
-    return backend->begin_frame(backend, delta_time);
+    return state_ptr->backend.begin_frame(&state_ptr->backend, delta_time);
 }
 
 bool renderer_end_frame(f32 delta_time)
 {
-    bool result = backend->end_frame(backend, delta_time);
-    backend->frame_number++;
+    bool result = state_ptr->backend.end_frame(&state_ptr->backend, delta_time);
+    state_ptr->backend.frame_number++;
     return result;
 }
 
 bool renderer_draw_frame(render_packet* packet)
 {
-    kassert_debug(backend != null, message_backend_not_created);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return false;    
+    }
 
     if(renderer_begin_frame(packet->delta_time))
     {
@@ -70,13 +82,15 @@ bool renderer_draw_frame(render_packet* packet)
             return false;
         }
     }
-
     return true;
 }
 
 void renderer_on_resize(i32 width, i32 height)
 {
-    // TODO: Может плохо сыграть, заменить на простые проверки похожие ситуации!
-    kassert_debug(backend != null, message_backend_not_created);
-    backend->resized(backend, width, height);
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
+    state_ptr->backend.resized(&state_ptr->backend, width, height);
 }

@@ -50,4 +50,6 @@ bool game_render(game* inst, f32 delta_time)
 
 void game_on_resize(game* inst, i32 width, i32 height)
 {
+    kdebug("Game resized (w/h): %d / %d", width, height);
+
 }

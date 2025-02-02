@@ -17,17 +17,13 @@
 #include "containers/darray.h"
 #include "kstring.h"
 
-// Указатель на контекст Vulkan.
 static vulkan_context* context = null;
 
-// TODO: Временный лайфхак.
 static u32 cached_framebuffer_width  = 0;
 static u32 cached_framebuffer_height = 0;
 
-// Сообщения.
 static const char* message_context_not_initialized = "Vulkan renderer was not initialized. Please first call 'vulkan_renderer_backend_initialize'.";
 
-// Объявления функций.
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data
@@ -61,10 +57,9 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 
     cached_framebuffer_width = backend->window_state->width;
     cached_framebuffer_height = backend->window_state->height;
-
-    kdebug("Vulkan initialize framebuffer width %d and height %d", cached_framebuffer_width, cached_framebuffer_height);
     context->framebuffer_width = (cached_framebuffer_width != 0) ? cached_framebuffer_width : 800;
     context->framebuffer_height = (cached_framebuffer_height != 0) ? cached_framebuffer_height : 600;
+    kdebug("Vulkan initialize framebuffer (w/h): %d / %d", context->framebuffer_width, context->framebuffer_height);
     cached_framebuffer_width = 0;
     cached_framebuffer_height = 0;
 
@@ -261,7 +256,6 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     sync_objects_create();
     ktrace("Vulkan sync objects created.");
 
-    kinfor("Renderer started.");
     return true;
 }
 
@@ -331,8 +325,6 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
         context = null;
         ktrace("Vulkan context destroyed.");
     }
-
-    kinfor("Renderer stopped.");
 }
 
 void vulkan_renderer_backend_on_resized(renderer_backend* backend, i32 width, i32 height)

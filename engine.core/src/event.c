@@ -45,7 +45,8 @@ void event_system_shutdown()
 {
     if(!state_ptr)
     {
-        kfatal(message_not_initialized, __FUNCTION__);
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
     }
 
     // Уничтожаем все созданые массивы!
@@ -53,7 +54,6 @@ void event_system_shutdown()
     {
         if(state_ptr->events[i].listeners != null)
         {
-            kdebug("Event shutdown -> darray destroy -> event %d, listeners addr %p", i, state_ptr->events[i].listeners);
             darray_destroy(state_ptr->events[i].listeners);
             state_ptr->events[i].listeners = null;
         }

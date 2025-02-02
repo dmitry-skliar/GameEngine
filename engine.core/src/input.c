@@ -47,7 +47,8 @@ void input_system_shutdown()
 {
     if(!state_ptr)
     {
-        kfatal(message_not_initialized, __FUNCTION__);
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
     }
 
     state_ptr = null;

@@ -21,17 +21,16 @@ typedef struct application_state {
     clock clock;
     f64   last_time;
 
-    // TODO: Сделать явным указателем!
-    linear_allocator systems_allocator;
+    linear_allocator* systems_allocator;
 
     u64 memory_system_memory_requirement;
     void* memory_system_state;
 
-    u64 input_system_memory_requirement;
-    void* input_system_state;
-
     u64 event_system_memory_requirement;
     void* event_system_state;
+
+    u64 input_system_memory_requirement;
+    void* input_system_state;
 
     u64 platform_window_memory_requirement;
     window* platform_window_state;
@@ -41,7 +40,6 @@ typedef struct application_state {
 
 } application_state;
 
-// Состояие приложения.
 static application_state* app_state = null;
 
 void application_on_focus(bool focused);
@@ -54,15 +52,15 @@ void application_on_close();
 
 bool application_create(game* game_inst)
 {
-    if(!game_inst)
+    if(app_state)
     {
-        kerror("Function '%s' require a game structure!", __FUNCTION__);
+        kerror("Function '%s' was called more than once. Return false!", __FUNCTION__);
         return false;
     }
 
-    if(app_state)
+    if(!game_inst)
     {
-        kerror("Function '%s' was called more than once!", __FUNCTION__);
+        kerror("Function '%s' require a game structure. Return false!", __FUNCTION__);
         return false;
     }
 
@@ -72,6 +70,8 @@ bool application_create(game* game_inst)
     app_state->game_inst = game_inst;
     game_inst->application_state = app_state;
 
+    // TODO: Сделать менеджер систем и подсистем. Решит проблему правильной инициализации и завершения.
+    // Создание системного линейного распределителя памяти.
     u64 systems_allocator_total_size = 64 * 1024 * 1024; // 64 Mb
     app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size);
 
@@ -114,12 +114,15 @@ bool application_create(game* game_inst)
     platform_window_set_on_mouse_wheel_handler(app_state->platform_window_state, application_on_mouse_wheel);
     platform_window_set_on_focus_handler(app_state->platform_window_state, application_on_focus);
 
-    // Инициализация редререра.
-    if(!renderer_initialize(app_state->platform_window_state))
+    // Подсистема визуализатора графики.
+    renderer_system_initialize(&app_state->renderer_system_memory_requirement, null, null);
+    app_state->renderer_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->renderer_system_memory_requirement);
+    if(!renderer_system_initialize(&app_state->renderer_system_memory_requirement, app_state->renderer_system_state, app_state->platform_window_state))
     {
         kerror("Failed to initialize renderer. Aborted!");
         return false;
     }
+    kinfor("Renderer started.");
 
     // Инициализация приложения пользователя (игры, 3d приложения).
     if(!game_inst->initialize(game_inst))
@@ -182,7 +185,12 @@ bool application_run()
             // TODO: Провести рефактор render_packet.
             render_packet packet;
             packet.delta_time = (f32)delta;
-            renderer_draw_frame(&packet);
+            if(!renderer_draw_frame(&packet))
+            {
+                kerror("Renderer failed draw frame, shutting down!");
+                app_state->is_running = false;
+                break;
+            }
 
             // Расчет времени кадра.
             f64 frame_end_time = platform_time_absolute();
@@ -214,7 +222,8 @@ bool application_run()
     }
 
     // Нормальное завершение работы.
-    renderer_shutdown();
+    renderer_system_shutdown();
+    kinfor("Renderer stopped.");
 
     platform_window_destroy(app_state->platform_window_state);
     kinfor("Platform window destroyed.");

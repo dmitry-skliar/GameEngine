@@ -3,9 +3,19 @@
 #include <renderer/renderer_types.h>
 #include <platform/window.h>
 
-bool renderer_initialize(window* window_state);
+/*
+    @brief Запускает систему визуализации.
+    @param memory_requirement Указатель на переменную для получения требований к памяти.
+    @param memory Указатель на выделенную память, для получения требований к памяти передать null.
+    @param window_state Указатель на выделенную память экземпляра оконной системы.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_system_initialize(u64* memory_requirement, void* memory, window* window_state);
 
-void renderer_shutdown();
+/*
+    @brief Завершает работу системы визуализации.
+*/
+void renderer_system_shutdown();
 
 void renderer_on_resize(i32 width, i32 height);
 

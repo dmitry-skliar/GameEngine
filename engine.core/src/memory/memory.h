@@ -29,6 +29,8 @@ typedef enum memory_tag {
 
 /*
     @brief Запускает систему менеджмента и контроля памяти.
+    @param memory_requirement Указатель на переменную для получения требований к памяти.
+    @param memory Указатель на выделенную память, для получения требований к памяти передать null.
 */
 void memory_system_initialize(u64* memory_requirement, void* memory);
 

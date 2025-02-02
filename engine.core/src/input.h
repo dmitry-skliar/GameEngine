@@ -5,6 +5,8 @@
 
 /*
     @brief Запускает систему ввода.
+    @param memory_requirement Указатель на переменную для получения требований к памяти.
+    @param memory Указатель на выделенную память, для получения требований к памяти передать null.
 */
 void input_system_initialize(u64* memory_requirement, void* memory);
 

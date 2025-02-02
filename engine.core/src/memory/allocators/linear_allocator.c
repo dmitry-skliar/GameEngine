@@ -12,49 +12,52 @@ struct linear_allocator {
     u64 allocated;
 };
 
-linear_allocator linear_allocator_create(u64 size)
+linear_allocator* linear_allocator_create(u64 size)
 {
     if(!size)
     {
-        kfatal("Function '%s' require a size greater than zero.", __FUNCTION__);
+        kerror("Function '%s' require a size greater than zero. Return null!", __FUNCTION__);
+        return null;
     }
 
     u64 total_size = sizeof(struct linear_allocator) + size;
-    linear_allocator allocator = kallocate(total_size, MEMORY_TAG_LINEAR_ALLOCATOR);
+    linear_allocator* allocator = kallocate(total_size, MEMORY_TAG_LINEAR_ALLOCATOR);
 
     if(!allocator)
     {
-        kfatal("Failed to allocate memory in function '%s'.", __FUNCTION__);
+        kerror("Function '%s': Failed to allocate memory. Return null!", __FUNCTION__);
+        return null;
     }
 
     allocator->size = size;
     allocator->allocated = 0;
-
     return allocator;
 }
 
-void linear_allocator_destroy(linear_allocator allocator)
-{
-    if(allocator)
-    {
-        u64 total_size = sizeof(struct linear_allocator) + allocator->size;
-        kfree(allocator, total_size, MEMORY_TAG_LINEAR_ALLOCATOR);
-        return;
-    }
-
-    kwarng("Function '%s' require a pointer to an instance of allocator.", __FUNCTION__);
-}
-
-void* linear_allocator_allocate(linear_allocator allocator, u64 size)
+void linear_allocator_destroy(linear_allocator* allocator)
 {
     if(!allocator)
     {
-        kfatal("Function '%s' require a pointer to an instance of allocator.", __FUNCTION__);
+        kerror("Function '%s' require a pointer to an instance of allocator. Just return!", __FUNCTION__);
+        return;
+    }
+
+    u64 total_size = sizeof(struct linear_allocator) + allocator->size;
+    kfree(allocator, total_size, MEMORY_TAG_LINEAR_ALLOCATOR);
+}
+
+void* linear_allocator_allocate(linear_allocator* allocator, u64 size)
+{
+    if(!allocator)
+    {
+        kerror("Function '%s' require a pointer to an instance of allocator. Return null!", __FUNCTION__);
+        return null;
     }
 
     if(!size)
     {
-        kfatal("Function '%s' require a size greater than zero.", __FUNCTION__);
+        kerror("Function '%s' require a size greater than zero. Return null!", __FUNCTION__);
+        return null;
     }
 
     if(allocator->allocated + size <= allocator->size)
@@ -69,11 +72,12 @@ void* linear_allocator_allocate(linear_allocator allocator, u64 size)
     return null;
 }
 
-void linear_allocator_free_all(linear_allocator allocator)
+void linear_allocator_free_all(linear_allocator* allocator)
 {
     if(!allocator)
     {
-        kfatal("Function '%s' require a pointer to an instance of allocator.", __FUNCTION__);
+        kerror("Function '%s' require a pointer to an instance of allocator. Just return!", __FUNCTION__);
+        return;
     }
 
     allocator->allocated = 0;

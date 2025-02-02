@@ -17,7 +17,7 @@
     #include <vulkan/vulkan.h>
     #include <vulkan/vulkan_wayland.h>
 
-    typedef struct window_state {
+    typedef struct platform_window_state {
         // Для работы с окном приложения.
         struct wl_display*    wdisplay;
         struct wl_registry*   wregistry;
@@ -40,7 +40,7 @@
         PFN_window_handler_focus        on_focus;
         // Флаги состояний.
         bool  do_resize;
-    } window_state;
+    } platform_window_state;
 
     // Объявления функций (обработчичи событий).
     static void wregistry_add(void* data, struct wl_registry* wregistry, u32 name, const char* interface, u32 version);
@@ -87,11 +87,13 @@
 
     bool platform_window_create(u64* memory_requirement, window* instance, window_config* config)
     {
-        *memory_requirement = sizeof(struct window) + sizeof(struct window_state);
-        if(!instance) return false;
+        // TODO: Защита от повтороного вызова для данного экземпляра!
+
+        *memory_requirement = sizeof(struct window) + sizeof(struct platform_window_state);
+        if(!instance) return true;
 
         kzero(instance, *memory_requirement);
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
 
         // Инициализация окна.
         instance->width = config->width;
@@ -155,10 +157,11 @@
     {
         if(!instance)
         {
-            kfatal(message_missing_instance, __FUNCTION__);
+            kerror(message_missing_instance, __FUNCTION__);
+            return;
         }
 
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         wl_pointer_destroy(state->wpointer);
         wl_keyboard_destroy(state->wkeyboard);
         wl_seat_destroy(state->wseat);
@@ -179,7 +182,7 @@
             return false;
         }
 
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         return wl_display_roundtrip(state->wdisplay) != -1;
     }
 
@@ -190,8 +193,7 @@
             kwarng(message_missing_instance, __FUNCTION__);
             return;
         }
-
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         state->on_close = handler;
     }
 
@@ -202,8 +204,7 @@
             kwarng(message_missing_instance, __FUNCTION__);
             return;
         }
-
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         state->on_resize = handler;
     }
 
@@ -215,7 +216,7 @@
             return;
         }
 
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         state->on_keyboard_key = handler;
     }
 
@@ -226,8 +227,7 @@
             kwarng(message_missing_instance, __FUNCTION__);
             return;
         }
-
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         state->on_mouse_move = handler;
     }
 
@@ -238,8 +238,7 @@
             kwarng(message_missing_instance, __FUNCTION__);
             return;
         }
-
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         state->on_mouse_button = handler;
     }
 
@@ -250,8 +249,7 @@
             kwarng(message_missing_instance, __FUNCTION__);
             return;
         }
-
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         state->on_mouse_wheel = handler;
     }
 
@@ -262,14 +260,13 @@
             kwarng(message_missing_instance, __FUNCTION__);
             return;
         }
-
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         state->on_focus = handler;
     }
 
     void wregistry_add(void* data, struct wl_registry* wregistry, u32 name, const char* interface, u32 version)
     {
-        window_state* state = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)data + sizeof(struct window));
         
         if(platform_string_equal(interface, wl_compositor_interface.name))
         {
@@ -305,7 +302,7 @@
     void xsurface_configure(void* data, struct xdg_surface* xsurface, u32 serial)
     {
         window* instance = data;
-        window_state* state = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)data + sizeof(struct window));
 
         xdg_surface_ack_configure(xsurface, serial);
 
@@ -325,9 +322,9 @@
     void xtoplevel_configure(void* data, struct xdg_toplevel* xtoplevel, i32 width, i32 height, struct wl_array* states)
     {
         window* instance = data;
-        window_state* state = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)data + sizeof(struct window));
 
-        if(width != 0 && height != 0 && (instance->width != width || instance->height != height))
+        if(width && height && (instance->width != width || instance->height != height))
         {
             state->do_resize = true;
             instance->width  = width;
@@ -337,7 +334,7 @@
 
     void xtoplevel_close(void* data, struct xdg_toplevel* xtoplevel)
     {
-        window_state* state = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)data + sizeof(struct window));
 
         if(state->on_close)
         {
@@ -355,7 +352,7 @@
 
     void wseat_capabilities(void* data, struct wl_seat* wseat, u32 capabilities)
     {
-        window_state* state = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)data + sizeof(struct window));
 
         if(capabilities & WL_SEAT_CAPABILITY_KEYBOARD)
         {
@@ -457,7 +454,7 @@
 
     void kb_key(void* data, struct wl_keyboard* wkeyboard, u32 serial, u32 time, u32 key, u32 state)
     {
-        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* wstate = (void*)((u8*)data + sizeof(struct window));
 
         if(wstate->on_keyboard_key)
         {
@@ -495,7 +492,7 @@
 
     void pt_enter(void* data, struct wl_pointer* wpointer, u32 serial, struct wl_surface* wsurface, wl_fixed_t x, wl_fixed_t y)
     {
-        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* wstate = (void*)((u8*)data + sizeof(struct window));
 
         if(wstate->on_focus)
         {
@@ -508,7 +505,7 @@
 
     void pt_leave(void* data, struct wl_pointer* wpointer, u32 serial, struct wl_surface* wsurface)
     {
-        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* wstate = (void*)((u8*)data + sizeof(struct window));
 
         if(wstate->on_focus)
         {
@@ -518,7 +515,7 @@
 
     void pt_motion(void* data, struct wl_pointer* wpointer, u32 time, wl_fixed_t x, wl_fixed_t y)
     {
-        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* wstate = (void*)((u8*)data + sizeof(struct window));
         
         // Преобразование координат.
         x = wl_fixed_to_int(x);
@@ -532,7 +529,7 @@
 
     void pt_button(void* data, struct wl_pointer* wpointer, u32 serial, u32 time, u32 button, u32 state)
     {
-        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* wstate = (void*)((u8*)data + sizeof(struct window));
 
         if(wstate->on_mouse_button)
         {
@@ -543,7 +540,7 @@
 
     void pt_axis(void* data, struct wl_pointer* wpointer, u32 time, u32 axis, wl_fixed_t value)
     {
-        window_state* wstate = (void*)((u8*)data + sizeof(struct window));
+        platform_window_state* wstate = (void*)((u8*)data + sizeof(struct window));
 
         // Преобразование значения.
         value = wl_fixed_to_int(value);
@@ -597,8 +594,7 @@
             return VK_ERROR_SURFACE_LOST_KHR;
         }
 
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
-
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         VkWaylandSurfaceCreateInfoKHR surfinfo = { VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR };
         surfinfo.display = state->wdisplay;
         surfinfo.surface = state->wsurface;
@@ -625,7 +621,7 @@
             return false;
         }
 
-        window_state* state = (void*)((u8*)instance + sizeof(struct window));
+        platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
         return (bool)vkGetPhysicalDeviceWaylandPresentationSupportKHR(physical_device, queue_family_index, state->wdisplay);
     }
 

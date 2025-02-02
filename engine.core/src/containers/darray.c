@@ -37,7 +37,7 @@ void* dynamic_array_create(u64 stride, u64 capacity)
         return (void*)((u8*)header + sizeof(struct dynamic_array_header));
     }
 
-    kfatal("In function '%s' failed to allocate memory!", __FUNCTION__);
+    kerror("Function '%s': Failed to allocate memory! Return null!", __FUNCTION__);
     return null;
 }
 

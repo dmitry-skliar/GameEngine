@@ -6,7 +6,7 @@
 
 u8 linear_allocator_should_create_and_destroy()
 {
-    linear_allocator allocator = linear_allocator_create(sizeof(u64));
+    linear_allocator* allocator = linear_allocator_create(sizeof(u64));
     expect_pointer_should_not_be(null, allocator);
 
     linear_allocator_destroy(allocator);
@@ -18,7 +18,7 @@ u8 linear_allocator_should_create_and_destroy()
 u8 linear_allocator_single_allocation_all_space()
 {
     const u64 max_size = 1024;
-    linear_allocator allocator = linear_allocator_create(max_size * sizeof(u64));
+    linear_allocator* allocator = linear_allocator_create(max_size * sizeof(u64));
     expect_pointer_should_not_be(null, allocator);
 
     void* block = linear_allocator_allocate(allocator, max_size * sizeof(u64));
@@ -43,7 +43,7 @@ u8 linear_allocator_single_allocation_all_space()
 u8 linear_allocator_multi_allocation_all_space()
 {
     u64 max_size = 1024;
-    linear_allocator allocator = linear_allocator_create(max_size * sizeof(u64));
+    linear_allocator* allocator = linear_allocator_create(max_size * sizeof(u64));
 
     void* block = null;
     void* last  = allocator;
@@ -83,7 +83,7 @@ u8 linear_allocator_multi_allocation_over_allocated()
     u64 element_size     = 3  * sizeof(u64);
     u64 element_allocate = 6;
     
-    linear_allocator allocator = linear_allocator_create(memory_size);
+    linear_allocator* allocator = linear_allocator_create(memory_size);
 
     void* block = null;
     void* last  = allocator;
@@ -122,7 +122,7 @@ u8 linear_allocator_multi_allocation_over_allocated()
 u8 linear_allocator_multi_allocation_all_space_then_free()
 {
     u64 max_size = 1024;
-    linear_allocator allocator = linear_allocator_create(max_size * sizeof(u64));
+    linear_allocator* allocator = linear_allocator_create(max_size * sizeof(u64));
 
     void* block = null;
     void* last  = allocator;

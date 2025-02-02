@@ -15,6 +15,8 @@ typedef bool (*PFN_event_handler)(event_code code, void* sender, void* listener,
 
 /*
     @brief Запускает систему событий.
+    @param memory_requirement Указатель на переменную для получения требований к памяти.
+    @param memory Указатель на выделенную память, для получения требований к памяти передать null.
 */
 void event_system_initialize(u64* memory_requirement, void* memory);
 

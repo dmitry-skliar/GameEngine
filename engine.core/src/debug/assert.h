@@ -71,7 +71,7 @@
         }
 
     #else
-        #define kassert_debug(expr)
+        #define kassert_debug(expr, message)
     #endif
 #else
     #define kassert(expr, message)
