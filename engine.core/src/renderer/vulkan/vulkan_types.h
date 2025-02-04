@@ -38,6 +38,16 @@ typedef struct vulkan_framebuffer {
     vulkan_renderpass* renderpass;
 } vulkan_framebuffer;
 
+typedef struct vulkan_buffer {
+    u64 total_size;
+    VkBuffer handle;
+    VkBufferUsageFlagBits usage;
+    bool is_locked;
+    VkDeviceMemory memory;
+    i32 memory_index;
+    u32 memory_property_flags;
+} vulkan_buffer;
+
 typedef struct vulkan_swapchain {
     // @brief Количество кадров для визуализации.
     u32 max_frames_in_flight;
@@ -138,6 +148,26 @@ typedef struct vulkan_fence {
     bool is_signaled;
 } vulkan_fence;
 
+typedef struct vulkan_shader_stage {
+    VkShaderModule handle;
+    VkShaderModuleCreateInfo handleinfo;
+    VkPipelineShaderStageCreateInfo pipelineinfo;
+} vulkan_shader_stage;
+
+typedef struct vulkan_pipeline {
+    VkPipeline handle;
+    VkPipelineLayout layout;
+} vulkan_pipeline;
+
+#define MATERIAL_SHADER_STAGE_COUNT 2
+
+typedef struct vulkan_material_shader {
+    // @brief Шаги шейдерных модулей: Vertex, Fragment.
+    vulkan_shader_stage stages[MATERIAL_SHADER_STAGE_COUNT];
+    // @brieg Pipeline.
+    vulkan_pipeline pipeline;
+} vulkan_material_shader;
+
 typedef struct vulkan_context {
     u32 framebuffer_width;
     u32 framebuffer_height;
@@ -152,6 +182,12 @@ typedef struct vulkan_context {
     vulkan_device device;
     vulkan_swapchain swapchain;
     vulkan_renderpass main_renderpass;
+
+    u64 geometry_vertex_offset;
+    vulkan_buffer object_vertex_buffer;
+    u64 geometry_index_offset;
+    vulkan_buffer object_index_buffer;
+
     // @brief Графические коммандные буферы (используется darray).
     vulkan_command_buffer* graphics_command_buffers;
     // @brief Готовое для визуализации (используется darray).
@@ -165,6 +201,7 @@ typedef struct vulkan_context {
     u32 image_index;
     u32 current_frame;
     bool recreating_swapchain;
+    vulkan_material_shader material_shader;
 
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;

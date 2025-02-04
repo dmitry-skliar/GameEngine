@@ -1,0 +1,17 @@
+#pragma once
+
+#include <defines.h>
+#include <renderer/renderer_types.h>
+#include <renderer/vulkan/vulkan_types.h>
+
+/*
+*/
+bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shader* out_shader);
+
+/*
+*/
+void vulkan_material_shader_destroy(vulkan_context* context, vulkan_material_shader* shader);
+
+/*
+*/
+void vulkan_material_shader_use(vulkan_context* context, vulkan_material_shader* shader);

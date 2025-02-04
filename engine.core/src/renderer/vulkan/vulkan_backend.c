@@ -9,6 +9,8 @@
 #include "renderer/vulkan/vulkan_command_buffer.h"
 #include "renderer/vulkan/vulkan_framebuffer.h"
 #include "renderer/vulkan/vulkan_fence.h"
+#include "renderer/vulkan/shaders/vulkan_material_shader.h"
+#include "renderer/vulkan/vulkan_buffer.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -16,6 +18,7 @@
 #include "memory/memory.h"
 #include "containers/darray.h"
 #include "kstring.h"
+#include "math/math_types.h"
 
 static vulkan_context* context = null;
 
@@ -37,6 +40,8 @@ void framebuffers_destroy(renderer_backend* backend, vulkan_swapchain* swapchain
 void sync_objects_create();
 void sync_objects_destroy();
 bool swapchain_recreate(renderer_backend* backend);
+bool buffers_create(vulkan_context* context);
+void buffers_destroy(vulkan_context* context);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 {
@@ -256,6 +261,22 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     sync_objects_create();
     ktrace("Vulkan sync objects created.");
 
+    // Создание шейдеров.
+    if(!vulkan_material_shader_create(context, &context->material_shader))
+    {
+        kerror("Function '%': Failed to load built-in basic lighting shader.", __FUNCTION__);
+        return false;
+    }
+    ktrace("Vulkan shaders created.");
+
+    // Создание буферов данных.
+    if(!buffers_create(context))
+    {
+        kerror("Function '%s': Failed to create buffers.", __FUNCTION__);
+        return false;
+    }
+    ktrace("Vulkan buffers created.");
+
     return true;
 }
 
@@ -264,6 +285,14 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     kassert_debug(context != null, message_context_not_initialized);
 
     vkDeviceWaitIdle(context->device.logical);
+
+    // Уничтожение буферов данных.
+    buffers_destroy(context);
+    ktrace("Vulkan buffers destroyed.");
+
+    // Уничтожение шейдеров.
+    vulkan_material_shader_destroy(context, &context->material_shader);
+    ktrace("Vulkan shaders destroyed.");
 
     // Уничтожение объектов сингхронизации.
     sync_objects_destroy();
@@ -286,11 +315,8 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     ktrace("Vulkan swapchain destroyed.");
 
     // Уничтожение физического и логического устройства.
-    if(context->device.logical)
-    {
-        vulkan_device_destroy(backend, context);
-        ktrace("Vulkan device destroyed.");
-    }
+    vulkan_device_destroy(backend, context);
+    ktrace("Vulkan device destroyed.");
 
     // Уничтожение поверхности Vulkan-Platform.
     if(context->surface)
@@ -669,14 +695,14 @@ bool swapchain_recreate(renderer_backend* backend)
     // Если уже начато воссоздание, ничего не делать.
     if(context->recreating_swapchain)
     {
-        kdebug("%s called when already recreating. Booting.", __FUNCTION__);
+        kdebug("Function '%s' called when already recreating. Booting.", __FUNCTION__);
         return false;
     }
 
     // Обнаружение малых размеров окна.
     if(context->framebuffer_width == 0 || context->framebuffer_height == 0)
     {
-        kdebug("%s called when window is < 1 in a dimension. Booting.", __FUNCTION__);
+        kdebug("Function '%s' called when window is < 1 in a dimension. Booting.", __FUNCTION__);
         return false;
     }
 
@@ -718,4 +744,35 @@ bool swapchain_recreate(renderer_backend* backend)
 
     return true;
     
+}
+
+bool buffers_create(vulkan_context* context)
+{
+    VkMemoryPropertyFlagBits memory_property_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    VkBufferUsageFlagBits vertex_usage_flags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VkBufferUsageFlagBits index_usage_flags = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    const u64 vertex_buffer_size = sizeof(struct vertex_3d) * 1024 * 1024;
+    if(!vulkan_buffer_create(context, vertex_buffer_size, vertex_usage_flags, memory_property_flags, true, &context->object_vertex_buffer))
+    {
+        kerror("Function '%s': Failed to create vertex buffer.", __FUNCTION__);
+        return false;
+    }
+
+    context->geometry_vertex_offset = 0;
+
+    const u64 index_buffer_size = sizeof(u32) * 1024 * 1024;
+    if(!vulkan_buffer_create(context, index_buffer_size, index_usage_flags, memory_property_flags, true, &context->object_index_buffer))
+    {
+        kerror("Function '%s': Failed to create index buffer.", __FUNCTION__);
+        return false;
+    }
+
+    return true;
+}
+
+void buffers_destroy(vulkan_context* context)
+{
+    vulkan_buffer_destroy(context, &context->object_vertex_buffer);
+    vulkan_buffer_destroy(context, &context->object_index_buffer);
 }

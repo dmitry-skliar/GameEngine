@@ -21,7 +21,7 @@ void* dynamic_array_create(u64 stride, u64 capacity)
 {
     if(stride == 0 || capacity == 0)
     {
-        kerror("Function '%s' requires stride and capacity more than zero. Return null!", __FUNCTION__);
+        kerror("Function '%s' requires stride and capacity more than zero.", __FUNCTION__);
         return null;
     }
 
@@ -37,7 +37,7 @@ void* dynamic_array_create(u64 stride, u64 capacity)
         return (void*)((u8*)header + sizeof(struct dynamic_array_header));
     }
 
-    kerror("Function '%s': Failed to allocate memory! Return null!", __FUNCTION__);
+    kerror("Function '%s': Failed to allocate memory!", __FUNCTION__);
     return null;
 }
 

@@ -18,7 +18,7 @@ __editions                  := Release Debug
 #	директорий. Одна директория - один модуль. Исключение: postbuild. 
 __libraries                 := engine.core
 __applications              := application engine.core.tests
-# __postbuild                 := assets
+__postbuild                 := assets
 
 # Конечные директории.
 #	Директории куда записывать файлы в процессе выполнения и по завершению. Исключение: postbuild.

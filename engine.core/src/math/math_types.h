@@ -135,7 +135,7 @@ typedef struct vertex_3d {
     // @brief Нормаль вершины.
     // vec3 normal;
     // @brief Текстурная координата вершины.
-    vec2 texcoord;
+    // vec2 texcoord;
     // @brief Цвет вершины.
     // vec4 color;
     // @brief Касательная вершины.
