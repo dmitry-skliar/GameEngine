@@ -5,6 +5,7 @@
 // Внутренние подключения.
 #include "logger.h"
 #include "memory/memory.h"
+#include "math/kmath.h"
 
 typedef struct renderer_system_state {
     renderer_backend backend;
@@ -74,6 +75,15 @@ bool renderer_draw_frame(render_packet* packet)
 
     if(renderer_begin_frame(packet->delta_time))
     {
+        // TODO: Временный тестовый код: начало.
+        mat4 projection = mat4_perspective(deg_to_rad(45.0f), 1280/720.0f, 0.1f, 1000.0f);
+        static f32 z = -1.0f;
+        z -= 0.1f;
+        mat4 view = mat4_translation((vec3){{0, 0, z}});
+
+        state_ptr->backend.update_global_state(projection, view, vec3_zero(), vec4_one(), 0);
+        // TODO: Временный тестовый код: конец.
+
         bool result = renderer_end_frame(packet->delta_time);
 
         if(!result)

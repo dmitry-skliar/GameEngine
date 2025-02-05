@@ -2,6 +2,7 @@
 
 #include <defines.h>
 #include <platform/window.h>
+#include <math/math_types.h>
 
 // @brief Тип рендера.
 typedef enum renderer_backend_type {
@@ -9,6 +10,12 @@ typedef enum renderer_backend_type {
     RENDERER_BACKEND_TYPE_OPENGL,
     RENDERER_BACKEND_TYPE_DIRECTX
 } renderer_backend_type;
+
+typedef struct global_uniform_object {
+    mat4 projection;       // 64 bytes.
+    mat4 view;             // 64 bytes.
+    mat4 m_reserved[2];    // 128 bytes зарезервировано.
+} global_uniform_object;
 
 typedef struct renderer_backend {
 
@@ -23,6 +30,8 @@ typedef struct renderer_backend {
     void (*resized)(struct renderer_backend* backend, i32 width, i32 height);
 
     bool (*begin_frame)(struct renderer_backend* backend, f32 delta_time);
+
+    void (*update_global_state)(mat4 projection, mat4 view, vec3 view_position, vec4 ambient_color, i32 mode);
 
     bool (*end_frame)(struct renderer_backend* backend, f32 delta_time);
 

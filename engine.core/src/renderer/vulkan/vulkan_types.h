@@ -166,6 +166,16 @@ typedef struct vulkan_material_shader {
     vulkan_shader_stage stages[MATERIAL_SHADER_STAGE_COUNT];
     // @brieg Pipeline.
     vulkan_pipeline pipeline;
+    // @brief
+    VkDescriptorPool global_descriptor_pool;
+    // @brief
+    VkDescriptorSetLayout global_descriptor_set_layout;
+    // @brief
+    VkDescriptorSet global_descriptor_sets[5]; // FIX: Потому что image_count = 5 (временно)!
+    // @brief Общий uniform object.
+    global_uniform_object global_ubo;
+    // @brief Общий unform buffer.
+    vulkan_buffer global_uniform_buffer;
 } vulkan_material_shader;
 
 typedef struct vulkan_context {

@@ -286,17 +286,19 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     vertex_3d verts[VERT_COUNT];
     kzero_tc(verts, struct vertex_3d, VERT_COUNT);
 
-    verts[0].position.x = -0.5f;
-    verts[0].position.y = -0.5f;
+    const f32 f = 10.0f;
 
-    verts[1].position.x =  0.5f;
-    verts[1].position.y =  0.5f;
+    verts[0].position.x = -0.5f * f;
+    verts[0].position.y = -0.5f * f;
 
-    verts[2].position.x = -0.5f;
-    verts[2].position.y =  0.5f;
+    verts[1].position.x =  0.5f * f;
+    verts[1].position.y =  0.5f * f;
 
-    verts[3].position.x =  0.5f;
-    verts[3].position.y = -0.5f;
+    verts[2].position.x = -0.5f * f;
+    verts[2].position.y =  0.5f * f;
+
+    verts[3].position.x =  0.5f * f;
+    verts[3].position.y = -0.5f * f;
 
     #define INDEX_COUNT 6
     u32 indices[INDEX_COUNT] = { 0, 1, 2, 0, 3, 1 };
@@ -486,6 +488,22 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
         command_buffer, &context->main_renderpass, context->swapchain.framebuffers[context->image_index].handle
     );
 
+    return true;
+}
+
+void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_position, vec4 ambient_color, i32 mode)
+{
+    vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
+
+    vulkan_material_shader_use(context, &context->material_shader);
+
+    context->material_shader.global_ubo.projection = projection;
+    context->material_shader.global_ubo.view = view;
+
+    // TODO: Другие ubo свойства.
+
+    vulkan_material_shader_update_global_state(context, &context->material_shader, 0);
+
     // TODO: Временный тестовый код: начало.
     vulkan_material_shader_use(context, &context->material_shader);
 
@@ -499,8 +517,6 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     // Рисовать.
     vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);
     // TODO: Временный тестовый код: конец.
-
-    return true;
 }
 
 bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time)
