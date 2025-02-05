@@ -240,9 +240,8 @@ void vulkan_material_shader_destroy(vulkan_context* context, vulkan_material_sha
 
 void vulkan_material_shader_use(vulkan_context* context, vulkan_material_shader* shader)
 {
-    // u32 image_index = context->image_index;
-    // vulkan_pipeline_bind(&context->graphics_command_buffers[image_index], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-    //                      &shader->pipeline);
+    u32 image_index = context->image_index;
+    vulkan_pipeline_bind(&context->graphics_command_buffers[image_index], VK_PIPELINE_BIND_POINT_GRAPHICS, &shader->pipeline);
 }
 
 void vulkan_material_shader_update_global_state(vulkan_context* context, vulkan_material_shader* shader, f32 delta_time)

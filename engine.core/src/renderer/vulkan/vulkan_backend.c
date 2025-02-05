@@ -42,6 +42,10 @@ void sync_objects_destroy();
 bool swapchain_recreate(renderer_backend* backend);
 bool buffers_create(vulkan_context* context);
 void buffers_destroy(vulkan_context* context);
+void upload_data_range(
+    vulkan_context* context, VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset,
+    u64 size, void* data
+);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 {
@@ -269,13 +273,45 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     }
     ktrace("Vulkan shaders created.");
 
-    // Создание буферов данных.
+    // Создание буферов данных в локальной памяти устройства (видеокарте).
     if(!buffers_create(context))
     {
         kerror("Function '%s': Failed to create buffers.", __FUNCTION__);
         return false;
     }
     ktrace("Vulkan buffers created.");
+
+    // TODO: Временный тестовый код: начало.
+    #define VERT_COUNT 4
+    vertex_3d verts[VERT_COUNT];
+    kzero_tc(verts, struct vertex_3d, VERT_COUNT);
+
+    verts[0].position.x = -0.5f;
+    verts[0].position.y = -0.5f;
+
+    verts[1].position.x =  0.5f;
+    verts[1].position.y =  0.5f;
+
+    verts[2].position.x = -0.5f;
+    verts[2].position.y =  0.5f;
+
+    verts[3].position.x =  0.5f;
+    verts[3].position.y = -0.5f;
+
+    #define INDEX_COUNT 6
+    u32 indices[INDEX_COUNT] = { 0, 1, 2, 0, 3, 1 };
+
+    upload_data_range(
+        context, context->device.graphics_queue.command_pool, null, context->device.graphics_queue.handle,
+        &context->object_vertex_buffer, 0, sizeof(vertex_3d) * VERT_COUNT, verts
+    );
+
+    upload_data_range(
+        context, context->device.graphics_queue.command_pool, null, context->device.graphics_queue.handle,
+        &context->object_index_buffer, 0, sizeof(u32) * INDEX_COUNT, indices
+    );
+
+    // TODO: Временный тестовый код: конец.
 
     return true;
 }
@@ -449,6 +485,20 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     vulkan_renderpass_begin(
         command_buffer, &context->main_renderpass, context->swapchain.framebuffers[context->image_index].handle
     );
+
+    // TODO: Временный тестовый код: начало.
+    vulkan_material_shader_use(context, &context->material_shader);
+
+    // Привязка буфера вершин co смещением.
+    VkDeviceSize offset[1] = {0};
+    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context->object_vertex_buffer.handle, offset);
+
+    // Привязка буфера индексов.
+    vkCmdBindIndexBuffer(command_buffer->handle, context->object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
+
+    // Рисовать.
+    vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);
+    // TODO: Временный тестовый код: конец.
 
     return true;
 }
@@ -775,4 +825,24 @@ void buffers_destroy(vulkan_context* context)
 {
     vulkan_buffer_destroy(context, &context->object_vertex_buffer);
     vulkan_buffer_destroy(context, &context->object_index_buffer);
+}
+
+void upload_data_range(
+    vulkan_context* context, VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset,
+    u64 size, void* data
+)
+{
+    // Создание host-видимую память для загрузки на устройство.
+    VkBufferUsageFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    vulkan_buffer staging;
+    vulkan_buffer_create(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, flags, true, &staging);
+
+    // Загрузка данных в staging буфер.
+    vulkan_buffer_load_data(context, &staging, 0, size, 0, data);
+
+    // Загрузка из staging буфера в локальный буфер устройства.
+    vulkan_buffer_copy_to(context, pool, fence, queue, staging.handle, 0, buffer->handle, offset, size);
+
+    // Уничтожение staging буфера.
+    vulkan_buffer_destroy(context, &staging);
 }
