@@ -9,6 +9,11 @@
 
 typedef struct renderer_system_state {
     renderer_backend backend;
+    mat4 projection;
+    mat4 view;
+    f32 fov_radians;
+    f32 near_clip;
+    f32 far_clip;
 } renderer_system_state;
 
 static renderer_system_state* state_ptr = null;
@@ -37,6 +42,19 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     {
         return false;
     }
+
+    // TODO: Сделать настраиваемыми!
+    state_ptr->fov_radians = 45.0f;
+    state_ptr->near_clip = 0.1f;
+    state_ptr->far_clip = 1000.0f;
+
+    // Создание матрицы проекции.
+    f32 aspect = window_state->width / (f32)window_state->height;
+    state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
+
+    // Создание матрицы вида.
+    state_ptr->view = mat4_translation((vec3){{0, 0, 30.0f}});
+    state_ptr->view = mat4_inverse(state_ptr->view);
 
     return true;
 }
@@ -76,13 +94,11 @@ bool renderer_draw_frame(render_packet* packet)
     if(renderer_begin_frame(packet->delta_time))
     {
         // TODO: Временный тестовый код: начало.
-        mat4 projection = mat4_perspective(deg_to_rad(45.0f), 1280/720.0f, 0.1f, 1000.0f);
-        mat4 view = mat4_translation((vec3){{0, 0, -30.0f}});
-        state_ptr->backend.update_global_state(projection, view, vec3_zero(), vec4_one(), 0);
+        state_ptr->backend.update_global_state(state_ptr->projection, state_ptr->view, vec3_zero(), vec4_one(), 0);
 
         // mat4 model = mat4_translation((vec3){{0, 0, 0}});
-        static f32 angle = 0.01f;
-        angle += 0.1f;
+        static f32 angle = 0.0f;
+        angle += 0.01f;
         quat rotation = quat_from_axis_angle(vec3_forward(), angle, false);
         mat4 model = quat_to_rotation_matrix(rotation, vec3_zero());
         geometry_render_data data = { model };
@@ -107,5 +123,13 @@ void renderer_on_resize(i32 width, i32 height)
         kerror(message_not_initialized, __FUNCTION__);
         return;
     }
+
+    f32 aspect = width / (f32)height;
+    state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
     state_ptr->backend.resized(&state_ptr->backend, width, height);
+}
+
+void renderer_set_view(mat4 view)
+{
+    state_ptr->view = view;
 }
