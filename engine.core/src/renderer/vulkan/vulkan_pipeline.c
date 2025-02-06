@@ -102,15 +102,15 @@ bool vulkan_graphics_pipeline_create(
     input_assembly_info.primitiveRestartEnable = VK_FALSE;
 
     // Передача констант.
-    // VkPushConstantRange push_constant;
-    // push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    // push_constant.offset = 0; // sizeof(mat4) * 0;
-    // push_constant.size = sizeof(mat4) * 2;
+    VkPushConstantRange push_constant;
+    push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    push_constant.offset = sizeof(mat4) * 0;
+    push_constant.size = sizeof(mat4) * 2;
 
     // Схема конвейера.
     VkPipelineLayoutCreateInfo pipeline_layout_info = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-    // pipeline_layout_info.pushConstantRangeCount = 1;
-    // pipeline_layout_info.pPushConstantRanges = &push_constant;
+    pipeline_layout_info.pushConstantRangeCount = 1;
+    pipeline_layout_info.pPushConstantRanges = &push_constant;
     pipeline_layout_info.setLayoutCount = descriptor_set_layout_count;
     pipeline_layout_info.pSetLayouts = descriptor_set_layouts;
 

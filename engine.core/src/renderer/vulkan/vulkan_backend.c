@@ -464,6 +464,7 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     vulkan_command_buffer_reset(command_buffer);
     vulkan_command_buffer_begin(command_buffer, false, false, false);
 
+    // Область просмотра.
     VkViewport viewport = {0};
     viewport.x = 0.0f;
     viewport.y = (f32)context->framebuffer_height;
@@ -472,6 +473,7 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
+    // Область отсечения.
     VkRect2D scissor = {0};
     scissor.offset.x = scissor.offset.y = 0;
     scissor.extent.width = context->framebuffer_width;
@@ -493,7 +495,7 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
 
 void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_position, vec4 ambient_color, i32 mode)
 {
-    vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
+    // vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
 
     vulkan_material_shader_use(context, &context->material_shader);
 
@@ -503,20 +505,6 @@ void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_p
     // TODO: Другие ubo свойства.
 
     vulkan_material_shader_update_global_state(context, &context->material_shader, 0);
-
-    // TODO: Временный тестовый код: начало.
-    vulkan_material_shader_use(context, &context->material_shader);
-
-    // Привязка буфера вершин co смещением.
-    VkDeviceSize offset[1] = {0};
-    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context->object_vertex_buffer.handle, offset);
-
-    // Привязка буфера индексов.
-    vkCmdBindIndexBuffer(command_buffer->handle, context->object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
-
-    // Рисовать.
-    vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);
-    // TODO: Временный тестовый код: конец.
 }
 
 bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time)
@@ -571,6 +559,27 @@ bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time
     );
 
     return true;
+}
+
+void vulkan_renderer_backend_update_object(geometry_render_data data)
+{
+    vulkan_material_shader_update_object(context, &context->material_shader, data);
+
+    vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
+
+    // TODO: Временный тестовый код: начало.
+    vulkan_material_shader_use(context, &context->material_shader);
+
+    // Привязка буфера вершин co смещением.
+    VkDeviceSize offset[1] = {0};
+    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context->object_vertex_buffer.handle, offset);
+
+    // Привязка буфера индексов.
+    vkCmdBindIndexBuffer(command_buffer->handle, context->object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
+
+    // Рисовать.
+    vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);
+    // TODO: Временный тестовый код: конец.
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(

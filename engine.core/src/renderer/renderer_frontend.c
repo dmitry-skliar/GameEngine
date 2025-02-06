@@ -77,11 +77,16 @@ bool renderer_draw_frame(render_packet* packet)
     {
         // TODO: Временный тестовый код: начало.
         mat4 projection = mat4_perspective(deg_to_rad(45.0f), 1280/720.0f, 0.1f, 1000.0f);
-        static f32 z = -1.0f;
-        z -= 0.1f;
-        mat4 view = mat4_translation((vec3){{0, 0, z}});
-
+        mat4 view = mat4_translation((vec3){{0, 0, -30.0f}});
         state_ptr->backend.update_global_state(projection, view, vec3_zero(), vec4_one(), 0);
+
+        // mat4 model = mat4_translation((vec3){{0, 0, 0}});
+        static f32 angle = 0.01f;
+        angle += 0.1f;
+        quat rotation = quat_from_axis_angle(vec3_forward(), angle, false);
+        mat4 model = quat_to_rotation_matrix(rotation, vec3_zero());
+        geometry_render_data data = { model };
+        state_ptr->backend.update_object(data);
         // TODO: Временный тестовый код: конец.
 
         bool result = renderer_end_frame(packet->delta_time);

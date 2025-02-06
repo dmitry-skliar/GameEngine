@@ -171,11 +171,13 @@ typedef struct vulkan_material_shader {
     // @brief
     VkDescriptorSetLayout global_descriptor_set_layout;
     // @brief
-    VkDescriptorSet global_descriptor_sets[5]; // FIX: Потому что image_count = 5 (временно)!
+    VkDescriptorSet global_descriptor_sets[5]; // TODO: Потому что image_count = 5 (временно)!
     // @brief Общий uniform object.
     global_uniform_object global_ubo;
     // @brief Общий unform buffer.
     vulkan_buffer global_uniform_buffer;
+    // @brief
+    bool descriptor_updated[5]; // TODO: ... image_index = 5! (NOT USED NOW!!!)
 } vulkan_material_shader;
 
 typedef struct vulkan_context {
