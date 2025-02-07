@@ -2,6 +2,7 @@
 
 #include <defines.h>
 #include <renderer/renderer_types.h>
+#include <resources/resource_types.h>
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend);
 
@@ -16,3 +17,10 @@ void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_p
 bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time);
 
 void vulkan_renderer_backend_update_object(geometry_render_data data);
+
+void vulkan_renderer_backend_create_texture(
+    const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
+    bool has_transparency, texture* out_texture
+);
+
+void vulkan_renderer_backend_destroy_texture(texture* texture);

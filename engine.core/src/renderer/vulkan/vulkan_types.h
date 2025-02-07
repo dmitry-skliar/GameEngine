@@ -112,7 +112,7 @@ typedef struct vulkan_device_requirements {
     VkPhysicalDeviceType device_type;
     // @brief Поддержка расширений физического устройства (используется массив darray).
     const char** extensions;
-    // @brief Поддержка анизотропии.
+    // @brief Поддержка анизотропной фильтрации.
     bool sampler_anisotropy;
 } vulkan_device_requirements;
 
@@ -161,29 +161,47 @@ typedef struct vulkan_pipeline {
 
 #define MATERIAL_SHADER_STAGE_COUNT 2
 
+typedef struct vulkan_descriptor_state {
+    // На кадр.
+    u32 generations[5];                    // TODO: image_count = 5!
+} vulkan_descriptor_state;
+
+#define VULKAN_OBJECT_SHADER_DESCRIPTOR_COUNT 2
+
+typedef struct vulkan_object_shader_object_state {
+    // На кадр.
+    VkDescriptorSet descriptor_sets[5];    // TODO: image_count = 5!
+    // На дескриптор.
+    vulkan_descriptor_state descriptor_states[VULKAN_OBJECT_SHADER_DESCRIPTOR_COUNT];
+} vulkan_object_shader_object_state;
+
+// Максимальное число объектов.
+#define VULKAN_OBJECT_MAX_OBJECT_COUNT 1024
+
 typedef struct vulkan_material_shader {
     // @brief Шаги шейдерных модулей: Vertex, Fragment.
     vulkan_shader_stage stages[MATERIAL_SHADER_STAGE_COUNT];
-    // @brieg Pipeline.
-    vulkan_pipeline pipeline;
-    // @brief
+
     VkDescriptorPool global_descriptor_pool;
-    // @brief
     VkDescriptorSetLayout global_descriptor_set_layout;
-    // @brief
     VkDescriptorSet global_descriptor_sets[5]; // TODO: Потому что image_count = 5 (временно)!
-    // @brief Общий uniform object.
     global_uniform_object global_ubo;
-    // @brief Общий unform buffer.
     vulkan_buffer global_uniform_buffer;
-    // @brief
-    bool descriptor_updated[5]; // TODO: ... image_index = 5! (NOT USED NOW!!!)
+
+    VkDescriptorPool object_descriptor_pool;
+    VkDescriptorSetLayout object_descriptor_set_layout;
+    vulkan_buffer object_uniform_buffer;
+    // TODO: Заменить на freelist.
+    u32 object_uniform_buffer_index;
+    // TODO: Сделать динамическим.
+    vulkan_object_shader_object_state object_states[VULKAN_OBJECT_MAX_OBJECT_COUNT];
+    vulkan_pipeline pipeline;
 } vulkan_material_shader;
 
 typedef struct vulkan_context {
+    f32 frame_delta_time;
     u32 framebuffer_width;
     u32 framebuffer_height;
-
     u64 framebuffer_size_generation;
     u64 framebuffer_size_last_generation;
 
@@ -217,3 +235,8 @@ typedef struct vulkan_context {
 
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;
+
+typedef struct vulkan_texture_data {
+    vulkan_image image;
+    VkSampler sampler;
+} vulkan_texture_data;

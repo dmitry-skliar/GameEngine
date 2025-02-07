@@ -3,6 +3,7 @@
 #include <defines.h>
 #include <platform/window.h>
 #include <math/math_types.h>
+#include <resources/resource_types.h>
 
 // @brief Тип рендера.
 typedef enum renderer_backend_type {
@@ -17,10 +18,15 @@ typedef struct global_uniform_object {
     mat4 m_reserved[2];    // 128 bytes зарезервировано.
 } global_uniform_object;
 
-typedef struct {
-    // u32 object_id;
+typedef struct object_uniform_object {
+    vec4 diffuse_color;    // 16 bytes.
+    vec4 m_reserved[3];    // 48 bytes.
+} object_uniform_object;
+
+typedef struct geometry_render_data {
+    u32 object_id;
     mat4 model;
-    // texture* textures[16];
+    texture* textures[16];
 } geometry_render_data;
 
 typedef struct renderer_backend {
@@ -42,6 +48,13 @@ typedef struct renderer_backend {
     bool (*end_frame)(struct renderer_backend* backend, f32 delta_time);
 
     void (*update_object)(geometry_render_data data);
+
+    void (*create_texture)(
+        const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
+        bool has_transparency, texture* out_texture
+    );
+
+    void (*destroy_texture)(texture* texture);
 
 } renderer_backend;
 

@@ -4,6 +4,7 @@
 
 // Внутренние подключения.
 #include "logger.h"
+#include "memory/memory.h"
 
 void vulkan_image_create(
     vulkan_context* context, VkImageType imagetype, u32 width, u32 height, VkFormat imageformat,
@@ -93,6 +94,86 @@ void vulkan_image_view_create(
     {
         kfatal("Failed to create image view for vulkan_image with result: %s", vulkan_result_get_string(result, true));
     }
+}
+
+void vulkan_image_transition_layout(
+    vulkan_context* context, vulkan_command_buffer* command_buffer, vulkan_image* image, VkFormat* format, 
+    VkImageLayout old_layout, VkImageLayout new_layout
+)
+{
+    VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcQueueFamilyIndex = context->device.graphics_queue.index;
+    barrier.dstQueueFamilyIndex = context->device.graphics_queue.index;
+    barrier.image = image->handle;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkPipelineStageFlags src_stage;
+    VkPipelineStageFlags dst_stage;
+
+    // Не обращайте внимания на старую компоновку - переходите к оптимальной компоновке (для базовой реализации).
+    if(old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        // Неважно, на какой стадии находится конвейер в начале.
+        src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+        // Используется для копирования.
+        dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if(
+        old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    )
+    {
+        // Переход из макета назначения передачи в макет только для чтения шейдера.
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        // От копирования к этапу ...
+        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+        // Стадия фрагмента.
+        dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else
+    {
+        kerror("Function '%s': Unsupported layout transition.", __FUNCTION__);
+        return;
+    }
+
+    vkCmdPipelineBarrier(command_buffer->handle, src_stage, dst_stage, 0, 0, null, 0, null, 1, &barrier);
+}
+
+void vulkan_image_copy_from_buffer(
+    vulkan_context* context, vulkan_image* image, VkBuffer buffer, vulkan_command_buffer* command_buffer
+)
+{
+    // Регион копирования.
+    VkBufferImageCopy region;
+    kzero_tc(&region, VkBufferImageCopy, 1);
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+
+    region.imageExtent.width = image->width;
+    region.imageExtent.height = image->height;
+    region.imageExtent.depth = 1;
+
+    vkCmdCopyBufferToImage(
+        command_buffer->handle, buffer, image->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region
+    );
 }
 
 void vulkan_image_destroy(vulkan_context* context, vulkan_image* image)

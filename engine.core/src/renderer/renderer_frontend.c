@@ -6,6 +6,7 @@
 #include "logger.h"
 #include "memory/memory.h"
 #include "math/kmath.h"
+#include "resources/resource_types.h"
 
 typedef struct renderer_system_state {
     renderer_backend backend;
@@ -14,6 +15,8 @@ typedef struct renderer_system_state {
     f32 fov_radians;
     f32 near_clip;
     f32 far_clip;
+
+    texture default_texture;
 } renderer_system_state;
 
 static renderer_system_state* state_ptr = null;
@@ -56,6 +59,42 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     state_ptr->view = mat4_translation((vec3){{0, 0, 30.0f}});
     state_ptr->view = mat4_inverse(state_ptr->view);
 
+    // NOTE: Создание текстуры по умолчанию, сине-белый шахматный узор 256x256.
+    // Это делается в коде, чтобы исключить зависимости от ресурсов.
+    ktrace("Function '%s' Create default texture...", __FUNCTION__);
+    const u32 tex_dimension = 255;
+    const u32 bpp = 4; // Байтов на пиксель (RBGA).
+    const u32 pixel_count = tex_dimension * tex_dimension;
+    u8 pixels[262150];
+    // u8* pixels = kallocate(sizeof(u8) * pixel_count * bpp, MEMORY_TAG_TEXTURE);
+    kset(pixels, sizeof(u8) * pixel_count * bpp, 255);
+
+    // Каждый пиксель.
+    for(u64 row = 0; row < tex_dimension; ++row)
+    {
+        for(u64 col = 0; col < tex_dimension; ++col)
+        {
+            u64 index = (row * tex_dimension) + col;
+            u64 index_bpp = index * bpp;
+
+            if(row % 2 == col % 2)
+            {
+                pixels[index_bpp + 0] = 0;
+                pixels[index_bpp + 1] = 0;
+            }
+        }
+    }
+
+    renderer_create_texture(
+        "default", false, tex_dimension, tex_dimension, 4, pixels, false, &state_ptr->default_texture
+    );
+
+    // Установка генерацию текстуры как недействительную, так как это текстура по умолчанию.
+    state_ptr->default_texture.generation = INVALID_ID32;
+
+    // TODO: Загрузить другие текстуры.
+    // create_texture(&state_ptr->test_diffuse);
+
     return true;
 }
 
@@ -67,7 +106,12 @@ void renderer_system_shutdown()
         return;
     }
 
+    // Уничтожение текстуры по умолчанию.
+    renderer_destroy_texture(&state_ptr->default_texture);
+
+    // Завершение работы рендерера.
     state_ptr->backend.shutdown(&state_ptr->backend);
+    renderer_backend_destroy(&state_ptr->backend);
     state_ptr = null;
 }
 
@@ -96,17 +140,19 @@ bool renderer_draw_frame(render_packet* packet)
         // TODO: Временный тестовый код: начало.
         state_ptr->backend.update_global_state(state_ptr->projection, state_ptr->view, vec3_zero(), vec4_one(), 0);
 
-        // mat4 model = mat4_translation((vec3){{0, 0, 0}});
+        mat4 model = mat4_translation((vec3){{0, 0, 0}});
         static f32 angle = 0.0f;
-        angle += 0.01f;
-        quat rotation = quat_from_axis_angle(vec3_forward(), angle, false);
-        mat4 model = quat_to_rotation_matrix(rotation, vec3_zero());
-        geometry_render_data data = { model };
+        // angle += 0.01f;
+        // quat rotation = quat_from_axis_angle(vec3_forward(), angle, false);
+        // mat4 model = quat_to_rotation_matrix(rotation, vec3_zero());
+        geometry_render_data data = {0};
+        data.object_id = 0;
+        data.model = model;
+        data.textures[0] = &state_ptr->default_texture;
         state_ptr->backend.update_object(data);
         // TODO: Временный тестовый код: конец.
 
         bool result = renderer_end_frame(packet->delta_time);
-
         if(!result)
         {
             kerror("Failed to complete function 'renderer_end_frame'. Shutting down.");
@@ -132,4 +178,17 @@ void renderer_on_resize(i32 width, i32 height)
 void renderer_set_view(mat4 view)
 {
     state_ptr->view = view;
+}
+
+void renderer_create_texture(
+    const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
+    bool has_transparency, texture* out_texture
+)
+{
+    state_ptr->backend.create_texture(name, auto_release, width, height, channel_count, pixels, has_transparency, out_texture);
+}
+
+void renderer_destroy_texture(texture* texture)
+{
+    state_ptr->backend.destroy_texture(texture);
 }

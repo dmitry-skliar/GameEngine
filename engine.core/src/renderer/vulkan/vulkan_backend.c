@@ -11,6 +11,7 @@
 #include "renderer/vulkan/vulkan_fence.h"
 #include "renderer/vulkan/shaders/vulkan_material_shader.h"
 #include "renderer/vulkan/vulkan_buffer.h"
+#include "renderer/vulkan/vulkan_image.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -284,21 +285,29 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     // TODO: Временный тестовый код: начало.
     #define VERT_COUNT 4
     vertex_3d verts[VERT_COUNT];
-    kzero_tc(verts, struct vertex_3d, VERT_COUNT);
+    kzero_tc(verts, vertex_3d, VERT_COUNT);
 
     const f32 f = 10.0f;
 
     verts[0].position.x = -0.5f * f;
     verts[0].position.y = -0.5f * f;
+    verts[0].texcoord.x =  0.0f;
+    verts[0].texcoord.y =  0.0f;
 
     verts[1].position.x =  0.5f * f;
     verts[1].position.y =  0.5f * f;
+    verts[1].texcoord.x =  1.0f;
+    verts[1].texcoord.y =  1.0f;
 
     verts[2].position.x = -0.5f * f;
     verts[2].position.y =  0.5f * f;
+    verts[2].texcoord.x =  0.0f;
+    verts[2].texcoord.y =  1.0f;
 
     verts[3].position.x =  0.5f * f;
     verts[3].position.y = -0.5f * f;
+    verts[3].texcoord.x =  1.0f;
+    verts[3].texcoord.y =  0.0f;
 
     #define INDEX_COUNT 6
     u32 indices[INDEX_COUNT] = { 0, 1, 2, 0, 3, 1 };
@@ -312,6 +321,13 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
         context, context->device.graphics_queue.command_pool, null, context->device.graphics_queue.handle,
         &context->object_index_buffer, 0, sizeof(u32) * INDEX_COUNT, indices
     );
+
+    u32 object_id = 0;
+    if(!vulkan_material_shader_acquire_resources(context, &context->material_shader, &object_id))
+    {
+        kerror("Function '%s': Failed to acquire shader resources.", __FUNCTION__);
+        return false;
+    }
 
     // TODO: Временный тестовый код: конец.
 
@@ -403,7 +419,7 @@ void vulkan_renderer_backend_on_resized(renderer_backend* backend, i32 width, i3
 
 bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_time)
 {
-    // context->frame_delta_time = delta_time;
+    context->frame_delta_time = delta_time;
     
     vulkan_device* device = &context->device;
 
@@ -504,7 +520,7 @@ void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_p
 
     // TODO: Другие ubo свойства.
 
-    vulkan_material_shader_update_global_state(context, &context->material_shader, 0);
+    vulkan_material_shader_update_global_state(context, &context->material_shader, context->frame_delta_time);
 }
 
 bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time)
@@ -870,4 +886,115 @@ void upload_data_range(
 
     // Уничтожение staging буфера.
     vulkan_buffer_destroy(context, &staging);
+}
+
+void vulkan_renderer_backend_create_texture(
+    const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
+    bool has_transparency, texture* out_texture
+)
+{
+    out_texture->width = width;
+    out_texture->height = height;
+    out_texture->channel_count = channel_count;
+    out_texture->generation = INVALID_ID32;
+
+    // Создание data.
+    // TODO: Используется распределитель памяти тут.
+    out_texture->data = kallocate_tc(vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
+    vulkan_texture_data* data = out_texture->data;
+    VkDeviceSize image_size = width * height * channel_count;
+
+    // NOTE: Предполагается 8 бит на канал.
+    VkFormat image_format = VK_FORMAT_R8G8B8A8_UNORM;
+
+    // Создание промежуточного буфера и загрузка данных в него.
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    vulkan_buffer staging;
+    vulkan_buffer_create(context, image_size, usage, memory_flags, true, &staging);
+
+    vulkan_buffer_load_data(context, &staging, 0, image_size, 0, pixels);
+
+    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
+    vulkan_image_create(
+        context, VK_IMAGE_TYPE_2D, width, height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
+        &data->image
+    );
+
+    vulkan_command_buffer command_buffer;
+    VkCommandPool pool = context->device.graphics_queue.command_pool;
+    VkQueue queue = context->device.graphics_queue.handle;
+
+    vulkan_command_buffer_allocate_and_begin_single_use(context, pool, &command_buffer);
+
+    // Изменение текущий макета на оптимальный для приема данных.
+    vulkan_image_transition_layout(
+        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_UNDEFINED, 
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    );
+
+    // Копирование данных из буфера.
+    vulkan_image_copy_from_buffer(context, &data->image, staging.handle, &command_buffer);
+
+    // Переход от оптимальной компоновки для получения данных к оптимальной компоновке только для чтения шейдеров.
+    vulkan_image_transition_layout(
+        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    );
+
+    vulkan_command_buffer_end_single_use(context, pool, &command_buffer, queue);
+
+    // Уничтожение толко после записи буфера команд, потому что во время выполнение может оказаться нулевыми данными!
+    vulkan_buffer_destroy(context, &staging);
+
+    // Создание фильтрации для текстуры.
+    VkSamplerCreateInfo sampler_info = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+    // TODO: Эти фильтры должны быть настраиваемыми.
+    sampler_info.magFilter = VK_FILTER_LINEAR;
+    sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.anisotropyEnable = VK_TRUE;
+    sampler_info.maxAnisotropy = 16;
+    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    sampler_info.unnormalizedCoordinates = VK_FALSE;
+    sampler_info.compareEnable = VK_FALSE;
+    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.mipLodBias = 0.0f;
+    sampler_info.minLod = 0.0f;
+    sampler_info.maxLod = 0.0f;
+
+    VkResult result = vkCreateSampler(context->device.logical, &sampler_info, context->allocator, &data->sampler);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Function '%s': Error creating texture sampler: %s", __FUNCTION__, vulkan_result_get_string(result, true));
+        return;
+    }
+
+    out_texture->has_transparency = has_transparency;
+    out_texture->generation++;
+}
+
+void vulkan_renderer_backend_destroy_texture(texture* texture)
+{
+    vkDeviceWaitIdle(context->device.logical);
+
+    vulkan_texture_data* data = texture->data;
+
+    if(!data)
+    {
+        kerror("Function '%s': Failed to get vulkan texture data.");
+        return;
+    }
+
+    vulkan_image_destroy(context, &data->image);
+    kzero_tc(&data->image, struct vulkan_image, 1);
+    vkDestroySampler(context->device.logical, data->sampler, context->allocator);
+
+    kfree_tc(texture->data, vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
+    kzero_tc(texture, struct texture, 1);
 }

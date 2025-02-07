@@ -15,6 +15,8 @@ bool renderer_backend_create(renderer_backend_type type, renderer_backend* out_r
         out_renderer_backend->end_frame           = vulkan_renderer_backend_end_frame;
         out_renderer_backend->resized             = vulkan_renderer_backend_on_resized;
         out_renderer_backend->update_object       = vulkan_renderer_backend_update_object;
+        out_renderer_backend->create_texture      = vulkan_renderer_backend_create_texture;
+        out_renderer_backend->destroy_texture     = vulkan_renderer_backend_destroy_texture;
         return true;
     }
 
@@ -30,5 +32,6 @@ void renderer_backend_destroy(renderer_backend* backend)
     backend->end_frame           = null;
     backend->resized             = null;
     backend->update_object       = null;
+    backend->create_texture      = null;
+    backend->destroy_texture     = null;
 }
-

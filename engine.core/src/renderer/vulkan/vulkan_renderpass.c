@@ -37,9 +37,9 @@ void vulkan_renderpass_create(
     // Вложение 1: буфер цвета.
     // TODO: Сделать настраиваемым.
     attachment_descriptions[ATTACHMENT_COLOR_INDEX].format = context->swapchain.image_format.format;
-    attachment_descriptions[ATTACHMENT_COLOR_INDEX].samples = VK_SAMPLE_COUNT_1_BIT;                   // Количество бит сэмпла для текстуры.
-    attachment_descriptions[ATTACHMENT_COLOR_INDEX].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;              // Очистить буфер цвета при операции загрузки.
-    attachment_descriptions[ATTACHMENT_COLOR_INDEX].storeOp = VK_ATTACHMENT_STORE_OP_STORE;            // Сохранить буфер цвета при операции сохранения.
+    attachment_descriptions[ATTACHMENT_COLOR_INDEX].samples = VK_SAMPLE_COUNT_1_BIT;                   // Количество бит сэмпла.
+    attachment_descriptions[ATTACHMENT_COLOR_INDEX].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;              // Очистить буфер цвета при операции загрузки (до отрисовки).
+    attachment_descriptions[ATTACHMENT_COLOR_INDEX].storeOp = VK_ATTACHMENT_STORE_OP_STORE;            // Сохранить буфер цвета при операции сохранения (после отрисовки).
     attachment_descriptions[ATTACHMENT_COLOR_INDEX].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   // Не интересуте буфер трафарета при операции загрузки.
     attachment_descriptions[ATTACHMENT_COLOR_INDEX].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Не интересуте буфер трафарета при операции сохранения.
     attachment_descriptions[ATTACHMENT_COLOR_INDEX].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;         // Состояние буфера перед проходм визуализатора не интересует!
@@ -73,10 +73,11 @@ void vulkan_renderpass_create(
     // TODO: Другие ссылки на вложения (ввод, показ, ...).
 
     // Главный подпроход визуализации.
+    // NOTE: layout(location = 0) out vec4 out_color ссылается на порядковый номер буфера в массиве pColorAttachments.
     VkSubpassDescription subpass = {0};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &attachment_references[ATTACHMENT_COLOR_INDEX];                        // Буфер цветов.
+    subpass.pColorAttachments = &attachment_references[ATTACHMENT_COLOR_INDEX];                        // Буфер цветов. 
     subpass.pDepthStencilAttachment = &attachment_references[ATTACHMENT_DEPTH_INDEX];                  // Буфер глубины.
     subpass.inputAttachmentCount = 0;
     subpass.pInputAttachments = null;                                                                  // Буферы содержимого из шейдера.

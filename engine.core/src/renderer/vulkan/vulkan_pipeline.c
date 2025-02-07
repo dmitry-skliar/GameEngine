@@ -22,15 +22,15 @@ bool vulkan_graphics_pipeline_create(
     viewport_stage.scissorCount = 1;
     viewport_stage.pScissors = &scissor;
 
-    // Растерезатор.
+    // Растерезующий шейдер (растерезатор).
     VkPipelineRasterizationStateCreateInfo rasterizer_info = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
-    rasterizer_info.depthClampEnable = VK_FALSE;
-    rasterizer_info.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer_info.polygonMode = is_wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+    rasterizer_info.depthClampEnable = VK_FALSE; // Отсекать фрагменты за пределами дальней и ближней плоскости.
+    rasterizer_info.rasterizerDiscardEnable = VK_FALSE; // Выполнять растерезацию и передавать во фреймбуфер.
+    rasterizer_info.polygonMode = is_wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL; // Ребра полигона отрезки или полигон полностью заполняет фрагмент.
     rasterizer_info.lineWidth = 1.0f;
-    rasterizer_info.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    rasterizer_info.depthBiasEnable = VK_FALSE;
+    rasterizer_info.cullMode = VK_CULL_MODE_BACK_BIT; // Тип отсечения.
+    rasterizer_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Порядок обхода вершин против часовой стрелки.
+    rasterizer_info.depthBiasEnable = VK_FALSE; // Для изменения значения глубины.
     rasterizer_info.depthBiasConstantFactor = 0.0f;
     rasterizer_info.depthBiasClamp = 0.0f;
     rasterizer_info.depthBiasSlopeFactor = 0.0f;
@@ -40,7 +40,7 @@ bool vulkan_graphics_pipeline_create(
     multisampling_info.sampleShadingEnable = VK_FALSE;
     multisampling_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
     multisampling_info.minSampleShading = 1.0f;
-    multisampling_info.pSampleMask = NULL;
+    multisampling_info.pSampleMask = null;
     multisampling_info.alphaToCoverageEnable = VK_FALSE;
     multisampling_info.alphaToOneEnable = VK_FALSE;
 
@@ -52,9 +52,10 @@ bool vulkan_graphics_pipeline_create(
     depth_stencil_info.depthBoundsTestEnable = VK_FALSE;
     depth_stencil_info.stencilTestEnable = VK_FALSE;
 
-    VkPipelineColorBlendAttachmentState color_blend_attachment_state = {0};
-    // kzero_tc(&color_blend_attachment_state, VkPipelineColorBlendAttachmentState, 1);
-    color_blend_attachment_state.blendEnable = VK_TRUE;
+    // Смешивание цветов: цвета из фрагментного шейдера смешиваются с цветом из буфера.
+    VkPipelineColorBlendAttachmentState color_blend_attachment_state;
+    kzero_tc(&color_blend_attachment_state, VkPipelineColorBlendAttachmentState, 1);
+    color_blend_attachment_state.blendEnable = VK_TRUE; // Цвет из фрагментного шейдера передается с изменениями.
     color_blend_attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     color_blend_attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_blend_attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
@@ -70,33 +71,34 @@ bool vulkan_graphics_pipeline_create(
     color_blend_state_info.attachmentCount = 1;
     color_blend_state_info.pAttachments = &color_blend_attachment_state;
 
-    // Динамическое состояние.
+    // Динамическое состояние: позволяет менять состояние графического конвейера не создавая занаво.
+    // В результате эти настройки нужно указывать прямо во время отрисовки.
     #define DYNAMIC_STATE_COUNT 3
     VkDynamicState dynamic_states[DYNAMIC_STATE_COUNT] = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR,
-        VK_DYNAMIC_STATE_LINE_WIDTH
+        VK_DYNAMIC_STATE_VIEWPORT,   // Изменение вьюпорта.
+        VK_DYNAMIC_STATE_SCISSOR,    // Изменение обрезки вьюпорта.
+        VK_DYNAMIC_STATE_LINE_WIDTH, // Изменение ширины отрезков.
     };
 
     VkPipelineDynamicStateCreateInfo dynamic_state_info = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
     dynamic_state_info.dynamicStateCount = DYNAMIC_STATE_COUNT;
     dynamic_state_info.pDynamicStates = dynamic_states;
 
-    // Ввод вертексов.
+    // Первая стадия конвейера (вход вертексов).
     // В шейдере это строка layout(location = 0) in vec3 in_position; - атрибут!
     VkVertexInputBindingDescription binding_description = {0};
     binding_description.binding = 0; // Индекс привязки.
     binding_description.stride = sizeof(vertex_3d);
     binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Переход к следующей записи данных для каждой вершины.
 
-    // Атрибуты.
+    // Выршинный шейдер: передаваемые атрибуты и привязки.
     VkPipelineVertexInputStateCreateInfo vertex_input_info = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
     vertex_input_info.vertexBindingDescriptionCount = 1;
     vertex_input_info.pVertexBindingDescriptions = &binding_description;
     vertex_input_info.vertexAttributeDescriptionCount = attribute_count;
-    vertex_input_info.pVertexAttributeDescriptions = attributes;
+    vertex_input_info.pVertexAttributeDescriptions = attributes; // Данные передаваемые в вершинный шейдер.
 
-    // Ввод сборки.
+    // Сборочный шейдер.
     VkPipelineInputAssemblyStateCreateInfo input_assembly_info = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
     input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     input_assembly_info.primitiveRestartEnable = VK_FALSE;
@@ -107,14 +109,13 @@ bool vulkan_graphics_pipeline_create(
     push_constant.offset = sizeof(mat4) * 0;
     push_constant.size = sizeof(mat4) * 2;
 
-    // Схема конвейера.
+    // Cоздание схемы конвейера (Layout конвейера): для использования uniform в шейдерах.
     VkPipelineLayoutCreateInfo pipeline_layout_info = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
     pipeline_layout_info.pushConstantRangeCount = 1;
     pipeline_layout_info.pPushConstantRanges = &push_constant;
     pipeline_layout_info.setLayoutCount = descriptor_set_layout_count;
     pipeline_layout_info.pSetLayouts = descriptor_set_layouts;
 
-    // Создание конвейера.
     VkResult result = vkCreatePipelineLayout(context->device.logical, &pipeline_layout_info, context->allocator, &out_pipeline->layout);
     if(!vulkan_result_is_success(result))
     {
@@ -122,13 +123,12 @@ bool vulkan_graphics_pipeline_create(
         return false;
     }
 
-    // Pipeline create.
+    // Создание графического конвейера.
     VkGraphicsPipelineCreateInfo pipeline_info = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     pipeline_info.stageCount = stage_count,
     pipeline_info.pStages = stages;
     pipeline_info.pVertexInputState = &vertex_input_info;
     pipeline_info.pInputAssemblyState = &input_assembly_info;
-
     pipeline_info.pViewportState = &viewport_stage;
     pipeline_info.pRasterizationState = &rasterizer_info;
     pipeline_info.pMultisampleState = &multisampling_info;
@@ -136,9 +136,7 @@ bool vulkan_graphics_pipeline_create(
     pipeline_info.pColorBlendState = &color_blend_state_info;
     pipeline_info.pDynamicState = &dynamic_state_info;
     pipeline_info.pTessellationState = null;
-
     pipeline_info.layout = out_pipeline->layout;
-
     pipeline_info.renderPass = renderpass->handle;
     pipeline_info.subpass = 0;
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
