@@ -35,6 +35,9 @@ typedef struct renderer_backend {
 
     window* window_state;
 
+    // @brief Указатель на текстуру по умолчанию.
+    texture* default_diffuse;
+
     bool (*initialize)(struct renderer_backend* backend);
 
     void (*shutdown)(struct renderer_backend* backend);

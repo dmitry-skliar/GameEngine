@@ -193,8 +193,13 @@ typedef struct vulkan_material_shader {
     vulkan_buffer object_uniform_buffer;
     // TODO: Заменить на freelist.
     u32 object_uniform_buffer_index;
+
     // TODO: Сделать динамическим.
     vulkan_object_shader_object_state object_states[VULKAN_OBJECT_MAX_OBJECT_COUNT];
+
+    // @brief Указатель на текустуру по умолчанию.
+    texture* default_diffuse;
+
     vulkan_pipeline pipeline;
 } vulkan_material_shader;
 

@@ -153,10 +153,10 @@ KAPI const char* input_mouse_button_str(button button);
     @brief Однократная регистрация нажатия клавиши клавиатуры.
     @param key Код клавиши.
 */
-#define input_keyboard_key_pressed(key) (input_is_keyboard_key_down(key) && input_was_keyboard_key_up(key))
+#define input_keyboard_key_press_detect(key) (input_is_keyboard_key_down(key) && input_was_keyboard_key_up(key))
 
 /*
     @brief Однократная регистрация освобождение клавиши клавиатуры.
     @param key Код клавиши.
 */
-#define input_keyboard_key_released(key) (input_is_keyboard_key_up(key) && input_was_keyboard_key_down(key))
+#define input_keyboard_key_release_detect(key) (input_is_keyboard_key_up(key) && input_was_keyboard_key_down(key))

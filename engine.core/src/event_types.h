@@ -67,6 +67,15 @@ typedef enum event_code {
     EVENT_CODE_MOUSE_WHEEL,
 
     /*
+        @brief Отладка.
+    */
+    EVENT_CODE_DEBUG_0,
+    EVENT_CODE_DEBUG_1,
+    EVENT_CODE_DEBUG_2,
+    EVENT_CODE_DEBUG_3,
+    EVENT_CODE_DEBUG_4,
+
+    /*
         @brief Максимально допустимое количество кодов событий.
     */
     EVENT_CODES_MAX = 0x3fff

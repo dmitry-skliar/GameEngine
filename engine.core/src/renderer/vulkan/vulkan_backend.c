@@ -267,7 +267,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     ktrace("Vulkan sync objects created.");
 
     // Создание шейдеров.
-    if(!vulkan_material_shader_create(context, &context->material_shader))
+    if(!vulkan_material_shader_create(context, backend->default_diffuse, &context->material_shader))
     {
         kerror("Function '%': Failed to load built-in basic lighting shader.", __FUNCTION__);
         return false;
@@ -985,16 +985,24 @@ void vulkan_renderer_backend_destroy_texture(texture* texture)
 
     vulkan_texture_data* data = texture->data;
 
-    if(!data)
+    if(data)
     {
-        kerror("Function '%s': Failed to get vulkan texture data.");
-        return;
+        vulkan_image_destroy(context, &data->image);
+        kzero_tc(&data->image, struct vulkan_image, 1);
+        vkDestroySampler(context->device.logical, data->sampler, context->allocator);
+        kfree_tc(texture->data, vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
+    }
+    else
+    {
+        if(texture->generation != INVALID_ID32)
+        {
+            kerror("Function '%s': Failed to get vulkan specific data of texture.", __FUNCTION__);
+        }
+        else
+        {
+            kwarng("Function '%s': Texture was not created. Skipping...", __FUNCTION__);
+        }
     }
 
-    vulkan_image_destroy(context, &data->image);
-    kzero_tc(&data->image, struct vulkan_image, 1);
-    vkDestroySampler(context->device.logical, data->sampler, context->allocator);
-
-    kfree_tc(texture->data, vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
     kzero_tc(texture, struct texture, 1);
 }

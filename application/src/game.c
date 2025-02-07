@@ -2,6 +2,7 @@
 
 #include <input.h>
 #include <memory/memory.h>
+#include <event.h>
 
 // HACK: Удалить позже после тестов!
 #include <renderer/renderer_frontend.h>
@@ -76,13 +77,18 @@ bool game_initialize(game* inst)
 
 bool game_update(game* inst, f32 delta_time)
 {
-    if(input_keyboard_key_pressed('M'))
+    if(input_keyboard_key_press_detect('M'))
     {
         static u64 alloc_count = 0;
         u64 prev_alloc_count = alloc_count;
         alloc_count = memory_system_alloc_count();
 
         kdebug("Allocations: %llu (%llu this frame)", alloc_count, alloc_count - prev_alloc_count);
+    }
+
+    if(input_keyboard_key_press_detect('T'))
+    {
+        event_send(EVENT_CODE_DEBUG_0, inst, null);
     }
 
     if(input_is_keyboard_key_down(KEY_LEFT))

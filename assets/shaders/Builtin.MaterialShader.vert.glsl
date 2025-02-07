@@ -14,7 +14,7 @@ layout(push_constant) uniform push_constants {
     mat4 model;
 } u_push_constants;
 
-layout(location = 0) out int out_mode;
+// layout(location = 0) out int out_mode;
 
 // Data transfer object.
 layout(location = 1) out struct dto {

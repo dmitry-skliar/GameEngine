@@ -12,8 +12,11 @@
 
 #define BUILTIN_SHADER_NAME_OBJECT "Builtin.MaterialShader"
 
-bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shader* out_shader)
+bool vulkan_material_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader)
 {
+    // Копирование указателя текстуры по умолчанию.
+    out_shader->default_diffuse = default_diffuse;
+    
     // Инициализация шейдерного модуля на каждом этапе.
     char stage_type_strings[MATERIAL_SHADER_STAGE_COUNT][5] = {"vert", "frag"};
 
@@ -371,14 +374,14 @@ void vulkan_material_shader_update_object(vulkan_context* context, vulkan_materi
         u32* descriptor_generation = &object_state->descriptor_states[descriptor_index].generations[image_index];
 
         // Если текстура еще не загружена, используется значение по умолчанию.
-        // TODO: Определите, какое использование имеет текстура, и извлечение соответствующего значения
+        // TODO: Определить, какое использование имеет текстура, и извлечение соответствующего значения
         //       по умолчанию на основе этого.
-        // if(t->generation == INVALID_ID32)
-        // {
-        //     t = shader->default_diffuse;
-        //     // Сбросить генерацию дескриптора, используя текстуру по умолчанию.
-        //     *descriptor_generation = INVALID_ID32;
-        // }
+        if(t->generation == INVALID_ID32)
+        {
+            t = shader->default_diffuse;
+            // Сбросить генерацию дескриптора, используя текстуру по умолчанию.
+            *descriptor_generation = INVALID_ID32;
+        }
 
         // Сначала проверка, нужно ли обновить дескриптор.
         if(t && (*descriptor_generation != t->generation || *descriptor_generation == INVALID_ID32))
