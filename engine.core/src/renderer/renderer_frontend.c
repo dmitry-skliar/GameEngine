@@ -77,10 +77,14 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
             u64 index = (row * tex_dimension) + col;
             u64 index_bpp = index * bpp;
 
-            if(row % 2 == col % 2)
+            u64 colv = col % 128;
+            u64 rowv = row % 128;
+
+            if((colv > 63 && rowv < 64) || (colv < 64 && rowv > 63))
             {
-                pixels[index_bpp + 0] = 0;
-                pixels[index_bpp + 1] = 0;
+                pixels[index_bpp + 0] = 50;
+                pixels[index_bpp + 1] = 50;
+                pixels[index_bpp + 2] = 50;
             }
         }
     }

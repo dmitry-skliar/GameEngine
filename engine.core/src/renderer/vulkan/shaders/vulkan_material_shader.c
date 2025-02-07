@@ -301,6 +301,7 @@ void vulkan_material_shader_update_global_state(vulkan_context* context, vulkan_
 
     vkUpdateDescriptorSets(context->device.logical, 1, &descriptor_write, 0, null);
 
+    // NOTE: Использовать позднее связывание, если не поддерживается картой!
     // // Связывание глобального набор дескрипторов для обновления.
     // vkCmdBindDescriptorSets(
     //     command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline.layout, 0, 1, &global_descriptor, 0, null
