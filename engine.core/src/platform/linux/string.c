@@ -16,11 +16,15 @@
 
     bool platform_string_equal(const char* lstr, const char* rstr)
     {
+        if(lstr == rstr) return true;
+        if(!lstr || !rstr) return false;
         return strcmp(lstr, rstr) == 0;
     }
 
     bool platform_string_equali(const char* lstr, const char* rstr)
     {
+        if(lstr == rstr) return true;
+        if(!lstr || !rstr) return false;
         return strcasecmp(lstr, rstr) == 0;
     }
 

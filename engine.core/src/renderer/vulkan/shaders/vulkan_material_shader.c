@@ -10,7 +10,7 @@
 #include "math/kmath.h"
 #include "memory/memory.h"
 
-#define BUILTIN_SHADER_NAME_OBJECT "Builtin.MaterialShader"
+#define BUILTIN_SHADER_NAME_MATERIAL "Builtin.MaterialShader"
 
 bool vulkan_material_shader_create(vulkan_context* context, texture* default_diffuse, vulkan_material_shader* out_shader)
 {
@@ -27,10 +27,10 @@ bool vulkan_material_shader_create(vulkan_context* context, texture* default_dif
 
     for(u32 i = 0; i < MATERIAL_SHADER_STAGE_COUNT; ++i)
     {
-        bool result = vulkan_shader_module_create(context, BUILTIN_SHADER_NAME_OBJECT, stage_type_strings[i], stage_types[i], i, out_shader->stages);
+        bool result = vulkan_shader_module_create(context, BUILTIN_SHADER_NAME_MATERIAL, stage_type_strings[i], stage_types[i], i, out_shader->stages);
         if(!result)
         {
-            kerror("Unable to create %s shader model for '%s'.", stage_type_strings[i], BUILTIN_SHADER_NAME_OBJECT);
+            kerror("Unable to create %s shader model for '%s'.", stage_type_strings[i], BUILTIN_SHADER_NAME_MATERIAL);
             return false;
         }
     }
@@ -225,11 +225,11 @@ bool vulkan_material_shader_create(vulkan_context* context, texture* default_dif
         return false;
     }
 
-    // Создание единого буфер объектов.
+    // Создание uniform буфера объектов.
     if(!vulkan_buffer_create(
         context, sizeof(object_uniform_object) /* * MAX_MATERIAL_INSTANCE_COUNT, */, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
-        device_local_bit, true, &out_shader->object_uniform_buffer
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true, &out_shader->object_uniform_buffer
     ))
     {
         kerror("Function '%s': Failed to create material instance buffer.", __FUNCTION__);
@@ -304,8 +304,8 @@ void vulkan_material_shader_update_global_state(vulkan_context* context, vulkan_
 
     vkUpdateDescriptorSets(context->device.logical, 1, &descriptor_write, 0, null);
 
-    // NOTE: Использовать позднее связывание, если не поддерживается картой!
-    // // Связывание глобального набор дескрипторов для обновления.
+    // TODO: Использовать позднее связывание, если не поддерживается картой! Ввести проверку на поддержку!
+    // Связывание глобального набор дескрипторов для обновления.
     // vkCmdBindDescriptorSets(
     //     command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline.layout, 0, 1, &global_descriptor, 0, null
     // );

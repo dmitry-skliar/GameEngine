@@ -475,6 +475,11 @@ void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices
             }
         }
 
+        if(devices[i].memory_local_host_visible_support)
+        {
+            kdebug("[%2d] GPU local host visible memory support", i);
+        }
+
         if(devices[i].physical == context->device.physical)
         {
             gpu_index = i;

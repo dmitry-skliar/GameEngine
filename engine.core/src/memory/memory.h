@@ -32,12 +32,12 @@ typedef enum memory_tag {
     @param memory_requirement Указатель на переменную для получения требований к памяти.
     @param memory Указатель на выделенную память, для получения требований к памяти передать null.
 */
-void memory_system_initialize(u64* memory_requirement, void* memory);
+KAPI void memory_system_initialize(u64* memory_requirement, void* memory);
 
 /*
     @brief Останавливает систему менеджмента и контроля памяти.
 */
-void memory_system_shutdown();
+KAPI void memory_system_shutdown();
 
 /*
     @brief Запрашивает данные об использовании памяти в виде строки.

@@ -4,7 +4,7 @@
 
 #include <memory/allocators/linear_allocator.h>
 
-u8 linear_allocator_should_create_and_destroy()
+u8 linear_allocator_test1()
 {
     linear_allocator* allocator = linear_allocator_create(sizeof(u64));
     expect_pointer_should_not_be(null, allocator);
@@ -15,7 +15,7 @@ u8 linear_allocator_should_create_and_destroy()
     return true;
 }
 
-u8 linear_allocator_single_allocation_all_space()
+u8 linear_allocator_test2()
 {
     const u64 max_size = 1024;
     linear_allocator* allocator = linear_allocator_create(max_size * sizeof(u64));
@@ -40,7 +40,7 @@ u8 linear_allocator_single_allocation_all_space()
     return true;
 }
 
-u8 linear_allocator_multi_allocation_all_space()
+u8 linear_allocator_test3()
 {
     u64 max_size = 1024;
     linear_allocator* allocator = linear_allocator_create(max_size * sizeof(u64));
@@ -77,12 +77,12 @@ u8 linear_allocator_multi_allocation_all_space()
     return true;
 }
 
-u8 linear_allocator_multi_allocation_over_allocated()
+u8 linear_allocator_test4()
 {
     u64 memory_size      = 20 * sizeof(u64);
     u64 element_size     = 3  * sizeof(u64);
     u64 element_allocate = 6;
-    
+
     linear_allocator* allocator = linear_allocator_create(memory_size);
 
     void* block = null;
@@ -119,7 +119,7 @@ u8 linear_allocator_multi_allocation_over_allocated()
     return true;
 }
 
-u8 linear_allocator_multi_allocation_all_space_then_free()
+u8 linear_allocator_test5()
 {
     u64 max_size = 1024;
     linear_allocator* allocator = linear_allocator_create(max_size * sizeof(u64));
@@ -171,24 +171,22 @@ u8 linear_allocator_multi_allocation_all_space_then_free()
 void linear_allocator_register_tests()
 {
     test_managet_register_test(
-        linear_allocator_should_create_and_destroy, "Linear allocator should create and destroy."
+        linear_allocator_test1, "Linear allocator should create and destroy successfully."
     );
 
     test_managet_register_test(
-        linear_allocator_single_allocation_all_space, "Linear allocator single allocate for all space."
+        linear_allocator_test2, "Linear allocator should single allocate for all space successfully."
     );
-    
+
     test_managet_register_test(
-        linear_allocator_multi_allocation_all_space, "Linear allocator multi allocate for all space."
+        linear_allocator_test3, "Linear allocator should multi allocate for all space successfully."
     );
-    
+
     test_managet_register_test(
-        linear_allocator_multi_allocation_over_allocated, "Linear allocator try over allocate."
+        linear_allocator_test4, "Linear allocator should try over allocate successfully."
     );
-    
+
     test_managet_register_test(
-        linear_allocator_multi_allocation_all_space_then_free, 
-        "Lineat allocator allocated should be NULL after 'free all'."
+        linear_allocator_test5, "Lineat allocator allocated should not be NULL after 'free all' successfully."
     );
 }
-

@@ -3,18 +3,27 @@
 
 // Внешние подключения.
 #include <logger.h>
+#include <memory/memory.h>
 
 // Подключения тестов.
 #include "memory/linear_allocator_tests.h"
+#include "containers/hashtable_tests.h"
 
 int main()
 {
+    // Вуделение памяти и включение менеджера памяти.
+    u64 requirement;
+    memory_system_initialize(&requirement, null);
+    void* memory = kallocate(requirement, MEMORY_TAG_SYSTEM);
+    memory_system_initialize(&requirement, memory);
+
     // Инициализация менеджера тестирования.
     test_manager_init();
 
     // INFO: Регистрация тестов здесь.
     {
         linear_allocator_register_tests();
+        hashtable_register_tests();
     }
     // INFO: Конец регистрации тестов.
 
@@ -25,6 +34,10 @@ int main()
 
     // Завершение работы менеджера тестирования.
     test_manager_shutdown();
+
+    // Освобождение памяти и завершение работы менеджера.
+    memory_system_shutdown();
+    kfree(memory, requirement, MEMORY_TAG_SYSTEM);
 
     return 0;
 }
