@@ -35,7 +35,7 @@ typedef void (*PFN_window_handler_focus)(bool focused);
     @brief Создает экземпляр оконного приложения.
     @param memory_requirement Указатель на переменную для получения требований к памяти.
     @param instance Указатель на выделенную память экземпляра, для получения требований к памяти передать null.
-    @param config Указатель на конфигурацию создаваемого окна.
+    @param config Указатель на конфигурацию создаваемого окна, для получения требований может быть null.
     @return True операция завершена успешно, false в случае ошибок.
 */
 KAPI bool platform_window_create(u64* memory_requirement, window* instance, window_config* config);

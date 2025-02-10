@@ -13,6 +13,7 @@
 #include "input.h"
 #include "clock.h"
 #include "renderer/renderer_frontend.h"
+#include "systems/texture_system.h"
 
 typedef struct application_state {
     game* game_inst;
@@ -37,6 +38,9 @@ typedef struct application_state {
 
     u64 renderer_system_memory_requirement;
     void* renderer_system_state;
+
+    u64 texture_system_memory_requirement;
+    void* textute_system_state;
 
 } application_state;
 
@@ -75,30 +79,33 @@ bool application_create(game* game_inst)
     u64 systems_allocator_total_size = 64 * 1024 * 1024; // 64 Mb
     app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size);
 
-    // Подсистема контроля памяти.
+    // Система контроля памяти.
     memory_system_initialize(&app_state->memory_system_memory_requirement, null);
     app_state->memory_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->memory_system_memory_requirement);
     memory_system_initialize(&app_state->memory_system_memory_requirement, app_state->memory_system_state);
     kinfor("Memory system started.");
 
-    // Подсистема событий (должно быть инициализировано до создания окна приложения).
+    // Система событий (должно быть инициализировано до создания окна приложения).
     event_system_initialize(&app_state->event_system_memory_requirement, null);
     app_state->event_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->event_system_memory_requirement);
     event_system_initialize(&app_state->event_system_memory_requirement, app_state->event_system_state);
     kinfor("Event system started.");
 
     // TODO: Отвязать от системы событий!
-    // Подсистема ввода (должно быть инициализировано до создания окна приложения, но после системы событий - связаны).
+    // Система ввода (должно быть инициализировано до создания окна приложения, но после системы событий - связаны).
     input_system_initialize(&app_state->input_system_memory_requirement, null);
     app_state->input_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->input_system_memory_requirement);
     input_system_initialize(&app_state->input_system_memory_requirement, app_state->input_system_state);
     kinfor("Input system started.");
 
     // Создание окна приложения.
-    window_config wconfig = { game_inst->window_title, game_inst->window_width, game_inst->window_height };
+    window_config window_sys_config;
+    window_sys_config.title = game_inst->window_title;
+    window_sys_config.width = game_inst->window_width;
+    window_sys_config.height = game_inst->window_height;
     platform_window_create(&app_state->platform_window_memory_requirement, null, null);
     app_state->platform_window_state = linear_allocator_allocate(app_state->systems_allocator, app_state->platform_window_memory_requirement);
-    if(!platform_window_create(&app_state->platform_window_memory_requirement, app_state->platform_window_state, &wconfig))
+    if(!platform_window_create(&app_state->platform_window_memory_requirement, app_state->platform_window_state, &window_sys_config))
     {
         kerror("Failed to create window. Aborted!");
         return false;
@@ -114,7 +121,7 @@ bool application_create(game* game_inst)
     platform_window_set_on_mouse_wheel_handler(app_state->platform_window_state, application_on_mouse_wheel);
     platform_window_set_on_focus_handler(app_state->platform_window_state, application_on_focus);
 
-    // Подсистема визуализатора графики.
+    // Система визуализатора графики.
     renderer_system_initialize(&app_state->renderer_system_memory_requirement, null, null);
     app_state->renderer_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->renderer_system_memory_requirement);
     if(!renderer_system_initialize(&app_state->renderer_system_memory_requirement, app_state->renderer_system_state, app_state->platform_window_state))
@@ -122,14 +129,27 @@ bool application_create(game* game_inst)
         kerror("Failed to initialize renderer. Aborted!");
         return false;
     }
-    kinfor("Renderer started.");
+    kinfor("Renderer system started.");
+
+    // Система упавления текстурами.
+    texture_system_config texture_sys_config;
+    texture_sys_config.max_texture_count = 65536;
+    texture_system_initialize(&app_state->texture_system_memory_requirement, null, &texture_sys_config);
+    app_state->textute_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->texture_system_memory_requirement);
+    if(!texture_system_initialize(&app_state->texture_system_memory_requirement, app_state->textute_system_state, &texture_sys_config))
+    {
+        kerror("Failed to initialize texture system. Aborted!");
+        return false;
+    }
+    kinfor("Texture system started.");
 
     // Инициализация приложения пользователя (игры, 3d приложения).
     if(!game_inst->initialize(game_inst))
     {
-        kerror("Failed to initialize user application. Aborted!");
+        kerror("Failed to initialize game. Aborted!");
         return false;
     }
+    kinfor("Game initialized.");
 
     // Принудительное обновление размера окна.
     game_inst->on_resize(game_inst, game_inst->window_width, game_inst->window_height);
@@ -220,10 +240,14 @@ bool application_run()
             app_state->last_time = current_time;
         }
     }
+    kinfor("Game stopped.");
 
-    // Нормальное завершение работы.
+    // Нормальное завершение работы систем.
+    texture_system_shutdown();
+    kinfor("Texture system stopped.");
+
     renderer_system_shutdown();
-    kinfor("Renderer stopped.");
+    kinfor("Renderer system stopped.");
 
     platform_window_destroy(app_state->platform_window_state);
     kinfor("Platform window destroyed.");

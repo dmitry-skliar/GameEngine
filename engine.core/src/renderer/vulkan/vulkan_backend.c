@@ -267,7 +267,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     ktrace("Vulkan sync objects created.");
 
     // Создание шейдеров.
-    if(!vulkan_material_shader_create(context, backend->default_diffuse, &context->material_shader))
+    if(!vulkan_material_shader_create(context, &context->material_shader))
     {
         kerror("Function '%': Failed to load built-in basic lighting shader.", __FUNCTION__);
         return false;
@@ -608,6 +608,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
         default:
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
             kerror(callback_data->pMessage);
+            // TODO: Для целей отладки ошибок!
+            kdebug_break();
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
             kwarng(callback_data->pMessage);
@@ -888,21 +890,13 @@ void upload_data_range(
     vulkan_buffer_destroy(context, &staging);
 }
 
-void vulkan_renderer_backend_create_texture(
-    const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
-    bool has_transparency, texture* out_texture
-)
+void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels)
 {
-    out_texture->width = width;
-    out_texture->height = height;
-    out_texture->channel_count = channel_count;
-    out_texture->generation = INVALID_ID32;
-
     // Создание data.
     // TODO: Используется распределитель памяти тут.
-    out_texture->data = kallocate_tc(vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
-    vulkan_texture_data* data = out_texture->data;
-    VkDeviceSize image_size = width * height * channel_count;
+    texture->data = kallocate_tc(vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
+    vulkan_texture_data* data = texture->data;
+    VkDeviceSize image_size = texture->width * texture->height * texture->channel_count;
 
     // NOTE: Предполагается 8 бит на канал.
     VkFormat image_format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -917,7 +911,7 @@ void vulkan_renderer_backend_create_texture(
 
     // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
     vulkan_image_create(
-        context, VK_IMAGE_TYPE_2D, width, height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        context, VK_IMAGE_TYPE_2D, texture->width, texture->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
         &data->image
@@ -975,8 +969,8 @@ void vulkan_renderer_backend_create_texture(
         return;
     }
 
-    out_texture->has_transparency = has_transparency;
-    out_texture->generation++;
+    // TODO: При создании всегда INVALID_ID32!
+    texture->generation++;
 }
 
 void vulkan_renderer_backend_destroy_texture(texture* texture)

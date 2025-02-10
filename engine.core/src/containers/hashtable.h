@@ -5,13 +5,23 @@
 // @brief Экземпляр хэш-таблицы.
 typedef struct hashtable hashtable;
 
+// @brief Конфигурация хэш-таблицы.
+typedef struct hashtable_config {
+    // @brief Размер данных записи в байтах.
+    u64 data_size;
+    // @brief Количество записей таблицы.
+    u64 entry_count;
+} hashtable_config;
+
 /*
     @brief Создает хэш-таблицу фиксированного размера.
-    @param data_size Размер элемента в байтах.
-    @param data_count Количество элементов.
-    @return Указатель на хэш-таблицу, null если создать не удалось.
+    @brief memory_requirement Указатель на переменную для получения требований к памяти.
+    @param memory Указатель на выделенную память, для получения требований к памяти передать null.
+    @param config Конфигурация хэш-таблицы.
+    @param out_table Указатель на хэш-таблицу, null если создать не удалось.
+    @return True операция завершилась успешно, false операция завершилась неудачей.
 */
-KAPI hashtable* hashtable_create(u64 data_size, u64 data_count);
+KAPI bool hashtable_create(u64* memory_requirement, void* memory, hashtable_config* config, hashtable** out_table);
 
 /*
     @brief Уничтожает хэш-таблицу.

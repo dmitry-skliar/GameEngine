@@ -35,9 +35,6 @@ typedef struct renderer_backend {
 
     window* window_state;
 
-    // @brief Указатель на текстуру по умолчанию.
-    texture* default_diffuse;
-
     bool (*initialize)(struct renderer_backend* backend);
 
     void (*shutdown)(struct renderer_backend* backend);
@@ -52,10 +49,7 @@ typedef struct renderer_backend {
 
     void (*update_object)(geometry_render_data data);
 
-    void (*create_texture)(
-        const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
-        bool has_transparency, texture* out_texture
-    );
+    void (*create_texture)(texture* texture, const void* pixels);
 
     void (*destroy_texture)(texture* texture);
 

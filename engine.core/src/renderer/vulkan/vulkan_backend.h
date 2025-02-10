@@ -18,9 +18,6 @@ bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time
 
 void vulkan_renderer_backend_update_object(geometry_render_data data);
 
-void vulkan_renderer_backend_create_texture(
-    const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
-    bool has_transparency, texture* out_texture
-);
+void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels);
 
 void vulkan_renderer_backend_destroy_texture(texture* texture);

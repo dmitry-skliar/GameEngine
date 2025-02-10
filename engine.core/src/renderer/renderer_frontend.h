@@ -24,9 +24,6 @@ bool renderer_draw_frame(render_packet* packet);
 // HACK: Временно!
 KAPI void renderer_set_view(mat4 view);
 
-void renderer_create_texture(
-    const char* name, bool auto_release, i32 width, i32 height, i32 channel_count, const u8* pixels,
-    bool has_transparency, texture* out_texture
-);
+void renderer_create_texture(texture* texture, const void* pixels);
 
 void renderer_destroy_texture(texture* texture);

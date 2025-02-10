@@ -17,39 +17,56 @@ typedef struct hashentry {
 } hashentry;
 
 struct hashtable {
-    u64 size;
-    u64 capacity;
+    // Размер данных записи в байтах.
     u64 data_size;
+    // Размер записи в байтах.
     u64 entry_size;
+    // Количество записей в таблице.
+    u64 entry_count_total;
+    // Текущее количество записей в таблице.
+    u64 entry_count_current;
 };
 
 u64 hashtable_get_hash(const char* key);
 bool hashtable_found_entry(hashtable* table, const char* str, hashentry** out_entry);
 
-hashtable* hashtable_create(u64 data_size, u64 data_count)
+bool hashtable_create(u64* memory_requirement, void* memory, hashtable_config* config, hashtable** out_table)
 {
-    if(!data_size || !data_count)
+    if(!memory_requirement || !config)
     {
-        kerror("Function '%s' requires data size and count. Return null!", __FUNCTION__);
-        return null;
+        kerror("Function '%s' requires a valid pointers to memory_requirement and config. Return false!", __FUNCTION__);
+        return false;
     }
 
-    u64 entry_size = sizeof(hashentry) + data_size;
-    u64 total_size = sizeof(hashtable) + entry_size * data_count;
-    hashtable* table = kallocate(total_size, MEMORY_TAG_HASHTABLE);
-
-    if(!table)
+    if(!config->data_size || !config->entry_count)
     {
-        kerror("Function '%s': Failed to allocate memory. Return null!", __FUNCTION__);
-        return null;
+        kerror("Function '%s' requires data size and entry count. Return false!", __FUNCTION__);
+        return false;
     }
 
-    kzero(table, total_size);
-    table->capacity = data_count;
-    table->data_size = data_size;
+    u64 entry_size = sizeof(hashentry) + config->data_size;
+    *memory_requirement = sizeof(hashtable) + entry_size * config->entry_count;
+
+    if(!memory)
+    {
+        return true;
+    }
+
+    if(!out_table)
+    {
+        kerror("Function '%s' requires a valid pointer to save pointer of hashtable. Return false!", __FUNCTION__);
+        return false;
+    }
+
+    kzero(memory, *memory_requirement);
+    hashtable* table = memory;
+
+    table->data_size = config->data_size;
     table->entry_size = entry_size;
+    table->entry_count_total = config->entry_count;
 
-    return table;
+    *out_table = table;
+    return true;
 }
 
 void hashtable_destroy(hashtable* table)
@@ -60,18 +77,23 @@ void hashtable_destroy(hashtable* table)
         return;
     }
 
+    if(!table->entry_count_total)
+    {
+        kerror("Function '%s': hashtable is invalid or destroyed.", __FUNCTION__);
+        return;
+    }
+
     // Удаление строк.
     u8* first = (u8*)table + sizeof(hashtable);
 
-    for(u32 i = 0; i < table->capacity; ++i)
+    for(u32 i = 0; i < table->entry_count_total; ++i)
     {
-        hashentry* entry = (hashentry*)(first + i * table->entry_size);
+        hashentry* entry = (void*)(first + i * table->entry_size);
         if(entry->key) string_free(entry->key);
     }
 
-    // Освобождение памяти.
-    u64 total_size = sizeof(hashtable) + table->entry_size * table->capacity;
-    kfree(table, total_size, MEMORY_TAG_HASHTABLE);
+    // Освобождение памяти (где table->entry_count == 0 делает ее невозможной к использованию).
+    kzero_tc(table, hashtable, 1);
 }
 
 bool hashtable_set(hashtable* table, const char* name, const void* value, bool update)
@@ -82,9 +104,15 @@ bool hashtable_set(hashtable* table, const char* name, const void* value, bool u
         return false;
     }
 
-    if(table->size >= table->capacity)
+    if(!table->entry_count_total)
     {
-        kwarng("Function '%s': hashtable is crowded. Return false!", __FUNCTION__);
+        kerror("Function '%s': hashtable is invalid or destroyed. Return false!", __FUNCTION__);
+        return false;
+    }
+
+    if(table->entry_count_current >= table->entry_count_total)
+    {
+        kerror("Function '%s': hashtable is crowded. Return false!", __FUNCTION__);
         return false;
     }
 
@@ -111,7 +139,7 @@ bool hashtable_set(hashtable* table, const char* name, const void* value, bool u
     // Получение смещения данных записи, т.к. данные идут после hashentry.
     void* data = (u8*)entry + sizeof(hashentry);
     kcopy(data, value, table->data_size);
-    table->size++;
+    table->entry_count_current++;
 
     return true;
 }
@@ -124,12 +152,18 @@ bool hashtable_get(hashtable* table, const char* name, void* out_value)
         return false;
     }
 
+    if(!table->entry_count_total)
+    {
+        kerror("Function '%s': hashtable is invalid or destroyed. Return false!", __FUNCTION__);
+        return false;
+    }
+
     hashentry* entry = null;
 
     // Ничего не найдено или найдена пустая строка.
-    if(!table->size || !hashtable_found_entry(table, name, &entry) || !entry->key)
+    if(!table->entry_count_current || !hashtable_found_entry(table, name, &entry) || !entry->key)
     {
-        kwarng("Function '%s': entry not found. Return false!", __FUNCTION__);
+        // kwarng("Function '%s': entry not found. Return false!", __FUNCTION__);
         return false;
     }
 
@@ -157,23 +191,23 @@ bool hashtable_found_entry(hashtable* table, const char* str, hashentry** out_en
 {
     // Начальная инициализация.
     const u8* entry_first = (u8*)table + sizeof(hashtable);
-    u64 index = hashtable_get_hash(str) % table->capacity;
+    u64 index = hashtable_get_hash(str) % table->entry_count_total;
     hashentry* entry = (void*)(entry_first + index * table->entry_size);
     u64 distance = 0;
 
     // Поиск пустой строки или дубликата.
-    while(entry->key && distance < table->capacity)
+    while(entry->key && distance < table->entry_count_total)
     {
         if(string_equal(entry->key, str)) break;
 
         distance++;
         index++;
-        index %= table->capacity;
+        index %= table->entry_count_total;
         entry = (void*)(entry_first + index * table->entry_size);
     }
 
     // Ничего не найдено.
-    if(distance >= table->capacity)
+    if(distance >= table->entry_count_total)
     {
         *out_entry = null;
         return false;
