@@ -1,9 +1,7 @@
-// Own includies.
+#include "hashtable_tests.h"
 #include "test_manager.h"
 #include "expect.h"
-#include "hashtable_tests.h"
 
-// External incudies.
 #include <containers/hashtable.h>
 #include <memory/memory.h>
 #include <kstring.h>

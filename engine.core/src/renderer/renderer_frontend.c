@@ -42,7 +42,7 @@ bool event_on_debug_event(event_code code, void* sender, void* listener_inst, ev
     choice %= 3;
 
     // TODO: Будет ошибка загрузки, потому что test_diffuse не был ранее создан!
-    state_ptr->test_diffuse = texture_system_acquire(names[choice], false);
+    state_ptr->test_diffuse = texture_system_acquire(names[choice], true);
 
     texture_system_release(old_name);
 
