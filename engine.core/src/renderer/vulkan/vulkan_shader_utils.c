@@ -26,16 +26,16 @@ bool vulkan_shader_module_create(
         return false;
     }
 
-    u64 size = 0;
-    void* file_buffer = null;
+    u64 file_size = platform_file_size(handle);
+    void* file_buffer = kallocate(file_size, MEMORY_TAG_ARRAY);
 
-    if(!platform_file_reads(handle, &size, &file_buffer))
+    if(!platform_file_reads(handle, file_buffer, &file_size))
     {
         kerror("Function '%s': Unable to read shader module '%s'.", __FUNCTION__, filename);
         return false;
     }
 
-    shader_stage[stage_index].handleinfo.codeSize = size;
+    shader_stage[stage_index].handleinfo.codeSize = file_size;
     shader_stage[stage_index].handleinfo.pCode = (u32*)file_buffer;
 
     platform_file_close(handle);
@@ -61,8 +61,7 @@ bool vulkan_shader_module_create(
 
     if(file_buffer)
     {
-        // TODO: Временное и не красивое решение!
-        kfree(file_buffer, size, MEMORY_TAG_STRING);
+        kfree(file_buffer, file_size, MEMORY_TAG_ARRAY);
         file_buffer = null;
     }
 

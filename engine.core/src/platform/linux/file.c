@@ -14,6 +14,7 @@
 
     struct file {
         FILE* handle;
+        u64 size;
     };
 
     bool platform_file_exists(const char* path)
@@ -69,7 +70,14 @@
             return false;
         }
 
+        // Чтение размера файла.
+        fseek(file, 0, SEEK_END);
+        u64 filesize = ftell(file);
+        rewind(file);
+
+        // Сохранение информации о файле.
         (*out_file)->handle = file;
+        (*out_file)->size = filesize;
 
         return true;
     }
@@ -86,41 +94,40 @@
         kfree_tc(file, struct file, 1, MEMORY_TAG_STRING);
     }
 
-    bool platform_file_read_line(file* file, char** line_buf)
+    u64 platform_file_size(file* file)
     {
-        if(!file || !file->handle)
+        return file->size;
+    }
+
+    bool platform_file_read_line(file *file, u64 buffer_size, char* buffer, u64* out_length)
+    {
+        if(!file || !file->handle || !buffer || !buffer_size)
         {
-            kerror("Function '%s' requires a valid pointer to file.", __FUNCTION__);
+            kerror(
+                "Function '%s' requires a valid pointer to file, buffer and buffer size greater then zero.",
+                __FUNCTION__
+            );
             return false;
         }
 
-        char buffer[32000];
-        if(!fgets(buffer, 32000, file->handle))
+        if(!fgets(buffer, buffer_size, file->handle))
         {
             return false;
         }
 
-        u64 length = strlen(buffer) + 1;
-        *line_buf = kallocate_tc(char, length, MEMORY_TAG_STRING);
-        strcpy(*line_buf, buffer);
+        *out_length = strlen(buffer);
         return true;
     }
 
-    bool platform_file_write_line(file* file, const char* text)
+    bool platform_file_write_line(file* file, const char* string)
     {
-        if(!file || !file->handle)
+        if(!file || !file->handle || !string)
         {
-            kerror("Function '%s' requires a valid pointer to file.", __FUNCTION__);
-            return false;
-        }
-
-        if(!text)
-        {
-            kerror("Function '%s' requires a valid pointer to string.", __FUNCTION__);
+            kerror("Function '%s' requires a valid pointer to file and string.", __FUNCTION__);
             return false;
         }
         
-        i32 result = fputs(text, file->handle);
+        i32 result = fputs(string, file->handle);
         if(result != EOF)
         {
             result = fputc('\n', file->handle);
@@ -130,53 +137,41 @@
         return result != EOF;
     }
 
-    bool platfrom_file_read(file* file, u64 data_size, void* data)
+    bool platfrom_file_read(file* file, u64 buffer_size, void* buffer)
     {
-        if(!file || !file->handle)
+        if(!file || !file->handle || !buffer || !buffer_size)
         {
-            kerror("Function '%s' requires a valid pointer to file.", __FUNCTION__);
+            kerror(
+                "Function '%s' requires a valid pointer to file, buffer and buffer size greater than zero.",
+                __FUNCTION__
+            );
             return false;
         }
 
-        if(!data_size || !data)
-        {
-            kerror("Function '%s' requires a data size greater than zero and a pointer to data.", __FUNCTION__);
-            return false;
-        }
-
-        u64 read = fread(data, 1, data_size, file->handle);
-        return read == data_size ? true : false;
+        u64 size = fread(buffer, 1, buffer_size, file->handle);
+        return (size && size <= buffer_size) ? true : false;
     }
-    
-    bool platform_file_reads(file* file, u64* out_data_size, void** out_data)
+
+    bool platform_file_reads(file* file, void* buffer, u64* out_size)
     {
-        if(!file || !file->handle)
+        if(!file || !file->handle || !buffer || !out_size)
         {
-            kerror("Function '%s' requires a valid pointer to file.", __FUNCTION__);
+            kerror("Function '%s' requires a valid pointer to file, buffer and out_size.", __FUNCTION__);
             return false;
         }
 
-        // Получаем размер файла.
-        fseek(file->handle, 0, SEEK_END);
-        u64 size = ftell(file->handle);
-        rewind(file->handle);
-
-        *out_data = kallocate_tc(u8, size, MEMORY_TAG_STRING);
-        *out_data_size = fread(*out_data, 1, size, file->handle);
-        return size == *out_data_size ? true : false;
+        *out_size = fread(buffer, 1, file->size, file->handle);
+        return file->size == *out_size ? true : false;
     }
 
     bool platform_file_write(file* file, u64 data_size, const void* data)
     {
-        if(!file || !file->handle)
+        if(!file || !file->handle || !data || !data_size)
         {
-            kerror("Function '%s' requires a valid pointer to file.", __FUNCTION__);
-            return false;
-        }
-
-        if(!data_size || !data)
-        {
-            kerror("Function '%s' requires a data size greater than zero and a pointer to data.", __FUNCTION__);
+            kerror(
+                "Function '%s' requires a valid pointer to file, data and data size greater than zero.",
+                __FUNCTION__
+            );
             return false;
         }
 
