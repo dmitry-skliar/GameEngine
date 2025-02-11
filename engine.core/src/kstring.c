@@ -96,7 +96,7 @@ bool string_to_vec4(char* str, vec4* out_vector)
 
     kzero_tc(out_vector, vec4, 1);
     i32 result = platform_string_sscanf(
-        str, "%f %f %f %f", &out_vector->x, &out_vector->y, out_vector->z, &out_vector->w
+        str, "%f %f %f %f", &out_vector->x, &out_vector->y, &out_vector->z, &out_vector->w
     );
 
     return result > 0;
@@ -107,7 +107,7 @@ bool string_to_vec3(char* str, vec3* out_vector)
     if(!str) return false;
 
     kzero_tc(out_vector, vec3, 1);
-    i32 result = platform_string_sscanf(str, "%f %f %f", &out_vector->x, &out_vector->y, out_vector->z);
+    i32 result = platform_string_sscanf(str, "%f %f %f", &out_vector->x, &out_vector->y, &out_vector->z);
 
     return result > 0;
 }

@@ -14,13 +14,13 @@
 #include "vendor/stb_image.h"
 
 typedef struct texture_system_state {
-    // @breif Конфигурация менеджера текстур.
+    // @breif Конфигурация системы.
     texture_system_config config;
     // @brief Текстура по умолчанию.
     texture default_texture;
     // @brief Массив текстур.
     texture* textures;
-    // @brief Массив указателей на текстуры.
+    // @brief Таблица ссылок на текстуры.
     hashtable* texture_references_table;
 } texture_system_state;
 
@@ -40,6 +40,7 @@ static const char* message_not_initialized =
 bool default_textures_create();
 void default_textures_destroy();
 bool texture_load(const char* texture_name, texture* t);
+void texture_destroy(texture* t);
 
 bool texture_system_initialize(u64* memory_requirement, void* memory, texture_system_config* config)
 {
@@ -57,23 +58,22 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
 
     if(!config->max_texture_count)
     {
-        kerror("Function '%s': config.max_texture_config must be greater then zero. Return false!", __FUNCTION__);
+        kerror("Function '%s': config.max_texture_count must be greater then zero. Return false!", __FUNCTION__);
         return false;
     }
 
-    hashtable_config hashtable_config;
-    hashtable_config.data_size = sizeof(texture_reference);
-    hashtable_config.entry_count = config->max_texture_count;
+    hashtable_config hconf;
+    hconf.data_size = sizeof(texture_reference);
+    hconf.entry_count = config->max_texture_count;
 
     u64 state_requirement = sizeof(texture_system_state);
     u64 textures_requirement = sizeof(texture) * config->max_texture_count;
     u64 hashtable_requirement = 0;
-    hashtable_create(&hashtable_requirement, null, &hashtable_config, null);
+    hashtable_create(&hashtable_requirement, null, &hconf, null);
     *memory_requirement = state_requirement + textures_requirement + hashtable_requirement;
 
     if(!memory)
     {
-        ktrace("Function '%s': Memory requirements obtained. Return true!", __FUNCTION__);
         return true;
     }
 
@@ -90,7 +90,7 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
 
     // Получение и запись указателя на хэш-таблицу.
     void* hashtable_block = (void*)((u8*)textures_block + textures_requirement);
-    if(!hashtable_create(&hashtable_requirement, hashtable_block, &hashtable_config, &state_ptr->texture_references_table))
+    if(!hashtable_create(&hashtable_requirement, hashtable_block, &hconf, &state_ptr->texture_references_table))
     {
         kerror("Function '%s': Failed to create hashtable of references to textures.", __FUNCTION__);
         return false;
@@ -107,6 +107,7 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
     if(!default_textures_create())
     {
         kerror("Function '%s': Failed to create default textures.", __FUNCTION__);
+        return false;
     }
 
     return true;
@@ -129,7 +130,7 @@ void texture_system_shutdown()
         texture* t = &state_ptr->textures[i];
         if(t->generation != INVALID_ID32)
         {
-            renderer_destroy_texture(t);
+            texture_destroy(t);
         }
     }
 
@@ -239,12 +240,15 @@ void texture_system_release(const char* name)
     }
 
     texture_reference ref;
-    // TODO: Ошибка, т.к. текстура созданая без auto release будет иметь текстуру в памяти!
     if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.reference_count == 0)
     {
         kwarng("Function '%s': Tried to release non-existent texture '%s'.", __FUNCTION__, name);
         return;
     }
+
+    // Копия имени.
+    char name_copy[TEXTURE_NAME_MAX_LENGTH];
+    string_ncopy(name_copy, name, TEXTURE_NAME_MAX_LENGTH);
 
     ref.reference_count--;
 
@@ -252,13 +256,8 @@ void texture_system_release(const char* name)
     {
         texture* t = &state_ptr->textures[ref.index];
 
-        // Удаление текстуры.
-        renderer_destroy_texture(t);
-
-        // Освобождение памяти для новой текстуры.
-        kzero_tc(t, texture, 1);
-        t->id = INVALID_ID32;
-        t->generation = INVALID_ID32;
+        // Освобождение/восстановление памяти текстуры для новой.
+        texture_destroy(t);
 
         // Освобождение ссылки.
         ref.index = INVALID_ID32;
@@ -266,18 +265,19 @@ void texture_system_release(const char* name)
 
         ktrace(
             "Function '%s': Released texture '%s', because reference count is 0 and auto release used.",
-            __FUNCTION__, name 
+            __FUNCTION__, name_copy
         );
     }
     else
     {
-        ktrace("Function '%s': Released texture '%s', now has a reference count is %i and auto release is %s.",
-               __FUNCTION__, name, ref.reference_count, ref.auto_release ? "used" : "unused"
+        ktrace(
+            "Function '%s': Released texture '%s', now has a reference count is %i and auto release is %s.",
+            __FUNCTION__, name_copy, ref.reference_count, ref.auto_release ? "used" : "unused"
         );
     }
 
     // Обновление ссылки на текстуру.
-    if(!hashtable_set(state_ptr->texture_references_table, name, &ref, true))
+    if(!hashtable_set(state_ptr->texture_references_table, name_copy, &ref, true))
     {
         kerror("Function '%s' Failed to update texture reference.", __FUNCTION__);
     }
@@ -332,24 +332,24 @@ bool default_textures_create()
         }
     }
 
+    string_ncopy(state_ptr->default_texture.name, DEFAULT_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
     state_ptr->default_texture.width = tex_dimension;
     state_ptr->default_texture.height = tex_dimension;
     state_ptr->default_texture.channel_count = bpp;
     state_ptr->default_texture.has_transparency = false;
+    // TODO: Когда текстура отдается на создание сразу, то переключение текстур запаздывает!
+    //       Алгоритм шейдера!
+    state_ptr->default_texture.generation = INVALID_ID32;
 
     renderer_create_texture(&state_ptr->default_texture, pixels);
 
-    // Установка генерацию текстуры как недействительную, так как это текстура по умолчанию.
-    state_ptr->default_texture.generation = INVALID_ID32;
-
     kfree(pixels, pixels_size, MEMORY_TAG_TEXTURE);
-
     return true;
 }
 
 void default_textures_destroy()
 {
-    renderer_destroy_texture(&state_ptr->default_texture);
+    texture_destroy(&state_ptr->default_texture);
 }
 
 bool texture_load(const char* texture_name, texture* t)
@@ -368,15 +368,20 @@ bool texture_load(const char* texture_name, texture* t)
         required_channel_count
     );
 
-    // TODO: Реальное количество может не совпадать!
-    t->channel_count = required_channel_count;
-
-    // TODO: Если ошибка загрузки несуществующей текстуры, нужно сбрасывать ошибки.
     if(!data || stbi_failure_reason())
     {
         kwarng("Function '%s': Failed to load file '%s' with result: %s.", __FUNCTION__, full_file_path, stbi_failure_reason());
+        // Очистка ошибок stbi, что бы следующая текстура могла загрузиться.
+        stbi__err(0, 0);
         return false;
     }
+
+    // TODO: Реальное количество может не совпадать!
+    t->channel_count = required_channel_count;
+
+    // Копирование имени текстуры.
+    string_ncopy(t->name, texture_name, TEXTURE_NAME_MAX_LENGTH);
+    
 
     u64 total_size = t->width * t->height * required_channel_count;
 
@@ -392,10 +397,25 @@ bool texture_load(const char* texture_name, texture* t)
         }
     }
 
-    // Получение внутренних ресурсов текстуры и загрузка их в графический процессор.
+    // Текстура всегда новая.
+    t->generation = 0;
+
+    // Загрузка в графический процессор.
     renderer_create_texture(t, data);
 
     // Очистка данных.
     stbi_image_free(data);
     return true;
+}
+
+void texture_destroy(texture* t)
+{
+    // Удаление из памяти графического процессора.
+    renderer_destroy_texture(t);
+
+    // Освобождение памяти для новой текстуры.
+    // kzero_tc(t->name, char, TEXTURE_NAME_MAX_LENGTH);
+    kzero_tc(t, texture, 1);
+    t->id = INVALID_ID32;
+    t->generation = INVALID_ID32;
 }

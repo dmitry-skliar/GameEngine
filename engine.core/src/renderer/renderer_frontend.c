@@ -10,7 +10,9 @@
 
 // TODO: Временный тестовый код: начало.
 #include "event.h"
+#include "kstring.h"
 #include "systems/texture_system.h"
+#include "systems/material_system.h"
 // TODO: Временный тестовый код: конец.
 
 typedef struct renderer_system_state {
@@ -22,7 +24,7 @@ typedef struct renderer_system_state {
     f32 far_clip;
 
 // TODO: Временный тестовый код: начало.
-    texture* test_diffuse;
+    material* test_material;
 // TODO: Временный тестовый код: конец.
 } renderer_system_state;
 
@@ -34,15 +36,19 @@ static const char* message_not_initialized =
 bool event_on_debug_event(event_code code, void* sender, void* listener_inst, event_context* context)
 {
     const char* names[3] = { "cobblestone", "paving", "paving2" };
-    static i8 choice = 2;
+    static i8 choice = 1;
 
     const char* old_name = names[choice];
 
     choice++;
     choice %= 3;
 
-    // TODO: Будет ошибка загрузки, потому что test_diffuse не был ранее создан!
-    state_ptr->test_diffuse = texture_system_acquire(names[choice], true);
+    state_ptr->test_material->diffuse_map.texture = texture_system_acquire(names[choice], true);
+    if(!state_ptr->test_material->diffuse_map.texture)
+    {
+        kwarng("NO TEXTURE! Using default.");
+        state_ptr->test_material->diffuse_map.texture = texture_system_get_default_texture();
+    }
 
     texture_system_release(old_name);
 
@@ -59,7 +65,11 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     }
 
     *memory_requirement = sizeof(struct renderer_system_state);
-    if(!memory) return true;
+
+    if(!memory)
+    {
+        return true;
+    }
 
     kzero(memory, *memory_requirement);
     state_ptr = memory;
@@ -138,16 +148,28 @@ bool renderer_draw_frame(render_packet* packet)
         // angle += 0.01f;
         // quat rotation = quat_from_axis_angle(vec3_forward(), angle, false);
         // mat4 model = quat_to_rotation_matrix(rotation, vec3_zero());
-        geometry_render_data data = {0};
-        data.object_id = 0;
-        data.model = model;
 
-        if(!state_ptr->test_diffuse)
+        // Создает материал по умолчанию если не существует.
+        if(!state_ptr->test_material)
         {
-            state_ptr->test_diffuse = texture_system_get_default_texture();
+            state_ptr->test_material = material_system_acquire("test_material");
+
+            if(!state_ptr->test_material)
+            {
+                kwarng("Automatic material load failed, falling back to manual default material.");
+
+                material_config config;
+                string_ncopy(config.name, "test_material", MATERIAL_NAME_MAX_LENGTH);
+                config.auto_release = false;
+                config.diffuse_color = vec4_one();
+                string_ncopy(config.diffuse_map_name, DEFAULT_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
+                state_ptr->test_material = material_system_acquire_from_config(&config);
+            }
         }
 
-        data.textures[0] = state_ptr->test_diffuse;
+        geometry_render_data data = {0};
+        data.material = state_ptr->test_material;
+        data.model = model;
         state_ptr->backend.update_object(data);
         // TODO: Временный тестовый код: конец.
 
@@ -187,4 +209,14 @@ void renderer_create_texture(texture* texture, const void* pixels)
 void renderer_destroy_texture(texture* texture)
 {
     state_ptr->backend.destroy_texture(texture);
+}
+
+bool renderer_create_material(material* material)
+{
+    return state_ptr->backend.create_material(material);
+}
+
+void renderer_destroy_material(material* material)
+{
+    state_ptr->backend.destroy_material(material);
 }

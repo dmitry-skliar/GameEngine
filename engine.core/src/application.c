@@ -14,6 +14,7 @@
 #include "clock.h"
 #include "renderer/renderer_frontend.h"
 #include "systems/texture_system.h"
+#include "systems/material_system.h"
 
 typedef struct application_state {
     game* game_inst;
@@ -41,6 +42,9 @@ typedef struct application_state {
 
     u64 texture_system_memory_requirement;
     void* textute_system_state;
+
+    u64 material_system_memory_requirement;
+    void* material_system_state;
 
 } application_state;
 
@@ -143,6 +147,21 @@ bool application_create(game* game_inst)
     }
     kinfor("Texture system started.");
 
+    // Система управления материалами.
+    material_system_config material_sys_config;
+    material_sys_config.max_material_count = 4096;
+    material_system_initialize(&app_state->material_system_memory_requirement, null, &material_sys_config);
+    app_state->material_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->material_system_memory_requirement);
+    // NOTE: Как я заебался искать повреждение памяти, проблема была в том, неправильно передал: &app_state->material_system_state!!!!!
+    //       Случайно поставил символ '&'.
+    // TODO: Переделать без использования void*!
+    if(!material_system_initialize(&app_state->material_system_memory_requirement, app_state->material_system_state, &material_sys_config))
+    {
+        kerror("Failed to initialize material system. Aborted!");
+        return false;
+    }
+    kinfor("Material system started.");
+
     // Инициализация приложения пользователя (игры, 3d приложения).
     if(!game_inst->initialize(game_inst))
     {
@@ -159,8 +178,11 @@ bool application_create(game* game_inst)
 
 bool application_run()
 {
-    // Проверка вызова функции.
-    // kassert_debug(context != null, "Application context was not created. Please first call 'application_create'.");
+    if(!app_state)
+    {
+        kerror("Application context was not created. Call 'application_create' first.");
+        return false;
+    }
 
     app_state->is_running = true;
 
@@ -242,7 +264,9 @@ bool application_run()
     }
     kinfor("Game stopped.");
 
-    // Нормальное завершение работы систем.
+    material_system_shutdown();
+    kinfor("Material system stopped.");
+
     texture_system_shutdown();
     kinfor("Texture system stopped.");
 

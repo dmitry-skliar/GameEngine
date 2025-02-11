@@ -3,11 +3,11 @@
 #include <defines.h>
 #include <resources/resource_types.h>
 
+#define DEFAULT_TEXTURE_NAME "default"
+
 typedef struct texture_system_config {
     u32 max_texture_count;
 } texture_system_config;
-
-#define DEFAULT_TEXTURE_NAME "default"
 
 /*
 */

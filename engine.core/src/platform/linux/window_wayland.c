@@ -90,7 +90,11 @@
         // TODO: Защита от повтороного вызова для данного экземпляра!
 
         *memory_requirement = sizeof(struct window) + sizeof(struct platform_window_state);
-        if(!instance) return true;
+
+        if(!instance)
+        {
+            return true;
+        }
 
         kzero(instance, *memory_requirement);
         platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));

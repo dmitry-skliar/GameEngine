@@ -35,7 +35,11 @@ void memory_system_initialize(u64* memory_requirement, void* memory)
     }
 
     *memory_requirement = sizeof(struct memory_system_state);
-    if(!memory) return;
+
+    if(!memory)
+    {
+        return;
+    }
 
     platform_memory_zero(memory, *memory_requirement);
     state_ptr = memory;

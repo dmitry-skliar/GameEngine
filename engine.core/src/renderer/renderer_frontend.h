@@ -27,3 +27,7 @@ KAPI void renderer_set_view(mat4 view);
 void renderer_create_texture(texture* texture, const void* pixels);
 
 void renderer_destroy_texture(texture* texture);
+
+bool renderer_create_material(material* material);
+
+void renderer_destroy_material(material* material);

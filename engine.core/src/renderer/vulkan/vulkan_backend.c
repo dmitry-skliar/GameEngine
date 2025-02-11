@@ -322,13 +322,6 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
         &context->object_index_buffer, 0, sizeof(u32) * INDEX_COUNT, indices
     );
 
-    u32 object_id = 0;
-    if(!vulkan_material_shader_acquire_resources(context, &context->material_shader, &object_id))
-    {
-        kerror("Function '%s': Failed to acquire shader resources.", __FUNCTION__);
-        return false;
-    }
-
     // TODO: Временный тестовый код: конец.
 
     return true;
@@ -969,7 +962,6 @@ void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels
         return;
     }
 
-    // TODO: При создании всегда INVALID_ID32!
     texture->generation++;
 }
 
@@ -999,4 +991,40 @@ void vulkan_renderer_backend_destroy_texture(texture* texture)
     }
 
     kzero_tc(texture, struct texture, 1);
+}
+
+bool vulkan_renderer_backend_create_material(material* material)
+{
+    if(!material)
+    {
+        kerror("Function '%s' required a valid pointer to material. Return false!", __FUNCTION__);
+        return false;
+    }
+
+    if(!vulkan_material_shader_acquire_resources(context, &context->material_shader, material))
+    {
+        kerror("Function '%s': Failed to acquire shader resource. Return false!", __FUNCTION__);
+        return false;
+    }
+
+    return true;
+}
+
+void vulkan_renderer_backend_destroy_material(material* material)
+{
+    if(!material)
+    {
+        kerror("Function '%s' required a valid pointer to material. Just return!", __FUNCTION__);
+        return;
+    }
+
+    if(material->internal_id == INVALID_ID32)
+    {
+        kerror("Function '%s' called with material internal_id = INVALID_ID32. Nothing was done.", __FUNCTION__);
+        return;
+    }
+
+    // FIX: By VUID-vkFreeDescriptorSets-pDescriptorSets-00309.
+    vkDeviceWaitIdle(context->device.logical);
+    vulkan_material_shader_release_resources(context, &context->material_shader, material);
 }

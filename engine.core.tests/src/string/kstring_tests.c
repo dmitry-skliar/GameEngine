@@ -103,6 +103,18 @@ u8 string_test5()
     return true;
 }
 
+u8 string_test6()
+{
+    char buffer[1024];
+    char test_str[] = "this is a test string";
+    
+    char* p = string_ncopy(buffer, test_str, 512);
+    expect_pointer_should_be(buffer, p);
+    expect_should_be(sizeof(test_str) - 1, string_length(p));
+
+    return true;
+}
+
 // TODO: Добавить еще тесты.
 
 void string_register_tests()
@@ -112,4 +124,5 @@ void string_register_tests()
     test_managet_register_test(string_test3, "Function 'string_to_f32' should convert a string to value successfully.");
     test_managet_register_test(string_test4, "Function 'string_trim' should trimming a string successfully.");
     test_managet_register_test(string_test5, "Function 'string_mid' should successfully retrieve the substring.");
+    test_managet_register_test(string_test6, "Function 'string_ncopy' should copy the string successfully.");
 }

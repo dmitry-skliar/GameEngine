@@ -35,7 +35,11 @@ void event_system_initialize(u64* memory_requirement, void* memory)
     }
 
     *memory_requirement = sizeof(struct event_system_state);
-    if(!memory) return;
+
+    if(!memory)
+    {
+        return;
+    }
 
     kzero(memory, *memory_requirement);
     state_ptr = memory;
