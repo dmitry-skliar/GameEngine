@@ -53,6 +53,13 @@ KAPI char* string_duplicate(const char* str);
 KAPI void string_free(const char* str);
 
 /*
+    @brief Очищает строку установкой первого символа в '\0'.
+    @param str Указатель на строку.
+    @return Возвращает указатель на строку.
+*/
+KAPI char* string_empty(char* str);
+
+/*
     @brief Копирует строку полностью.
     NOTE: Память куда копируется строка должны быть больше на 1 символ.
     @param dest Указатель на память куда скопировать.

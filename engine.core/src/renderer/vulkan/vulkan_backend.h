@@ -16,7 +16,7 @@ void vulkan_renderer_update_global_state(mat4 projection, mat4 view, vec3 view_p
 
 bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time);
 
-void vulkan_renderer_backend_update_object(geometry_render_data data);
+void vulkan_renderer_backend_draw_geometry(geometry_render_data data);
 
 void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels);
 
@@ -25,3 +25,9 @@ void vulkan_renderer_backend_destroy_texture(texture* texture);
 bool vulkan_renderer_backend_create_material(material* material);
 
 void vulkan_renderer_backend_destroy_material(material* material);
+
+bool vulkan_renderer_backend_create_geometry(
+    geometry* geometry, u32 vertex_count, const vertex_3d* vertices, u32 index_count, const u32* indices
+);
+
+void vulkan_renderer_backend_destroy_geometry(geometry* geometry);

@@ -5,6 +5,7 @@
 
 #define TEXTURE_NAME_MAX_LENGTH 512
 #define MATERIAL_NAME_MAX_LENGTH 256
+#define GEOMETRY_NAME_MAX_LENGTH 256
 
 // @brief Данные текстуры.
 typedef struct texture {
@@ -36,3 +37,11 @@ typedef struct material {
     vec4 diffuse_color;
     texture_map diffuse_map;
 } material;
+
+typedef struct geometry {
+    u32 id;
+    u32 internal_id;
+    u32 generation;
+    char name[GEOMETRY_NAME_MAX_LENGTH];
+    material* material;
+} geometry;

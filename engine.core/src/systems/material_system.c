@@ -1,5 +1,6 @@
 // Собственные подключения.
 #include "systems/material_system.h"
+#include "systems/texture_system.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -8,7 +9,6 @@
 #include "containers/hashtable.h"
 #include "math/kmath.h"
 #include "renderer/renderer_frontend.h"
-#include "systems/texture_system.h"
 
 // TODO: Временно!
 #include "platform/file.h"
@@ -313,6 +313,17 @@ void material_system_release(const char* name)
     {
         kerror("Function '%s' Failed to update material reference.", __FUNCTION__);
     }
+}
+
+material* material_system_get_default()
+{
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return null;
+    }
+
+    return &state_ptr->default_material;
 }
 
 bool default_materials_create()

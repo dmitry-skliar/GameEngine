@@ -35,3 +35,7 @@ material* material_system_acquire_from_config(material_config* config);
 /*
 */
 void material_system_release(const char* name);
+
+/*
+*/
+material* material_system_get_default();

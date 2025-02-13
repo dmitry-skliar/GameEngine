@@ -8,13 +8,6 @@
 #include "math/kmath.h"
 #include "resources/resource_types.h"
 
-// TODO: Временный тестовый код: начало.
-#include "event.h"
-#include "kstring.h"
-#include "systems/texture_system.h"
-#include "systems/material_system.h"
-// TODO: Временный тестовый код: конец.
-
 typedef struct renderer_system_state {
     renderer_backend backend;
     mat4 projection;
@@ -22,39 +15,11 @@ typedef struct renderer_system_state {
     f32 fov_radians;
     f32 near_clip;
     f32 far_clip;
-
-// TODO: Временный тестовый код: начало.
-    material* test_material;
-// TODO: Временный тестовый код: конец.
 } renderer_system_state;
 
 static renderer_system_state* state_ptr = null;
 static const char* message_not_initialized =
     "Function '%s' requires the renderer system to be initialized. Call 'renderer_system_initialize' first.!";
-
-// TODO: Временный тестовый код: начало.
-bool event_on_debug_event(event_code code, void* sender, void* listener_inst, event_context* context)
-{
-    const char* names[3] = { "cobblestone", "paving", "paving2" };
-    static i8 choice = 1;
-
-    const char* old_name = names[choice];
-
-    choice++;
-    choice %= 3;
-
-    state_ptr->test_material->diffuse_map.texture = texture_system_acquire(names[choice], true);
-    if(!state_ptr->test_material->diffuse_map.texture)
-    {
-        kwarng("NO TEXTURE! Using default.");
-        state_ptr->test_material->diffuse_map.texture = texture_system_get_default_texture();
-    }
-
-    texture_system_release(old_name);
-
-    return true;
-}
-// TODO: Временный тестовый код: конец.
 
 bool renderer_system_initialize(u64* memory_requirement, void* memory, window* window_state)
 {
@@ -78,10 +43,6 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     // TODO: Сделать настраиваемым из приложения!
     renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, &state_ptr->backend);
     state_ptr->backend.window_state = window_state;
-
-    // TODO: Временный тестовый код: начало.
-    event_register(EVENT_CODE_DEBUG_0, state_ptr, event_on_debug_event);
-    // TODO: Временный тестовый код: конец.
 
     if(!state_ptr->backend.initialize(&state_ptr->backend))
     {
@@ -140,38 +101,13 @@ bool renderer_draw_frame(render_packet* packet)
 
     if(renderer_begin_frame(packet->delta_time))
     {
-        // TODO: Временный тестовый код: начало.
         state_ptr->backend.update_global_state(state_ptr->projection, state_ptr->view, vec3_zero(), vec4_one(), 0);
 
-        mat4 model = mat4_translation((vec3){{0, 0, 0}});
-        // static f32 angle = 0.0f;
-        // angle += 0.01f;
-        // quat rotation = quat_from_axis_angle(vec3_forward(), angle, false);
-        // mat4 model = quat_to_rotation_matrix(rotation, vec3_zero());
-
-        // Создает материал по умолчанию если не существует.
-        if(!state_ptr->test_material)
+        u32 count = packet->geometry_count;
+        for(u32 i = 0; i < count; ++i)
         {
-            state_ptr->test_material = material_system_acquire("test_material");
-
-            if(!state_ptr->test_material)
-            {
-                kwarng("Automatic material load failed, falling back to manual default material.");
-
-                material_config config;
-                string_ncopy(config.name, "test_material", MATERIAL_NAME_MAX_LENGTH);
-                config.auto_release = false;
-                config.diffuse_color = vec4_one();
-                string_ncopy(config.diffuse_map_name, DEFAULT_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
-                state_ptr->test_material = material_system_acquire_from_config(&config);
-            }
+            state_ptr->backend.draw_geometry(packet->geometries[i]);
         }
-
-        geometry_render_data data = {0};
-        data.material = state_ptr->test_material;
-        data.model = model;
-        state_ptr->backend.update_object(data);
-        // TODO: Временный тестовый код: конец.
 
         bool result = renderer_end_frame(packet->delta_time);
         if(!result)
@@ -219,4 +155,16 @@ bool renderer_create_material(material* material)
 void renderer_destroy_material(material* material)
 {
     state_ptr->backend.destroy_material(material);
+}
+
+bool renderer_create_geometry(
+    geometry* geometry, u32 vertex_count, const vertex_3d* vertices, u32 index_count, const u32* indices
+)
+{
+    return state_ptr->backend.create_geometry(geometry, vertex_count, vertices, index_count, indices);
+}
+
+void renderer_destroy_geometry(geometry* geometry)
+{
+    state_ptr->backend.destroy_geometry(geometry);
 }

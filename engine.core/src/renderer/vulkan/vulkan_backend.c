@@ -20,6 +20,7 @@
 #include "containers/darray.h"
 #include "kstring.h"
 #include "math/math_types.h"
+#include "systems/material_system.h"
 
 static vulkan_context* context = null;
 
@@ -44,9 +45,9 @@ bool swapchain_recreate(renderer_backend* backend);
 bool buffers_create(vulkan_context* context);
 void buffers_destroy(vulkan_context* context);
 void upload_data_range(
-    vulkan_context* context, VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset,
-    u64 size, void* data
+    VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset, u64 size, const void* data
 );
+void free_data_range(vulkan_buffer* buffer, u64 offset, u64 size);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 {
@@ -282,47 +283,11 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     }
     ktrace("Vulkan buffers created.");
 
-    // TODO: Временный тестовый код: начало.
-    #define VERT_COUNT 4
-    vertex_3d verts[VERT_COUNT];
-    kzero_tc(verts, vertex_3d, VERT_COUNT);
-
-    const f32 f = 10.0f;
-
-    verts[0].position.x = -0.5f * f;
-    verts[0].position.y = -0.5f * f;
-    verts[0].texcoord.x =  0.0f;
-    verts[0].texcoord.y =  0.0f;
-
-    verts[1].position.x =  0.5f * f;
-    verts[1].position.y =  0.5f * f;
-    verts[1].texcoord.x =  1.0f;
-    verts[1].texcoord.y =  1.0f;
-
-    verts[2].position.x = -0.5f * f;
-    verts[2].position.y =  0.5f * f;
-    verts[2].texcoord.x =  0.0f;
-    verts[2].texcoord.y =  1.0f;
-
-    verts[3].position.x =  0.5f * f;
-    verts[3].position.y = -0.5f * f;
-    verts[3].texcoord.x =  1.0f;
-    verts[3].texcoord.y =  0.0f;
-
-    #define INDEX_COUNT 6
-    u32 indices[INDEX_COUNT] = { 0, 1, 2, 0, 3, 1 };
-
-    upload_data_range(
-        context, context->device.graphics_queue.command_pool, null, context->device.graphics_queue.handle,
-        &context->object_vertex_buffer, 0, sizeof(vertex_3d) * VERT_COUNT, verts
-    );
-
-    upload_data_range(
-        context, context->device.graphics_queue.command_pool, null, context->device.graphics_queue.handle,
-        &context->object_index_buffer, 0, sizeof(u32) * INDEX_COUNT, indices
-    );
-
-    // TODO: Временный тестовый код: конец.
+    // Отметить все геометрии как недействительные.
+    for(u32 i = 0; i < VULKAN_MAX_GEOMETRY_COUNT; ++i)
+    {
+        context->geometries[i].id = INVALID_ID32;
+    }
 
     return true;
 }
@@ -568,27 +533,6 @@ bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time
     );
 
     return true;
-}
-
-void vulkan_renderer_backend_update_object(geometry_render_data data)
-{
-    vulkan_material_shader_update_object(context, &context->material_shader, data);
-
-    vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
-
-    // TODO: Временный тестовый код: начало.
-    vulkan_material_shader_use(context, &context->material_shader);
-
-    // Привязка буфера вершин co смещением.
-    VkDeviceSize offset[1] = {0};
-    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context->object_vertex_buffer.handle, offset);
-
-    // Привязка буфера индексов.
-    vkCmdBindIndexBuffer(command_buffer->handle, context->object_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
-
-    // Рисовать.
-    vkCmdDrawIndexed(command_buffer->handle, 6, 1, 0, 0, 0);
-    // TODO: Временный тестовый код: конец.
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
@@ -864,8 +808,7 @@ void buffers_destroy(vulkan_context* context)
 }
 
 void upload_data_range(
-    vulkan_context* context, VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset,
-    u64 size, void* data
+    VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset, u64 size, const void* data
 )
 {
     // Создание host-видимую память для загрузки на устройство.
@@ -881,6 +824,12 @@ void upload_data_range(
 
     // Уничтожение staging буфера.
     vulkan_buffer_destroy(context, &staging);
+}
+
+void free_data_range(vulkan_buffer* buffer, u64 offset, u64 size)
+{
+    // TODO: Освободить в буфере.
+    // TODO: Обновить freelist с этим диапазоном begin free.
 }
 
 void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels)
@@ -1024,7 +973,174 @@ void vulkan_renderer_backend_destroy_material(material* material)
         return;
     }
 
-    // FIX: By VUID-vkFreeDescriptorSets-pDescriptorSets-00309.
-    vkDeviceWaitIdle(context->device.logical);
     vulkan_material_shader_release_resources(context, &context->material_shader, material);
+}
+
+bool vulkan_renderer_backend_create_geometry(
+    geometry* geometry, u32 vertex_count, const vertex_3d* vertices, u32 index_count, const u32* indices
+)
+{
+    if(!vertex_count || !vertices)
+    {
+        kerror(
+            "Function '%s' requires vertex data, and none was supplied. vertex_count=%d, vertices=%p",
+            __FUNCTION__, vertex_count, vertices
+        );
+        return false;
+    }
+
+    // Проверка на повторную загрузку. Если это так, необходимо освободить старые данные после этого.
+    bool is_reupload = geometry->internal_id != INVALID_ID32;
+    vulkan_geometry_data old_range;
+
+    vulkan_geometry_data* internal_data = null;
+    if(is_reupload)
+    {
+        internal_data = &context->geometries[geometry->internal_id];
+        // Копия старого диапазона.
+        kcopy_tc(&old_range, internal_data, vulkan_geometry_data, 1);
+    }
+    else
+    {
+        for(u32 i = 0; i < VULKAN_MAX_GEOMETRY_COUNT; ++i)
+        {
+            if(context->geometries[i].id == INVALID_ID32)
+            {
+                // Поиск свободного индекса.
+                geometry->internal_id = i;
+                context->geometries[i].id = i;
+                internal_data = &context->geometries[i];
+                break;
+            }
+        }
+    }
+
+    if(!internal_data)
+    {
+        kerror(
+            "Function '%s': Failed to find a free index for a new geometry upload. Adjust config to allow for more.",
+            __FUNCTION__
+        );
+        return false;
+    }
+
+    VkCommandPool pool = context->device.graphics_queue.command_pool;
+    VkQueue queue = context->device.graphics_queue.handle;
+
+    // Данные вершин.
+    internal_data->vertex_buffer_offset = context->geometry_vertex_offset;
+    internal_data->vertex_count = vertex_count;
+    internal_data->vertex_size = sizeof(vertex_3d) * vertex_count;
+    upload_data_range(
+        pool, null, queue, &context->object_vertex_buffer, internal_data->vertex_buffer_offset,
+        internal_data->vertex_size, vertices
+    );
+    // TODO: Следует использовать freelist вместо этого.
+    context->geometry_vertex_offset += internal_data->vertex_size;
+
+    // Данные индексов, если поддерживается.
+    if(index_count && indices)
+    {
+        internal_data->index_buffer_offset = context->geometry_index_offset;
+        internal_data->index_count = index_count;
+        internal_data->index_size = sizeof(u32) * index_count;
+        upload_data_range(
+            pool, null, queue, &context->object_index_buffer, internal_data->index_buffer_offset,
+            internal_data->index_size, indices
+        );
+        // TODO: Следует использовать freelist вместо этого.
+        context->geometry_index_offset += internal_data->index_size;
+    }
+
+    if(internal_data->generation == INVALID_ID32)
+    {
+        internal_data->generation = 0;
+    }
+    else
+    {
+        internal_data->generation++;
+    }
+
+    if(is_reupload)
+    {
+        // Освобождение данных вершин.
+        free_data_range(&context->object_vertex_buffer, old_range.vertex_buffer_offset, old_range.vertex_size);
+
+        // Освобождение данных индексов, если доступно.
+        if(old_range.index_size > 0)
+        {
+            free_data_range(&context->object_index_buffer, old_range.index_buffer_offset, old_range.index_size);
+        }
+    }
+
+    return true;
+}
+
+void vulkan_renderer_backend_destroy_geometry(geometry* geometry)
+{
+    if(!geometry || geometry->internal_id == INVALID_ID32)
+    {
+        return;
+    }
+
+    vkDeviceWaitIdle(context->device.logical);
+    vulkan_geometry_data* internal_data = &context->geometries[geometry->internal_id];
+
+    // Освобождение данных вершин.
+    free_data_range(&context->object_vertex_buffer, internal_data->vertex_buffer_offset, internal_data->vertex_size);
+
+    // Освобождение данных индексов, если доступно.
+    if(internal_data->index_size > 0)
+    {
+        free_data_range(&context->object_index_buffer, internal_data->index_buffer_offset, internal_data->index_size);
+    }
+
+    // Освобождение диапазона для нового использования.
+    kzero_tc(internal_data, vulkan_geometry_data, 1);
+    internal_data->id = INVALID_ID32;
+    internal_data->generation = INVALID_ID32;
+}
+
+void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
+{
+    // Игнорирование не загруженных геометрий.
+    if(!data.geometry || data.geometry->internal_id == INVALID_ID32)
+    {
+        return;
+    }
+
+    vulkan_geometry_data* buffer_data = &context->geometries[data.geometry->internal_id];
+    vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
+
+    // TODO: Действительно ли тут нужно.
+    vulkan_material_shader_use(context, &context->material_shader);
+
+    vulkan_material_shader_set_model(context, &context->material_shader, &data.model);
+
+    material* m = data.geometry->material;
+    if(!m)
+    {
+        m = material_system_get_default();
+    }
+    vulkan_material_shader_apply_material(context, &context->material_shader, m);
+
+    // Привязка буфера вершин co смещением.
+    VkDeviceSize offset[1] = { buffer_data->vertex_buffer_offset };
+    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context->object_vertex_buffer.handle, offset);
+
+    if(buffer_data->index_count > 0)
+    {
+        // Привязка буфера индексов.
+        vkCmdBindIndexBuffer(
+            command_buffer->handle, context->object_index_buffer.handle, buffer_data->index_buffer_offset,
+            VK_INDEX_TYPE_UINT32
+        );
+        // Рисовать.
+        vkCmdDrawIndexed(command_buffer->handle, buffer_data->index_count, 1, 0, 0, 0);
+    }
+    else
+    {
+        // Рисовать.
+        vkCmdDraw(command_buffer->handle, buffer_data->vertex_count, 1, 0, 0);
+    }
 }

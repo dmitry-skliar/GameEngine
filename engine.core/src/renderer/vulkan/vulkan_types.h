@@ -177,8 +177,24 @@ typedef struct vulkan_material_shader_instance_state {
     vulkan_descriptor_state descriptor_states[VULKAN_MATERIAL_SHADER_DESCRIPTOR_COUNT];
 } vulkan_material_shader_instance_state;
 
-// Максимальное число объектов.
+// @brief Максимальное количество материальных экземпляров.
+// TODO: Сделать настраиваемым.
 #define VULKAN_MAX_MATERIAL_COUNT 1024
+
+// @brief Максимальное количество одновременно загружаемых геометрий.
+// TODO: Сделать настраиваемым.
+#define VULKAN_MAX_GEOMETRY_COUNT 4096
+
+typedef struct vulkan_geometry_data {
+    u32 id;
+    u32 generation;
+    u32 vertex_count;
+    u32 vertex_size;
+    u32 vertex_buffer_offset;
+    u32 index_count;
+    u32 index_size;
+    u32 index_buffer_offset;
+} vulkan_geometry_data;
 
 typedef struct vulkan_material_shader {
     // @brief Шаги шейдерных модулей: Vertex, Fragment.
@@ -223,6 +239,9 @@ typedef struct vulkan_context {
     vulkan_buffer object_vertex_buffer;
     u64 geometry_index_offset;
     vulkan_buffer object_index_buffer;
+
+    // TODO: Сделать динамическим размер.
+    vulkan_geometry_data geometries[VULKAN_MAX_GEOMETRY_COUNT];
 
     // @brief Графические коммандные буферы (используется darray).
     vulkan_command_buffer* graphics_command_buffers;

@@ -12,9 +12,15 @@
 #include "memory/allocators/linear_allocator.h"
 #include "input.h"
 #include "clock.h"
+#include "kstring.h"
 #include "renderer/renderer_frontend.h"
 #include "systems/texture_system.h"
 #include "systems/material_system.h"
+#include "systems/geometry_system.h"
+
+// TODO: Временный тестовый код: начало.
+#include "math/kmath.h"
+// TODO: Временный тестовый код: конец.
 
 typedef struct application_state {
     game* game_inst;
@@ -46,6 +52,13 @@ typedef struct application_state {
     u64 material_system_memory_requirement;
     void* material_system_state;
 
+    u64 geometry_system_memory_requirement;
+    void* geometry_system_state;
+
+    // TODO: Временный тестовый код: начало.
+    geometry* test_geometry;
+    // TODO: Временный тестовый код: конец.
+
 } application_state;
 
 static application_state* app_state = null;
@@ -57,6 +70,34 @@ void application_on_mouse_move(i32 x, i32 y);
 void application_on_keyboard_key(u32 keycode, bool pressed);
 void application_on_resize(i32 width, i32 height);
 void application_on_close();
+
+// TODO: Временный тестовый код: начало.
+bool event_on_debug_event(event_code code, void* sender, void* listener_inst, event_context* context)
+{
+    const char* names[3] = { "cobblestone", "paving", "paving2" };
+    static i8 choice = 1;
+
+    const char* old_name = names[choice];
+
+    choice++;
+    choice %= 3;
+
+    if(app_state->test_geometry)
+    {
+        app_state->test_geometry->material->diffuse_map.texture = texture_system_acquire(names[choice], true);
+        if(!app_state->test_geometry->material->diffuse_map.texture)
+        {
+            kwarng("Function '%s': Failed to load texture. Using default! ", __FUNCTION__);
+            app_state->test_geometry->material->diffuse_map.texture = texture_system_get_default_texture();
+        }
+
+        texture_system_release(old_name);
+    }
+
+    return true;
+}
+// TODO: Временный тестовый код: конец.
+
 
 bool application_create(game* game_inst)
 {
@@ -152,7 +193,7 @@ bool application_create(game* game_inst)
     material_sys_config.max_material_count = 4096;
     material_system_initialize(&app_state->material_system_memory_requirement, null, &material_sys_config);
     app_state->material_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->material_system_memory_requirement);
-    // NOTE: Как я заебался искать повреждение памяти, проблема была в том, неправильно передал: &app_state->material_system_state!!!!!
+    // NOTE: Как я ******** искать повреждение памяти, проблема была в том, неправильно передал: &app_state->material_system_state!!!!!
     //       Случайно поставил символ '&'.
     // TODO: Переделать без использования void*!
     if(!material_system_initialize(&app_state->material_system_memory_requirement, app_state->material_system_state, &material_sys_config))
@@ -161,6 +202,30 @@ bool application_create(game* game_inst)
         return false;
     }
     kinfor("Material system started.");
+
+    geometry_system_config geometry_sys_config;
+    geometry_sys_config.max_geometry_count = 4096;
+    geometry_system_initialize(&app_state->geometry_system_memory_requirement, null, &geometry_sys_config);
+    app_state->geometry_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->geometry_system_memory_requirement);
+    if(!geometry_system_initialize(&app_state->geometry_system_memory_requirement, app_state->geometry_system_state, &geometry_sys_config))
+    {
+        kerror("Failed to initialize geometry system. Aborted!");
+        return false;
+    }
+    kinfor("Geometry system started.");
+
+    // TODO: Временный тестовый код: начало.
+
+    // TODO: Где-то опять повреждения памяти.
+    geometry_config g_config = geometry_system_generate_plane_config(100.0f, 100.0f, 10, 10, 5.0f, 5.0f, "test geometry", "test_material");
+    app_state->test_geometry = geometry_system_acquire_from_config(&g_config, true);
+
+    kfree_tc(g_config.vertices, vertex_3d, g_config.vertex_count, MEMORY_TAG_ARRAY);
+    kfree_tc(g_config.indices, u32, g_config.index_count, MEMORY_TAG_ARRAY);
+
+    // app_state->test_geometry = geometry_system_get_default();
+    event_register(EVENT_CODE_DEBUG_0, null, event_on_debug_event);
+    // TODO: Временный тестовый код: конец.
 
     // Инициализация приложения пользователя (игры, 3d приложения).
     if(!game_inst->initialize(game_inst))
@@ -227,6 +292,16 @@ bool application_run()
             // TODO: Провести рефактор render_packet.
             render_packet packet;
             packet.delta_time = (f32)delta;
+
+            // TODO: Временный тестовый код: начало.
+            geometry_render_data test_render;
+            test_render.geometry = app_state->test_geometry;
+            test_render.model = mat4_identity();
+
+            packet.geometry_count = 1;
+            packet.geometries = &test_render;
+            // TODO: Временный тестовый код: конец.
+
             if(!renderer_draw_frame(&packet))
             {
                 kerror("Renderer failed draw frame, shutting down!");
@@ -264,6 +339,13 @@ bool application_run()
     }
     kinfor("Game stopped.");
 
+    // NOTE: Что бы исключить нежелательные эффекты!
+    input_system_shutdown();
+    kinfor("Input system stopped.");
+
+    geometry_system_shutdown();
+    kinfor("Geometry system stopped.");
+
     material_system_shutdown();
     kinfor("Material system stopped.");
 
@@ -275,9 +357,6 @@ bool application_run()
 
     platform_window_destroy(app_state->platform_window_state);
     kinfor("Platform window destroyed.");
-
-    input_system_shutdown();
-    kinfor("Input system stopped.");
 
     event_system_shutdown();
     kinfor("Event system stopped.");

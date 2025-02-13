@@ -228,8 +228,8 @@ bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shad
     // Создание uniform буфера объектов.
     if(!vulkan_buffer_create(
         context, sizeof(material_uniform_object) * VULKAN_MAX_MATERIAL_COUNT, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, device_local_bit | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        true, &out_shader->object_uniform_buffer
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        | device_local_bit, true, &out_shader->object_uniform_buffer
     ))
     {
         kerror("Function '%s': Failed to create material instance buffer.", __FUNCTION__);
@@ -311,15 +311,32 @@ void vulkan_material_shader_update_global_state(vulkan_context* context, vulkan_
     // );
 }
 
-void vulkan_material_shader_update_object(vulkan_context* context, vulkan_material_shader* shader, geometry_render_data data)
+void vulkan_material_shader_set_model(vulkan_context* context, vulkan_material_shader* shader, mat4* model)
 {
+    if(!context || !shader || !model)
+    {
+        kwarng("Function '%s' requires a valid pointers to context, shader and model. Just return!", __FUNCTION__);
+        return;
+    }
+
+    u32 image_index = context->image_index;
+    VkCommandBuffer command_buffer = context->graphics_command_buffers[image_index].handle;
+    vkCmdPushConstants(command_buffer, shader->pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), model);
+}
+
+void vulkan_material_shader_apply_material(vulkan_context* context, vulkan_material_shader* shader, material* material)
+{
+    if(!context || !shader || !material)
+    {
+        kwarng("Function '%s' requires a valid pointers to context, shader and material. Just return!", __FUNCTION__);
+        return;
+    }
+
     u32 image_index = context->image_index;
     VkCommandBuffer command_buffer = context->graphics_command_buffers[image_index].handle;
 
-    vkCmdPushConstants(command_buffer, shader->pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &data.model);
-
     // Получение данных о материалах.
-    vulkan_material_shader_instance_state* instance_state = &shader->instance_states[data.material->internal_id];
+    vulkan_material_shader_instance_state* instance_state = &shader->instance_states[material->internal_id];
     VkDescriptorSet object_descriptor_set = instance_state->descriptor_sets[image_index];
 
     // TODO: если необходимо обновить!
@@ -330,7 +347,7 @@ void vulkan_material_shader_update_object(vulkan_context* context, vulkan_materi
 
     // Дескриптор 0 - Uniform buffer.
     u32 range  = sizeof(material_uniform_object);
-    u64 offset = sizeof(material_uniform_object) * data.material->internal_id; // Также индекс в массиве.
+    u64 offset = sizeof(material_uniform_object) * material->internal_id; // Также индекс в массиве.
     material_uniform_object obo;
 
     // // TODO: Получить диффузный цвет из материала.
@@ -339,14 +356,14 @@ void vulkan_material_shader_update_object(vulkan_context* context, vulkan_materi
     // f32 s = (ksin(accumulator) + 1.0f) / 2.0f;  // Scale from -1, 1 to 0, 1.
     // obo.diffuse_color = vec4_create(s, s, s, 1.0f);
 
-    obo.diffuse_color = data.material->diffuse_color;
+    obo.diffuse_color = material->diffuse_color;
 
     // Загрузка данных в буфер.
     vulkan_buffer_load_data(context, &shader->object_uniform_buffer, offset, range, 0, &obo);
 
     // Выполнять только в том случае, если дескриптор еще не обновлен!
     u32* global_ubo_generation = &instance_state->descriptor_states[descriptor_index].generations[image_index];
-    if(*global_ubo_generation == INVALID_ID32 || *global_ubo_generation != data.material->generation)
+    if(*global_ubo_generation == INVALID_ID32 || *global_ubo_generation != material->generation)
     {
         VkDescriptorBufferInfo buffer_info;
         buffer_info.buffer = shader->object_uniform_buffer.handle;
@@ -364,7 +381,7 @@ void vulkan_material_shader_update_object(vulkan_context* context, vulkan_materi
         descriptor_count++;
 
         // Обновление генерации кадра. В этом случае это нужно только один раз, так как это буфер.
-        *global_ubo_generation = data.material->generation;
+        *global_ubo_generation = material->generation;
     }
     descriptor_index++;
 
@@ -378,7 +395,7 @@ void vulkan_material_shader_update_object(vulkan_context* context, vulkan_materi
         switch(use)
         {
             case TEXTURE_USE_MAP_DIFFUSE:
-                t = data.material->diffuse_map.texture;
+                t = material->diffuse_map.texture;
                 break;
             default:
                 kerror("Function '%s': Unable to bind sampler to unknown use.", __FUNCTION__);
@@ -482,6 +499,10 @@ void vulkan_material_shader_release_resources(vulkan_context* context, vulkan_ma
 {
     vulkan_material_shader_instance_state* instance_state = &shader->instance_states[material->internal_id];
     const u32 descriptor_set_count = 5; // TODO: image_count = 5!
+
+    // Дождаться завершения всех операций, использующих набор дескрипторов.
+    // FIX: By VUID-vkFreeDescriptorSets-pDescriptorSets-00309.
+    vkDeviceWaitIdle(context->device.logical);
 
     // Освобождение наборов дескрипторов объектов.
     VkResult result = vkFreeDescriptorSets(

@@ -63,7 +63,7 @@ void camera_pitch(game_state* state, f32 amount)
 
 bool game_initialize(game* inst)
 {
-    game_state* state = (game_state*)inst->state;
+    game_state* state = inst->state;
 
     state->camera_position = vec3_create(0, 0, 30.0f);
     state->camera_euler = vec3_zero();

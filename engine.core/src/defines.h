@@ -83,7 +83,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define U64_MAX 0xffffffffffffffff
 #define I64_MAX 0x7fffffffffffffff
 
-#define INVALID_ID64 U64_MAX
+// #define INVALID_ID64 U64_MAX
 #define INVALID_ID32 U32_MAX
 
 // Определение нулевого указателя.

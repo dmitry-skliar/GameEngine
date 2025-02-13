@@ -15,6 +15,15 @@ char* string_duplicate(const char* str)
     return newstr;
 }
 
+char* string_empty(char* str)
+{
+    if(str)
+    {
+        str[0] = '\0';
+    }
+    return str;
+}
+
 void string_free(const char* str)
 {
     if(!str) return;
@@ -23,6 +32,7 @@ void string_free(const char* str)
     kfree(str, length, MEMORY_TAG_STRING);
 }
 
+// TODO: Есть ли тут проблемы?
 char* string_trim(char* str)
 {
     if(!str) return null;
