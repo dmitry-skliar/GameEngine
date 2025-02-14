@@ -21,22 +21,26 @@ typedef enum vulkan_renderpass_state {
     VULKAN_RENDERPASS_STATE_NOT_ALLOCATED
 } vulkan_renderpass_state;
 
+typedef enum renderpass_clear_flag {
+    RENDERPASS_CLEAR_NONE_FLAG           = 0x0,
+    RENDERPASS_CLEAR_COLOR_BUFFER_FLAG   = 0x1,
+    RENDERPASS_CLEAR_DEPTH_BUFFER_FLAG   = 0x2,
+    RENDERPASS_CLEAR_STENCIL_BUFFER_FLAG = 0x4,
+} renderpass_clear_flag;
+
 typedef struct vulkan_renderpass {
     VkRenderPass handle;
-    f32 x, y, w, h;
-    f32 r, g, b, a;
+    vec4 render_area;
+    vec4 clear_color;
+    bool do_clear_color;
+    bool do_clear_depth;
+    bool do_clear_stencil;
+    bool has_prev_pass;
+    bool has_next_pass;
     f32 depth;
     f32 stencil;
     vulkan_renderpass_state state;
 } vulkan_renderpass;
-
-typedef struct vulkan_framebuffer {
-    VkFramebuffer handle;
-    u32 attachment_count;
-    // @brief Буферы представлений изображений (используется darray).
-    VkImageView* attachments;
-    vulkan_renderpass* renderpass;
-} vulkan_framebuffer;
 
 typedef struct vulkan_buffer {
     u64 total_size;
@@ -64,7 +68,7 @@ typedef struct vulkan_swapchain {
     // @brief Буфер глубины.
     vulkan_image depth_attachment;
     // @brief Кадровые буферы для визуализации на экране (используется darray).
-    vulkan_framebuffer* framebuffers;
+    VkFramebuffer framebuffers[5]; // TODO: image_count == 5!
 } vulkan_swapchain;
 
 typedef enum vulkan_command_buffer_state {
@@ -143,11 +147,6 @@ typedef struct vulkan_device {
     VkFormat depth_format;
 } vulkan_device;
 
-typedef struct vulkan_fence {
-    VkFence handle;
-    bool is_signaled;
-} vulkan_fence;
-
 typedef struct vulkan_shader_stage {
     VkShaderModule handle;
     VkShaderModuleCreateInfo handleinfo;
@@ -196,6 +195,23 @@ typedef struct vulkan_geometry_data {
     u32 index_buffer_offset;
 } vulkan_geometry_data;
 
+typedef struct vulkan_material_shader_global_ubo {
+    mat4 projection;       // 64 bytes.
+    mat4 view;             // 64 bytes.
+    mat4 m_reserved[2];    // 128 bytes зарезервировано.
+} vulkan_material_shader_global_ubo;
+
+typedef struct vulkan_material_shader_instance_ubo {
+    vec4 diffuse_color;    // 16 bytes.
+    vec4 m_reserved[3];    // 48 bytes.
+} vulkan_material_shader_instance_ubo;
+
+// TODO: Временно.
+typedef enum vulkan_shader_type {
+    VULKAN_SHADER_TYPE_MATERIAL,
+    VULKAN_SHADER_TYPE_UI
+} vulkan_shader_type;
+
 typedef struct vulkan_material_shader {
     // @brief Шаги шейдерных модулей: Vertex, Fragment.
     vulkan_shader_stage stages[MATERIAL_SHADER_STAGE_COUNT];
@@ -203,7 +219,7 @@ typedef struct vulkan_material_shader {
     VkDescriptorPool global_descriptor_pool;
     VkDescriptorSetLayout global_descriptor_set_layout;
     VkDescriptorSet global_descriptor_sets[5]; // TODO: Потому что image_count = 5 (временно)!
-    global_uniform_object global_ubo;
+    vulkan_material_shader_global_ubo global_ubo;
     vulkan_buffer global_uniform_buffer;
 
     VkDescriptorPool object_descriptor_pool;
@@ -218,6 +234,9 @@ typedef struct vulkan_material_shader {
     vulkan_material_shader_instance_state instance_states[VULKAN_MAX_MATERIAL_COUNT];
 
     vulkan_pipeline pipeline;
+
+    // TODO: Временно.
+    vulkan_shader_type shader_type;    
 } vulkan_material_shader;
 
 typedef struct vulkan_context {
@@ -232,8 +251,10 @@ typedef struct vulkan_context {
     VkSurfaceKHR surface;
     VkDebugUtilsMessengerEXT debug_messenger;
     vulkan_device device;
+
     vulkan_swapchain swapchain;
     vulkan_renderpass main_renderpass;
+    vulkan_renderpass ui_renderpass;
 
     u64 geometry_vertex_offset;
     vulkan_buffer object_vertex_buffer;
@@ -250,13 +271,17 @@ typedef struct vulkan_context {
     // @brief Завершение визуализации (используется darray).
     VkSemaphore* queue_complete_semaphores;
     u32 in_flight_fence_count;
-    vulkan_fence* in_flight_fences;
+    VkFence in_flight_fences[4];
     // Содержит указатели на существующие ограждения, принадлежащие кому-то другому.
-    vulkan_fence** images_in_flight;
+    VkFence images_in_flight[5]; // TODO: Потому что image_count = 5 (временно)!
     u32 image_index;
     u32 current_frame;
     bool recreating_swapchain;
     vulkan_material_shader material_shader;
+    vulkan_material_shader ui_shader;
+
+    // Кадровые буферы используются для визуализации мире на кадр.
+    VkFramebuffer world_framebuffers[5]; // TODO: Потому что image_count == 5!
 
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;

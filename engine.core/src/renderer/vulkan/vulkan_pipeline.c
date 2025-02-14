@@ -8,11 +8,11 @@
 #include "math/math_types.h"
 
 bool vulkan_graphics_pipeline_create(
-    vulkan_context* context, vulkan_renderpass* renderpass, u32 attribute_count, 
+    vulkan_context* context, vulkan_renderpass* renderpass, u32 stride, u32 attribute_count, 
     VkVertexInputAttributeDescription* attributes, u32 descriptor_set_layout_count, 
     VkDescriptorSetLayout* descriptor_set_layouts, u32 stage_count,
     VkPipelineShaderStageCreateInfo* stages, VkViewport viewport,
-    VkRect2D scissor, bool is_wireframe, vulkan_pipeline* out_pipeline
+    VkRect2D scissor, bool is_wireframe, bool depth_test_enabled, vulkan_pipeline* out_pipeline
 )
 {
     // Область экрана.
@@ -46,11 +46,14 @@ bool vulkan_graphics_pipeline_create(
 
     // Тестирование глубины и трафарета.
     VkPipelineDepthStencilStateCreateInfo depth_stencil_info = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-    depth_stencil_info.depthTestEnable = VK_TRUE;
-    depth_stencil_info.depthWriteEnable = VK_TRUE;
-    depth_stencil_info.depthCompareOp = VK_COMPARE_OP_LESS;
-    depth_stencil_info.depthBoundsTestEnable = VK_FALSE;
-    depth_stencil_info.stencilTestEnable = VK_FALSE;
+    if(depth_test_enabled)
+    {
+        depth_stencil_info.depthTestEnable = VK_TRUE;
+        depth_stencil_info.depthWriteEnable = VK_TRUE;
+        depth_stencil_info.depthCompareOp = VK_COMPARE_OP_LESS;
+        depth_stencil_info.depthBoundsTestEnable = VK_FALSE;
+        depth_stencil_info.stencilTestEnable = VK_FALSE;
+    }
 
     // Смешивание цветов: цвета из фрагментного шейдера смешиваются с цветом из буфера.
     VkPipelineColorBlendAttachmentState color_blend_attachment_state;
@@ -88,7 +91,7 @@ bool vulkan_graphics_pipeline_create(
     // В шейдере это строка layout(location = 0) in vec3 in_position; - атрибут!
     VkVertexInputBindingDescription binding_description = {0};
     binding_description.binding = 0; // Индекс привязки.
-    binding_description.stride = sizeof(vertex_3d);
+    binding_description.stride = stride; //sizeof(vertex_3d);
     binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Переход к следующей записи данных для каждой вершины.
 
     // Выршинный шейдер: передаваемые атрибуты и привязки.
@@ -132,7 +135,7 @@ bool vulkan_graphics_pipeline_create(
     pipeline_info.pViewportState = &viewport_stage;
     pipeline_info.pRasterizationState = &rasterizer_info;
     pipeline_info.pMultisampleState = &multisampling_info;
-    pipeline_info.pDepthStencilState = &depth_stencil_info;
+    pipeline_info.pDepthStencilState = depth_test_enabled ? &depth_stencil_info : null;
     pipeline_info.pColorBlendState = &color_blend_state_info;
     pipeline_info.pDynamicState = &dynamic_state_info;
     pipeline_info.pTessellationState = null;

@@ -11,8 +11,9 @@
 #include "systems/texture_system.h"
 
 #define BUILTIN_SHADER_NAME_MATERIAL "Builtin.MaterialShader"
+#define BUILTIN_SHADER_NAME_UI "Builtin.UIShader"
 
-bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shader* out_shader)
+bool vulkan_material_shader_create(vulkan_context* context, vulkan_shader_type type, vulkan_material_shader* out_shader)
 {
     // Инициализация шейдерного модуля на каждом этапе.
     char stage_type_strings[MATERIAL_SHADER_STAGE_COUNT][5] = {"vert", "frag"};
@@ -22,12 +23,25 @@ bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shad
         VK_SHADER_STAGE_FRAGMENT_BIT
     };
 
+    // TODO: Временно.
+    out_shader->shader_type = type;
+    const char* builtin_name;
+    switch(type)
+    {
+        case VULKAN_SHADER_TYPE_MATERIAL:
+            builtin_name = BUILTIN_SHADER_NAME_MATERIAL;
+            break;
+        case VULKAN_SHADER_TYPE_UI:
+            builtin_name = BUILTIN_SHADER_NAME_UI;
+            break;
+    }
+
     for(u32 i = 0; i < MATERIAL_SHADER_STAGE_COUNT; ++i)
     {
-        bool result = vulkan_shader_module_create(context, BUILTIN_SHADER_NAME_MATERIAL, stage_type_strings[i], stage_types[i], i, out_shader->stages);
+        bool result = vulkan_shader_module_create(context, builtin_name, stage_type_strings[i], stage_types[i], i, out_shader->stages);
         if(!result)
         {
-            kerror("Unable to create %s shader model for '%s'.", stage_type_strings[i], BUILTIN_SHADER_NAME_MATERIAL);
+            kerror("Unable to create %s shader model for '%s'.", stage_type_strings[i], builtin_name);
             return false;
         }
     }
@@ -146,15 +160,24 @@ bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shad
     VkVertexInputAttributeDescription attribute_descriptions[ATTRIBUTE_COUNT];
 
     // Позиция, текстурные координаты.
-    VkFormat formats[ATTRIBUTE_COUNT] = {
-        VK_FORMAT_R32G32B32_SFLOAT,
-        VK_FORMAT_R32G32_SFLOAT,
-    };
+    VkFormat formats[ATTRIBUTE_COUNT]; //= { VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R32G32_SFLOAT };
+    u64 sizes[ATTRIBUTE_COUNT]; //= { sizeof(vec3), sizeof(vec2) };
 
-    u64 sizes[ATTRIBUTE_COUNT] = {
-        sizeof(vec3),
-        sizeof(vec2),
-    };
+    switch(type)
+    {
+        case VULKAN_SHADER_TYPE_MATERIAL:
+            formats[0] = VK_FORMAT_R32G32B32_SFLOAT;
+            formats[1] = VK_FORMAT_R32G32_SFLOAT;
+            sizes[0] = sizeof(vec3);
+            sizes[1] = sizeof(vec2);
+            break;
+        case VULKAN_SHADER_TYPE_UI:
+            formats[0] = VK_FORMAT_R32G32_SFLOAT;
+            formats[1] = VK_FORMAT_R32G32_SFLOAT;
+            sizes[0] = sizeof(vec2);
+            sizes[1] = sizeof(vec2);
+            break;
+    }
 
     // В шейдере это строка layout(location = 0) in vec3 in_position; - атрибут!
     for(u32 i = 0; i < ATTRIBUTE_COUNT; ++i)
@@ -177,15 +200,34 @@ bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shad
     VkPipelineShaderStageCreateInfo stage_infos[MATERIAL_SHADER_STAGE_COUNT];
     kzero_tc(stage_infos, stage_infos, 1);
 
+    // TODO: Заменить на kcopy!
     for(u32 i = 0; i < MATERIAL_SHADER_STAGE_COUNT; ++i)
     {
         stage_infos[i] = out_shader->stages[i].pipelineinfo;
     }
 
+    vulkan_renderpass* renderpass;
+    u32 stride;
+    bool depth_test;
+    switch(type)
+    {
+        case VULKAN_SHADER_TYPE_MATERIAL:
+            renderpass = &context->main_renderpass;
+            stride = sizeof(vertex_3d);
+            depth_test = true;
+            break;
+        case VULKAN_SHADER_TYPE_UI:
+            renderpass = &context->ui_renderpass;
+            stride = sizeof(vertex_2d);
+            depth_test = false;
+            break;
+    }
+
     // Создание графического конвейера.
     if(!vulkan_graphics_pipeline_create(
-        context, &context->main_renderpass, ATTRIBUTE_COUNT, attribute_descriptions, DESCRIPTOR_SET_LAYOUT_COUNT,
-        layouts, MATERIAL_SHADER_STAGE_COUNT, stage_infos, viewport, scissor, false, &out_shader->pipeline
+        context, renderpass, stride, ATTRIBUTE_COUNT, attribute_descriptions,
+        DESCRIPTOR_SET_LAYOUT_COUNT, layouts, MATERIAL_SHADER_STAGE_COUNT, stage_infos, viewport, scissor,
+        false, depth_test, &out_shader->pipeline
     ))
     {
         kerror("Function '%s': Failed to load graphics pipeline for material shader.", __FUNCTION__);
@@ -195,7 +237,7 @@ bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shad
     // Создание глобального uniform buffer.
     u32 device_local_bit = context->device.memory_local_host_visible_support ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : 0;
     if(!vulkan_buffer_create( // TODO: image_index = 5, позже сделать универсальный метод!
-        context, sizeof(global_uniform_object)/* * 5 */, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+        context, sizeof(vulkan_material_shader_global_ubo)/* * 5 */, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | device_local_bit, 
         true, &out_shader->global_uniform_buffer
     ))
@@ -227,7 +269,7 @@ bool vulkan_material_shader_create(vulkan_context* context, vulkan_material_shad
 
     // Создание uniform буфера объектов.
     if(!vulkan_buffer_create(
-        context, sizeof(material_uniform_object) * VULKAN_MAX_MATERIAL_COUNT, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        context, sizeof(vulkan_material_shader_instance_ubo) * VULKAN_MAX_MATERIAL_COUNT, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
         | device_local_bit, true, &out_shader->object_uniform_buffer
     ))
@@ -282,8 +324,8 @@ void vulkan_material_shader_update_global_state(vulkan_context* context, vulkan_
     );
 
     // Настройка дескрипторов для указанного индекса.
-    u32 range = sizeof(global_uniform_object);
-    u64 offset = 0; // sizeof(global_uniform_object) * image_index;
+    u32 range = sizeof(vulkan_material_shader_global_ubo);
+    u64 offset = 0; // sizeof(vulkan_material_shader_global_ubo) * image_index;
 
     // Копирование данных в буфер.
     vulkan_buffer_load_data(context, &shader->global_uniform_buffer, offset, range, 0, &shader->global_ubo);
@@ -346,20 +388,15 @@ void vulkan_material_shader_apply_material(vulkan_context* context, vulkan_mater
     u32 descriptor_index = 0;
 
     // Дескриптор 0 - Uniform buffer.
-    u32 range  = sizeof(material_uniform_object);
-    u64 offset = sizeof(material_uniform_object) * material->internal_id; // Также индекс в массиве.
-    material_uniform_object obo;
+    u32 range  = sizeof(vulkan_material_shader_instance_ubo);
+    u64 offset = sizeof(vulkan_material_shader_instance_ubo) * material->internal_id; // Также индекс в массиве.
+    vulkan_material_shader_instance_ubo instance_ubo;
 
-    // // TODO: Получить диффузный цвет из материала.
-    // static f32 accumulator = 0.0f;
-    // accumulator += context->frame_delta_time;
-    // f32 s = (ksin(accumulator) + 1.0f) / 2.0f;  // Scale from -1, 1 to 0, 1.
-    // obo.diffuse_color = vec4_create(s, s, s, 1.0f);
-
-    obo.diffuse_color = material->diffuse_color;
+    // Установка диффузного цвет из материала.
+    instance_ubo.diffuse_color = material->diffuse_color;
 
     // Загрузка данных в буфер.
-    vulkan_buffer_load_data(context, &shader->object_uniform_buffer, offset, range, 0, &obo);
+    vulkan_buffer_load_data(context, &shader->object_uniform_buffer, offset, range, 0, &instance_ubo);
 
     // Выполнять только в том случае, если дескриптор еще не обновлен!
     u32* global_ubo_generation = &instance_state->descriptor_states[descriptor_index].generations[image_index];
@@ -406,7 +443,7 @@ void vulkan_material_shader_apply_material(vulkan_context* context, vulkan_mater
         u32* descriptor_id = &instance_state->descriptor_states[descriptor_index].ids[image_index];
 
         // Если текстура еще не загружена, используется значение по умолчанию.
-        if(t->generation == INVALID_ID)
+        if(!t || t->generation == INVALID_ID)
         {
             t = texture_system_get_default_texture();
             // Сбросить генерацию дескриптора, используя текстуру по умолчанию.

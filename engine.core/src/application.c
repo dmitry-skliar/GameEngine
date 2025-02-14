@@ -12,7 +12,6 @@
 #include "memory/allocators/linear_allocator.h"
 #include "input.h"
 #include "clock.h"
-#include "kstring.h"
 #include "renderer/renderer_frontend.h"
 #include "systems/texture_system.h"
 #include "systems/material_system.h"
@@ -317,6 +316,9 @@ bool application_run()
 
             packet.geometry_count = 1;
             packet.geometries = &test_render;
+
+            packet.ui_geometry_count = 0;
+            packet.ui_geometries = null;
             // TODO: Временный тестовый код: конец.
 
             if(!renderer_draw_frame(&packet))

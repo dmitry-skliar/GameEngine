@@ -12,9 +12,13 @@ typedef struct renderer_system_state {
     renderer_backend backend;
     mat4 projection;
     mat4 view;
+    mat4 ui_projection;
+    mat4 ui_view;
     f32 fov_radians;
     f32 near_clip;
     f32 far_clip;
+    f32 ui_near_clip;
+    f32 ui_far_clip;
 } renderer_system_state;
 
 static renderer_system_state* state_ptr = null;
@@ -49,18 +53,23 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
         return false;
     }
 
+    // Создание матриц проекции и вида (world).
     // TODO: Сделать настраиваемыми!
     state_ptr->fov_radians = 45.0f;
     state_ptr->near_clip = 0.1f;
     state_ptr->far_clip = 1000.0f;
-
-    // Создание матрицы проекции.
     f32 aspect = window_state->width / (f32)window_state->height;
-    state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
 
-    // Создание матрицы вида.
+    state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
+    // TODO: Конфигурация стартовой позиции камеры.
     state_ptr->view = mat4_translation((vec3){{0, 0, 30.0f}});
     state_ptr->view = mat4_inverse(state_ptr->view);
+
+    // Создание матриц проекции и вида (ui).
+    state_ptr->ui_near_clip = -100.0f;
+    state_ptr->ui_far_clip = 100.0f;
+    state_ptr->ui_projection = mat4_orthographic(0, window_state->width, window_state->height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
+    state_ptr->ui_view = mat4_inverse(mat4_identity());
 
     return true;
 }
@@ -79,37 +88,62 @@ void renderer_system_shutdown()
     state_ptr = null;
 }
 
-bool renderer_begin_frame(f32 delta_time)
-{
-    return state_ptr->backend.begin_frame(&state_ptr->backend, delta_time);
-}
-
-bool renderer_end_frame(f32 delta_time)
-{
-    bool result = state_ptr->backend.end_frame(&state_ptr->backend, delta_time);
-    state_ptr->backend.frame_number++;
-    return result;
-}
-
 bool renderer_draw_frame(render_packet* packet)
 {
     if(!state_ptr)
     {
         kerror(message_not_initialized, __FUNCTION__);
-        return false;    
+        return false;
     }
 
-    if(renderer_begin_frame(packet->delta_time))
+    if(state_ptr->backend.begin_frame(&state_ptr->backend, packet->delta_time))
     {
-        state_ptr->backend.update_global_state(state_ptr->projection, state_ptr->view, vec3_zero(), vec4_one(), 0);
+        // Проход (world).
+        if(!state_ptr->backend.begin_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_WORLD))
+        {
+            kerror("Begin renderpass -> BUILTIN_RENDERPASS_WORLD failed.");
+            return false;
+        }
 
+        state_ptr->backend.update_global_world_state(state_ptr->projection, state_ptr->view, vec3_zero(), vec4_one(), 0);
+
+        // Рисование World.
         u32 count = packet->geometry_count;
         for(u32 i = 0; i < count; ++i)
         {
             state_ptr->backend.draw_geometry(packet->geometries[i]);
         }
 
-        bool result = renderer_end_frame(packet->delta_time);
+        if(!state_ptr->backend.end_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_WORLD))
+        {
+            kerror("End renderpass -> BUILTIN_RENDERPASS_WORLD failed.");
+            return false;
+        }
+
+        // Проход (world).
+        if(!state_ptr->backend.begin_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_UI))
+        {
+            kerror("Begin renderpass -> BUILTIN_RENDERPASS_UI failed.");
+            return false;
+        }
+
+        state_ptr->backend.update_global_ui_state(state_ptr->ui_projection, state_ptr->ui_view, 0);
+
+        // Рисование UI.
+        count = packet->ui_geometry_count;
+        for(u32 i = 0; i < count; ++i)
+        {
+            state_ptr->backend.draw_geometry(packet->ui_geometries[i]);
+        }
+
+        if(!state_ptr->backend.end_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_UI))
+        {
+            kerror("End renderpass -> BUILTIN_RENDERPASS_UI failed.");
+            return false;
+        }
+
+        bool result = state_ptr->backend.end_frame(&state_ptr->backend, packet->delta_time);
+        state_ptr->backend.frame_number++;
         if(!result)
         {
             kerror("Failed to complete function 'renderer_end_frame'. Shutting down.");
@@ -127,9 +161,14 @@ void renderer_on_resize(i32 width, i32 height)
         return;
     }
 
+    // Обновление проекции (world).
     f32 aspect = width / (f32)height;
     state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
-    state_ptr->backend.resized(&state_ptr->backend, width, height);
+
+    // Обновление проекции (ui).
+    state_ptr->ui_projection = mat4_orthographic(0, (f32)width, (f32)height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
+
+    state_ptr->backend.resized(&state_ptr->backend, width, height);    
 }
 
 void renderer_set_view(mat4 view)

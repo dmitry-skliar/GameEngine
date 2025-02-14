@@ -20,7 +20,7 @@ bool vulkan_shader_module_create(
     resource binary_resource;
     if(!resource_system_load(filename, RESOURCE_TYPE_BINARY, &binary_resource))
     {
-        kerror("Function '%': Unable to read shader module '%s'.", __FUNCTION__, filename);
+        kerror("Function '%s': Unable to read shader module '%s'.", __FUNCTION__, filename);
         return false;
     }
 

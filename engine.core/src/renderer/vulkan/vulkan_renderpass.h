@@ -6,8 +6,8 @@
 /*
 */
 void vulkan_renderpass_create(
-    vulkan_context* context, vulkan_renderpass* out_renderpass, f32 x, f32 y, f32 w, f32 h, f32 r, f32 g, f32 b,
-    f32 a, f32 depth, u32 stencil
+    vulkan_context* context, vulkan_renderpass* out_renderpass, vec4 render_area, vec4 clear_color, f32 depth,
+    u32 stencil, renderpass_clear_flag clear_flags, bool has_prev_pass, bool has_next_pass
 );
 
 /*
