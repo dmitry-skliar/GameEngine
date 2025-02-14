@@ -58,9 +58,6 @@
 
         mode_str[index] = 0;
 
-        *out_file = kallocate_tc(struct file, 1, MEMORY_TAG_STRING);
-        kzero_tc(*out_file, struct file, 1);
-
         // Попытка открыть файл.
         FILE* file = fopen(path, mode_str);
 
@@ -74,6 +71,14 @@
         fseek(file, 0, SEEK_END);
         u64 filesize = ftell(file);
         rewind(file);
+
+        if(!filesize)
+        {
+            kerror("Function '%s': Failed to get file size of file '%s'.", __FUNCTION__, path);
+        }
+
+        *out_file = kallocate_tc(struct file, 1, MEMORY_TAG_FILE);
+        kzero_tc(*out_file, struct file, 1);
 
         // Сохранение информации о файле.
         (*out_file)->handle = file;
@@ -91,7 +96,7 @@
         }
 
         fclose(file->handle);
-        kfree_tc(file, struct file, 1, MEMORY_TAG_STRING);
+        kfree_tc(file, struct file, 1, MEMORY_TAG_FILE);
     }
 
     u64 platform_file_size(file* file)
@@ -149,19 +154,7 @@
         }
 
         u64 size = fread(buffer, 1, buffer_size, file->handle);
-        return (size && size <= buffer_size) ? true : false;
-    }
-
-    bool platform_file_reads(file* file, void* buffer, u64* out_size)
-    {
-        if(!file || !file->handle || !buffer || !out_size)
-        {
-            kerror("Function '%s' requires a valid pointer to file, buffer and out_size.", __FUNCTION__);
-            return false;
-        }
-
-        *out_size = fread(buffer, 1, file->size, file->handle);
-        return file->size == *out_size ? true : false;
+        return (size && size <= buffer_size);
     }
 
     bool platform_file_write(file* file, u64 data_size, const void* data)
@@ -177,7 +170,19 @@
 
         i64 written = fwrite(data, 1, data_size, file->handle);
         fflush(file->handle);
-        return written == data_size ? true : false;
+        return written == data_size;
+    }
+
+    bool platform_file_read_all_bytes(file* file, void* buffer, u64* out_size)
+    {
+        if(!file || !file->handle || !buffer || !out_size)
+        {
+            kerror("Function '%s' requires a valid pointer to file, buffer and out_size.", __FUNCTION__);
+            return false;
+        }
+
+        *out_size = fread(buffer, 1, file->size, file->handle);
+        return *out_size == file->size;
     }
 
 #endif

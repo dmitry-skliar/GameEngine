@@ -71,16 +71,6 @@ KAPI bool platform_file_write_line(file* file, const char* string);
 KAPI bool platfrom_file_read(file* file, u64 buffer_size, void* buffer);
 
 /*
-    @brief Читает все байты из файла.
-    NOTE: Буфер нужно выделять достаточный для чтения файла.
-    @param file Указатель на экземпляр файла.
-    @param buffer Указатель на буфер, куда будут записаны байты.
-    @param out_size Указатель на память, куда будет записано количество считаных байт в буфер.
-    @param True успешно считано, false не удалось прочитать.
-*/
-KAPI bool platform_file_reads(file* file, void* buffer, u64* out_size);
-
-/*
     @brief Записывает заданное количество байт в файл.
     @param file Указатель на экземпляр файла.
     @param data_size Количество байт для записи.
@@ -88,3 +78,26 @@ KAPI bool platform_file_reads(file* file, void* buffer, u64* out_size);
     @param True успешно записано, false не удалось записать.
 */
 KAPI bool platform_file_write(file* file, u64 data_size, const void* data);
+
+/*
+    @brief Читает все байты из файла.
+    NOTE: Буфер нужно выделять достаточный для чтения файла.
+    @param file Указатель на экземпляр файла.
+    @param buffer Указатель на буфер, куда будут записаны байты.
+    @param out_size Указатель на память, куда будет записано количество считаных байт в буфер.
+    @param True успешно считано, false не удалось прочитать.
+*/
+KAPI bool platform_file_read_all_bytes(file* file, void* buffer, u64* out_size);
+
+/*
+    @brief Читает все символы из файла.
+    NOTE: Буфер нужно выделять достаточный для чтения файла.
+    @param file Указатель на экземпляр файла.
+    @param buffer Указатель на буфер, куда будут записаны символы.
+    @param out_size Указатель на память, куда будет записано количество считаных символов в буфер.
+    @param True успешно считано, false не удалось прочитать.
+*/
+KINLINE bool platform_file_read_all_text(file* file, char* buffer, u64* out_size)
+{
+    return platform_file_read_all_bytes(file, buffer, out_size);
+}

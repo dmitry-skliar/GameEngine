@@ -140,6 +140,7 @@ const char* memory_system_usage_str()
     static const char* memory_tag_strings[MEMORY_TAGS_MAX + 1] = {
         "UNKNOWN          ",
         "SYSTEM           ",
+        "FILE             ",
         "ARRAY            ",
         "DARRAY           ",
         "HASHTABLE        ",

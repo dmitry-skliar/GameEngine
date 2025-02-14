@@ -1,6 +1,7 @@
 // Собственные подключения.
 #include "systems/material_system.h"
 #include "systems/texture_system.h"
+#include "systems/resource_system.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -9,9 +10,6 @@
 #include "containers/hashtable.h"
 #include "math/kmath.h"
 #include "renderer/renderer_frontend.h"
-
-// TODO: Временно!
-#include "platform/file.h"
 
 typedef struct material_system_state {
     // @brief Конфигурация системы.
@@ -24,7 +22,6 @@ typedef struct material_system_state {
     hashtable* material_references_table;
 } material_system_state;
 
-// TODO: Общая структура!
 typedef struct material_reference {
     // @brief Количество ссылок на материал.
     u64 reference_count;
@@ -42,7 +39,6 @@ bool default_materials_create();
 void default_materials_destroy();
 bool material_load(material_config* config, material* m);
 void material_destroy(material* m);
-bool material_load_configuration_file(const char* path, material_config* out_config);
 
 bool material_system_initialize(u64* memory_requirement, void* memory, material_system_config* config)
 {
@@ -101,9 +97,9 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
     // Отмечает все материалы как недействительные.
     for(u32 i = 0; i < state_ptr->config.max_material_count; ++i)
     {
-        state_ptr->materials[i].id = INVALID_ID32;
-        state_ptr->materials[i].generation = INVALID_ID32;
-        state_ptr->materials[i].internal_id = INVALID_ID32;
+        state_ptr->materials[i].id = INVALID_ID;
+        state_ptr->materials[i].generation = INVALID_ID;
+        state_ptr->materials[i].internal_id = INVALID_ID;
     }
 
     // Создание материала по-умолчанию.
@@ -131,7 +127,7 @@ void material_system_shutdown()
     for(u32 i = 0; i < state_ptr->config.max_material_count; ++i)
     {
         material* m = &state_ptr->materials[i];
-        if(m->id != INVALID_ID32)
+        if(m->id != INVALID_ID)
         {
             material_destroy(m);
         }
@@ -151,24 +147,28 @@ material* material_system_acquire(const char* name)
         return null;
     }
 
-    // Загрузка конфигурации материала с диска.
-    material_config config;
-
-    // Загрузка файла.
-    // TODO: Возможность менять локацию файла.
-    char* format_str = "../assets/materials/%s.%s";
-    char filepath[512];
-
-    // TODO: попробовать разные расширения.
-    string_format(filepath, format_str, name, "kmt");
-
-    if(!material_load_configuration_file(filepath, &config))
+    // Загрузка конфигурации материала.
+    resource material_resource;
+    if(!resource_system_load(name, RESOURCE_TYPE_MATERIAL, &material_resource))
     {
-        kerror("Function '%s': Failed to load file '%s'. Return null!", __FUNCTION__, filepath);
+        kerror("Function '%s': Failed to load material resource '%s'. Return null!", __FUNCTION__, name);
         return null;
     }
 
-    return material_system_acquire_from_config(&config);
+    material* m = null;
+    if(material_resource.data)
+    {
+        m = material_system_acquire_from_config(material_resource.data);
+    }
+
+    resource_system_unload(&material_resource);
+
+    if(!m)
+    {
+        kerror("Function '%s': Failed to load material resource '%s'. Return null!", __FUNCTION__, name);
+    }
+
+    return m;
 }
 
 material* material_system_acquire_from_config(material_config* config)
@@ -185,21 +185,21 @@ material* material_system_acquire_from_config(material_config* config)
     }
 
     material_reference ref;
-    if(!hashtable_get(state_ptr->material_references_table, config->name, &ref) || ref.index == INVALID_ID32)
+    if(!hashtable_get(state_ptr->material_references_table, config->name, &ref) || ref.index == INVALID_ID)
     {
         ref.reference_count = 0;
         ref.auto_release = config->auto_release;
-        ref.index = INVALID_ID32;
+        ref.index = INVALID_ID;
     }
 
     ref.reference_count++;
 
-    if(ref.index == INVALID_ID32)
+    if(ref.index == INVALID_ID)
     {
         // Поиск свободной памяти для материала.
         for(u32 i = 0; i < state_ptr->config.max_material_count; ++i)
         {
-            if(state_ptr->materials[i].id == INVALID_ID32)
+            if(state_ptr->materials[i].id == INVALID_ID)
             {
                 ref.index = i;
                 break;
@@ -207,7 +207,7 @@ material* material_system_acquire_from_config(material_config* config)
         }
 
         // Если свободный участок памяти не найден.
-        if(ref.index == INVALID_ID32)
+        if(ref.index == INVALID_ID)
         {
             kerror(
                 "Function '%s': Material system cannot hold anymore materials. Adjust configuration to allow more.",
@@ -227,9 +227,9 @@ material* material_system_acquire_from_config(material_config* config)
         }
 
         // TODO: Сомнительно!!
-        if(m->generation == INVALID_ID32)
+        if(m->generation == INVALID_ID)
         {
-            kdebug("MARETIAL generation INVALID_ID32!");
+            kdebug("MARETIAL generation INVALID_ID!");
             m->generation = 0;
         }
         else
@@ -292,7 +292,7 @@ void material_system_release(const char* name)
         material_destroy(m);
 
         // Освобождение ссылки.
-        ref.index = INVALID_ID32;
+        ref.index = INVALID_ID;
         ref.auto_release = false;
 
         ktrace(
@@ -329,8 +329,8 @@ material* material_system_get_default()
 bool default_materials_create()
 {
     kzero_tc(&state_ptr->default_material, material, 1);
-    state_ptr->default_material.id = INVALID_ID32;
-    state_ptr->default_material.generation = INVALID_ID32;
+    state_ptr->default_material.id = INVALID_ID;
+    state_ptr->default_material.generation = INVALID_ID;
 
     string_ncopy(state_ptr->default_material.name, DEFAULT_MATERIAL_NAME, MATERIAL_NAME_MAX_LENGTH);
     state_ptr->default_material.diffuse_color = vec4_one();    // Белый цвет.
@@ -406,93 +406,7 @@ void material_destroy(material* m)
 
     // Освобождение памяти для нового материала.
     kzero_tc(m, material, 1);
-    m->id = INVALID_ID32;
-    m->generation = INVALID_ID32;
-    m->internal_id = INVALID_ID32;
-}
-
-bool material_load_configuration_file(const char* path, material_config* out_config)
-{
-    file* f = null;
-
-    if(!platform_file_open(path, FILE_MODE_READ, &f))
-    {
-        kerror("Function '%s': Unable to open material file '%s' for reading.", __FUNCTION__, path);
-        return false;
-    }
-
-    kdebug("Material file size %llu.", platform_file_size(f));
-
-    char bufferline[512] = "";
-    char* p = bufferline;
-    u64 line_length = 0;
-    u32 line_number = 1;
-
-    // Построчное чтение файла.
-    while(platform_file_read_line(f, 511, p, &line_length))
-    {
-        char* trimmed = string_trim(bufferline);
-        line_length = string_length(trimmed);
-
-        // Пропуск пустых строк и коментариев.
-        if(line_length < 1 || trimmed[0] == '#')
-        {
-            line_number++;
-            continue;
-        }
-
-        i32 equal_index = string_index_of(trimmed, '=');
-        if(equal_index == -1)
-        {
-
-            kwarng(
-                "Potential formatting issue found in file '%s': '=' token not found. Skipping line %u.",
-                path, line_number
-            );
-        }
-
-        // Max of 64 characters for variable name.
-        char raw_var_name[64];
-        kzero(raw_var_name, sizeof(char) * 64);
-        string_mid(raw_var_name, trimmed, 0, equal_index);
-        char* trimmed_var_name = string_trim(raw_var_name);
-
-        // Max of 511-65 (446) characters for value.
-        char raw_value[446];
-        kzero(raw_value, sizeof(char) * 446);
-        string_mid(raw_value, trimmed, equal_index + 1, -1);
-        char* trimmed_value = string_trim(raw_value);
-
-        // Процесс формирования.
-        if(string_equali(trimmed_var_name, "version"))
-        {
-            // TODO: Версия.
-        }
-        else if(string_equali(trimmed_var_name, "name"))
-        {
-            string_ncopy(out_config->name, trimmed_value, MATERIAL_NAME_MAX_LENGTH);
-        }
-        else if(string_equali(trimmed_var_name, "diffuse_map_name"))
-        {
-            string_ncopy(out_config->diffuse_map_name, trimmed_value, TEXTURE_NAME_MAX_LENGTH);
-        }
-        else if(string_equali(trimmed_var_name, "diffuse_color"))
-        {
-            if(!string_to_vec4(trimmed_value, &out_config->diffuse_color))
-            {
-                kwarng("Error parsing diffuse_color in file '%s'. Using default of white instead.", path);
-                out_config->diffuse_color = vec4_one(); // Белый.
-            }
-        }
-
-        // TODO: Другие поля.
-
-        // Очистка буфера.
-        kzero(bufferline, sizeof(char) * 512);
-        line_number++;
-    }
-
-    platform_file_close(f);
-
-    return true;
+    m->id = INVALID_ID;
+    m->generation = INVALID_ID;
+    m->internal_id = INVALID_ID;
 }

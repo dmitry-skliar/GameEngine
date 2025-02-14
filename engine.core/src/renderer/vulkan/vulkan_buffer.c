@@ -34,7 +34,7 @@ bool vulkan_buffer_create(
     VkMemoryRequirements requirements = {0};
     vkGetBufferMemoryRequirements(context->device.logical, out_buffer->handle, &requirements);
     out_buffer->memory_index = context->find_memory_index(requirements.memoryTypeBits, out_buffer->memory_property_flags);
-    if(out_buffer->memory_index == -1)
+    if(out_buffer->memory_index == INVALID_ID)
     {
         kerror("Function '%s': Failed to find required memory type index.", __FUNCTION__);
         return false;

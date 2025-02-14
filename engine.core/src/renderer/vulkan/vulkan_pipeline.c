@@ -140,7 +140,7 @@ bool vulkan_graphics_pipeline_create(
     pipeline_info.renderPass = renderpass->handle;
     pipeline_info.subpass = 0;
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
-    pipeline_info.basePipelineIndex = -1;
+    pipeline_info.basePipelineIndex = INVALID_ID;
 
     result = vkCreateGraphicsPipelines(context->device.logical, VK_NULL_HANDLE, 1, &pipeline_info, context->allocator, &out_pipeline->handle);
     if(!vulkan_result_is_success(result))

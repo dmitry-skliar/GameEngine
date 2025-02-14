@@ -77,9 +77,9 @@ bool geometry_system_initialize(u64* memory_requirement, void* memory, geometry_
     // Отмечает все геометрии как недействительные.
     for(u32 i = 0; i < state_ptr->config.max_geometry_count; ++i)
     {
-        state_ptr->geometries[i].geometry.id = INVALID_ID32;
-        state_ptr->geometries[i].geometry.generation = INVALID_ID32;
-        state_ptr->geometries[i].geometry.internal_id = INVALID_ID32;
+        state_ptr->geometries[i].geometry.id = INVALID_ID;
+        state_ptr->geometries[i].geometry.generation = INVALID_ID;
+        state_ptr->geometries[i].geometry.internal_id = INVALID_ID;
     }
 
     // Создание геометрии по-умолчанию.
@@ -113,7 +113,7 @@ geometry* geometry_system_acquire_by_id(u32 id)
         return null;
     }
 
-    if(id != INVALID_ID32 && state_ptr->geometries[id].geometry.id != INVALID_ID32)
+    if(id != INVALID_ID && state_ptr->geometries[id].geometry.id != INVALID_ID)
     {
         state_ptr->geometries[id].reference_count++;
         return &state_ptr->geometries[id].geometry;
@@ -136,7 +136,7 @@ geometry* geometry_system_acquire_from_config(geometry_config* config, bool auto
     for(u32 i = 0; i < state_ptr->config.max_geometry_count; ++i)
     {
         geometry_reference* ref = &state_ptr->geometries[i];
-        if(ref->geometry.id == INVALID_ID32)
+        if(ref->geometry.id == INVALID_ID)
         {
             ref->auto_release = auto_release;
             ref->reference_count = 1;
@@ -172,7 +172,7 @@ void geometry_system_release(geometry* geometry)
         return;
     }
 
-    if(geometry->id == INVALID_ID32)
+    if(geometry->id == INVALID_ID)
     {
         kwarng("Function '%s': Tried to release non-existent geometry.", __FUNCTION__);
         return;
@@ -254,9 +254,9 @@ bool geometry_create(geometry_config* config, geometry* g)
     {
         state_ptr->geometries[g->id].reference_count = 0;
         state_ptr->geometries[g->id].auto_release = false;
-        g->id = INVALID_ID32;
-        g->internal_id = INVALID_ID32;
-        g->generation = INVALID_ID32;
+        g->id = INVALID_ID;
+        g->internal_id = INVALID_ID;
+        g->generation = INVALID_ID;
 
         return false;
     }
@@ -282,9 +282,9 @@ void geometry_destroy(geometry* g)
     // Уничтожение геометрии в памяти графического процессора.
     renderer_destroy_geometry(g);
 
-    g->id = INVALID_ID32;
-    g->internal_id = INVALID_ID32;
-    g->generation = INVALID_ID32;
+    g->id = INVALID_ID;
+    g->internal_id = INVALID_ID;
+    g->generation = INVALID_ID;
 
     string_empty(g->name);
 

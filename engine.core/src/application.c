@@ -17,6 +17,7 @@
 #include "systems/texture_system.h"
 #include "systems/material_system.h"
 #include "systems/geometry_system.h"
+#include "systems/resource_system.h"
 
 // TODO: Временный тестовый код: начало.
 #include "math/kmath.h"
@@ -42,6 +43,9 @@ typedef struct application_state {
 
     u64 platform_window_memory_requirement;
     window* platform_window_state;
+
+    u64 resource_system_memory_requirement;
+    void* resource_system_state;
 
     u64 renderer_system_memory_requirement;
     void* renderer_system_state;
@@ -136,7 +140,7 @@ bool application_create(game* game_inst)
     event_system_initialize(&app_state->event_system_memory_requirement, app_state->event_system_state);
     kinfor("Event system started.");
 
-    // TODO: Отвязать от системы событий!
+    // TODO: Отвязать от системы событий! и перенести!
     // Система ввода (должно быть инициализировано до создания окна приложения, но после системы событий - связаны).
     input_system_initialize(&app_state->input_system_memory_requirement, null);
     app_state->input_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->input_system_memory_requirement);
@@ -166,12 +170,25 @@ bool application_create(game* game_inst)
     platform_window_set_on_mouse_wheel_handler(app_state->platform_window_state, application_on_mouse_wheel);
     platform_window_set_on_focus_handler(app_state->platform_window_state, application_on_focus);
 
+    // Система загрузки ресурсов (должна загружаться до визуализатора, и других ресурсных систем).
+    resource_system_config resource_sys_config;
+    resource_sys_config.asset_base_path = "../assets";
+    resource_sys_config.max_loader_count = 32;
+    resource_system_initialize(&app_state->resource_system_memory_requirement, null, &resource_sys_config);
+    app_state->resource_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->resource_system_memory_requirement);
+    if(!resource_system_initialize(&app_state->resource_system_memory_requirement, app_state->resource_system_state, &resource_sys_config))
+    {
+        kerror("Failed to initialize resource system. Aborted!");
+        return false;
+    }
+    kinfor("Resource system started.");
+
     // Система визуализатора графики.
     renderer_system_initialize(&app_state->renderer_system_memory_requirement, null, null);
     app_state->renderer_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->renderer_system_memory_requirement);
     if(!renderer_system_initialize(&app_state->renderer_system_memory_requirement, app_state->renderer_system_state, app_state->platform_window_state))
     {
-        kerror("Failed to initialize renderer. Aborted!");
+        kerror("Failed to initialize renderer system. Aborted!");
         return false;
     }
     kinfor("Renderer system started.");
@@ -354,6 +371,9 @@ bool application_run()
 
     renderer_system_shutdown();
     kinfor("Renderer system stopped.");
+
+    resource_system_shutdown();
+    kinfor("Resource system stopped.");
 
     platform_window_destroy(app_state->platform_window_state);
     kinfor("Platform window destroyed.");

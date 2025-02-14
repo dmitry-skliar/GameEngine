@@ -1,5 +1,6 @@
 // Собственные подключения.
 #include "systems/texture_system.h"
+#include "systems/resource_system.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -7,11 +8,6 @@
 #include "memory/memory.h"
 #include "containers/hashtable.h"
 #include "renderer/renderer_frontend.h"
-
-// Внешние подключения.
-// TODO: загрузчик ресурсов.
-#define STB_IMAGE_IMPLEMENTATION
-#include "vendor/stb_image.h"
 
 typedef struct texture_system_state {
     // @breif Конфигурация системы.
@@ -99,8 +95,8 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
     // Отмечает все текстуры как недействительные.
     for(u32 i = 0; i < state_ptr->config.max_texture_count; ++i)
     {
-        state_ptr->textures[i].id = INVALID_ID32;
-        state_ptr->textures[i].generation = INVALID_ID32;
+        state_ptr->textures[i].id = INVALID_ID;
+        state_ptr->textures[i].generation = INVALID_ID;
     }
 
     // Создание текстуры по-умолчанию.
@@ -128,7 +124,7 @@ void texture_system_shutdown()
     for(u32 i = 0; i < state_ptr->config.max_texture_count; ++i)
     {
         texture* t = &state_ptr->textures[i];
-        if(t->generation != INVALID_ID32)
+        if(t->generation != INVALID_ID)
         {
             texture_destroy(t);
         }
@@ -159,21 +155,21 @@ texture* texture_system_acquire(const char* name, bool auto_release)
     //       Если авто освобождение отключено, то ref.index будет иметь индекс созданой текстуры!
     //       Но если авто освобождение включено, то текстура будет удаляться из памяти, и ref.index будет равен INVAID_ID32
     //       а следовательно, что по этому же имени нужно заново использовать эту ссылку!
-    if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.index == INVALID_ID32)
+    if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.index == INVALID_ID)
     {
         ref.reference_count = 0;
         ref.auto_release = auto_release;
-        ref.index = INVALID_ID32;
+        ref.index = INVALID_ID;
     }
 
     ref.reference_count++;
 
-    if(ref.index == INVALID_ID32)
+    if(ref.index == INVALID_ID)
     {
         // Поиск свободной памяти для текстуры.
         for(u32 i = 0; i < state_ptr->config.max_texture_count; ++i)
         {
-            if(state_ptr->textures[i].id == INVALID_ID32)
+            if(state_ptr->textures[i].id == INVALID_ID)
             {
                 ref.index = i;
                 break;
@@ -181,7 +177,7 @@ texture* texture_system_acquire(const char* name, bool auto_release)
         }
 
         // Если свободный участок памяти не найден.
-        if(ref.index == INVALID_ID32)
+        if(ref.index == INVALID_ID)
         {
             kerror(
                 "Function '%s': Texture system cannot hold anymore textures. Adjust configuration to allow more.",
@@ -260,7 +256,7 @@ void texture_system_release(const char* name)
         texture_destroy(t);
 
         // Освобождение ссылки.
-        ref.index = INVALID_ID32;
+        ref.index = INVALID_ID;
         ref.auto_release = false;
 
         ktrace(
@@ -339,7 +335,7 @@ bool default_textures_create()
     state_ptr->default_texture.has_transparency = false;
     // TODO: Когда текстура отдается на создание сразу, то переключение текстур запаздывает!
     //       Алгоритм шейдера!
-    state_ptr->default_texture.generation = INVALID_ID32;
+    state_ptr->default_texture.generation = INVALID_ID;
 
     renderer_create_texture(&state_ptr->default_texture, pixels);
 
@@ -354,57 +350,43 @@ void default_textures_destroy()
 
 bool texture_load(const char* texture_name, texture* t)
 {
-    // TODO: Должна быть возможность размещения в любом месте.
-    char* format_str = "../assets/textures/%s.%s";
-    const i32 required_channel_count = 4;
-    stbi_set_flip_vertically_on_load(true);
-    char full_file_path[512];
-
-    // TODO: попробовать разные расширения.
-    string_format(full_file_path, format_str, texture_name, "png");
-
-    u8* data = stbi_load(
-        full_file_path, (i32*)&t->width, (i32*)&t->height, (i32*)&t->channel_count,
-        required_channel_count
-    );
-
-    if(!data || stbi_failure_reason())
+    resource img_resource;
+    if(!resource_system_load(texture_name, RESOURCE_TYPE_IMAGE, &img_resource))
     {
-        kwarng("Function '%s': Failed to load file '%s' with result: %s.", __FUNCTION__, full_file_path, stbi_failure_reason());
-        // Очистка ошибок stbi, что бы следующая текстура могла загрузиться.
-        stbi__err(0, 0);
+        kerror("Function '%s': Failed to load image resource for texture '%s'.", __FUNCTION__, texture_name);
         return false;
     }
 
-    // TODO: Реальное количество может не совпадать!
-    t->channel_count = required_channel_count;
-
-    // Копирование имени текстуры.
-    string_ncopy(t->name, texture_name, TEXTURE_NAME_MAX_LENGTH);
-    
-
-    u64 total_size = t->width * t->height * required_channel_count;
+    image_resouce_data* resource_data = img_resource.data;
+    t->width = resource_data->width;
+    t->height = resource_data->height;
+    t->channel_count = resource_data->channel_count;
 
     // Проверка прозрачности.
-    for(u64 i = 0; i < total_size; i += required_channel_count)
+    u64 total_size = t->width * t->height * t->channel_count;
+    bool has_transparency = false;
+    for(u64 i = 0; i < total_size; i += t->channel_count)
     {
         // RGB[A]
-        u8 a = data[i + 3];
+        // NOTE: Не корректно, т.к. реальный размер канала может быть 3!
+        u8 a = resource_data->pixels[i + 3];
         if(a < 255)
         {
-            t->has_transparency = true;
+            has_transparency = true;
             break;
         }
     }
 
-    // Текстура всегда новая.
+    // Копирование имени текстуры.
+    string_ncopy(t->name, texture_name, TEXTURE_NAME_MAX_LENGTH);
     t->generation = 0;
+    t->has_transparency = has_transparency;
 
     // Загрузка в графический процессор.
-    renderer_create_texture(t, data);
+    renderer_create_texture(t, resource_data->pixels);
 
     // Очистка данных.
-    stbi_image_free(data);
+    resource_system_unload(&img_resource);
     return true;
 }
 
@@ -414,8 +396,7 @@ void texture_destroy(texture* t)
     renderer_destroy_texture(t);
 
     // Освобождение памяти для новой текстуры.
-    // kzero_tc(t->name, char, TEXTURE_NAME_MAX_LENGTH);
     kzero_tc(t, texture, 1);
-    t->id = INVALID_ID32;
-    t->generation = INVALID_ID32;
+    t->id = INVALID_ID;
+    t->generation = INVALID_ID;
 }

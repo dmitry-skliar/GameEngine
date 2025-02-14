@@ -363,7 +363,7 @@ void vulkan_material_shader_apply_material(vulkan_context* context, vulkan_mater
 
     // Выполнять только в том случае, если дескриптор еще не обновлен!
     u32* global_ubo_generation = &instance_state->descriptor_states[descriptor_index].generations[image_index];
-    if(*global_ubo_generation == INVALID_ID32 || *global_ubo_generation != material->generation)
+    if(*global_ubo_generation == INVALID_ID || *global_ubo_generation != material->generation)
     {
         VkDescriptorBufferInfo buffer_info;
         buffer_info.buffer = shader->object_uniform_buffer.handle;
@@ -406,15 +406,15 @@ void vulkan_material_shader_apply_material(vulkan_context* context, vulkan_mater
         u32* descriptor_id = &instance_state->descriptor_states[descriptor_index].ids[image_index];
 
         // Если текстура еще не загружена, используется значение по умолчанию.
-        if(t->generation == INVALID_ID32)
+        if(t->generation == INVALID_ID)
         {
             t = texture_system_get_default_texture();
             // Сбросить генерацию дескриптора, используя текстуру по умолчанию.
-            *descriptor_generation = INVALID_ID32;
+            *descriptor_generation = INVALID_ID;
         }
 
         // Сначала проверка, нужно ли обновить дескриптор.
-        if(t && (*descriptor_id != t->id || *descriptor_generation != t->generation || *descriptor_generation == INVALID_ID32))
+        if(t && (*descriptor_id != t->id || *descriptor_generation != t->generation || *descriptor_generation == INVALID_ID))
         {
             vulkan_texture_data* tdata = t->data;
 
@@ -434,7 +434,7 @@ void vulkan_material_shader_apply_material(vulkan_context* context, vulkan_mater
             descriptor_count++;
 
             // Синхронизация генерации кадров, если не используется текстура по умолчанию.
-            if(t->generation != INVALID_ID32)
+            if(t->generation != INVALID_ID)
             {
                 *descriptor_generation = t->generation;
                 *descriptor_id = t->id;
@@ -466,8 +466,8 @@ bool vulkan_material_shader_acquire_resources(vulkan_context* context, vulkan_ma
         // TODO: image_count = 5!
         for(u32 j = 0; j < 5; ++j)
         {
-            instance_state->descriptor_states[i].generations[j] = INVALID_ID32;
-            instance_state->descriptor_states[i].ids[j] = INVALID_ID32;
+            instance_state->descriptor_states[i].generations[j] = INVALID_ID;
+            instance_state->descriptor_states[i].ids[j] = INVALID_ID;
         }
     }
 
@@ -519,12 +519,12 @@ void vulkan_material_shader_release_resources(vulkan_context* context, vulkan_ma
         // TODO: image_count = 5!
         for(u32 j = 0; j < 5; ++j)
         {
-            instance_state->descriptor_states[i].generations[j] = INVALID_ID32;
-            instance_state->descriptor_states[i].ids[j] = INVALID_ID32;
+            instance_state->descriptor_states[i].generations[j] = INVALID_ID;
+            instance_state->descriptor_states[i].ids[j] = INVALID_ID;
         }
     }
 
-    material->internal_id = INVALID_ID32;
+    material->internal_id = INVALID_ID;
 
     // TODO: добавить object_id в свободный список.
 }

@@ -7,6 +7,30 @@
 #define MATERIAL_NAME_MAX_LENGTH 256
 #define GEOMETRY_NAME_MAX_LENGTH 256
 
+typedef enum resource_type {
+    RESOURCE_TYPE_TEXT,
+    RESOURCE_TYPE_BINARY,
+    RESOURCE_TYPE_IMAGE,
+    RESOURCE_TYPE_MATERIAL,
+    RESOURCE_TYPE_STATIC_MESH,
+    RESOURCE_TYPE_CUSTOM
+} resource_type;
+
+typedef struct resource {
+    u32 loader_id;
+    const char* name;
+    char* full_path;
+    u64 data_size;
+    void* data;
+} resource;
+
+typedef struct image_resouce_data {
+    u8 channel_count;
+    u32 width;
+    u32 height;
+    u8* pixels;
+} image_resouce_data;
+
 // @brief Данные текстуры.
 typedef struct texture {
     u32 id;
@@ -28,6 +52,13 @@ typedef struct texture_map {
     texture* texture;
     texture_use use;
 } texture_map;
+
+typedef struct material_config {
+    char name[MATERIAL_NAME_MAX_LENGTH];
+    bool auto_release;
+    vec4 diffuse_color;
+    char diffuse_map_name[TEXTURE_NAME_MAX_LENGTH];
+} material_config;
 
 typedef struct material {
     u32 id;

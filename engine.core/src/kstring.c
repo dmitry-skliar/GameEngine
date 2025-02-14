@@ -10,7 +10,7 @@ char* string_duplicate(const char* str)
     if(!str) return null;
 
     u64 length = platform_string_length(str) + 1;
-    char* newstr = kallocate(length, MEMORY_TAG_STRING);
+    char* newstr = kallocate_tc(char, length, MEMORY_TAG_STRING);
     kcopy(newstr, str, length);
     return newstr;
 }
@@ -29,7 +29,7 @@ void string_free(const char* str)
     if(!str) return;
 
     u64 length = platform_string_length(str) + 1;
-    kfree(str, length, MEMORY_TAG_STRING);
+    kfree_tc(str, char, length, MEMORY_TAG_STRING);
 }
 
 // TODO: Есть ли тут проблемы?

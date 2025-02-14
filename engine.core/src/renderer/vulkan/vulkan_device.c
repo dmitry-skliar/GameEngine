@@ -18,10 +18,10 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
 VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context)
 {
     // Начальная инициализация.
-    context->device.graphics_queue.index = -1;
-    context->device.compute_queue.index  = -1;
-    context->device.present_queue.index  = -1;
-    context->device.transfer_queue.index = -1;
+    context->device.graphics_queue.index = INVALID_ID;
+    context->device.compute_queue.index  = INVALID_ID;
+    context->device.present_queue.index  = INVALID_ID;
+    context->device.transfer_queue.index = INVALID_ID;
 
     // TODO: Вынести на верхние уровни и сделать настраиваемым.
     vulkan_device_requirements requirements = {0};
@@ -184,10 +184,10 @@ void vulkan_device_destroy(renderer_backend* backend, vulkan_context* context)
 
         // Уничтожение информации об устройстве.
         kzero_tc(&context->device, vulkan_device, 1);
-        context->device.graphics_queue.index = -1;
-        context->device.compute_queue.index  = -1;
-        context->device.present_queue.index  = -1;
-        context->device.transfer_queue.index = -1;
+        context->device.graphics_queue.index = INVALID_ID;
+        context->device.compute_queue.index  = INVALID_ID;
+        context->device.present_queue.index  = INVALID_ID;
+        context->device.transfer_queue.index = INVALID_ID;
         ktrace("Vulkan physical device released.");
     }
 }
@@ -297,15 +297,15 @@ VkResult vulkan_create_devices_info(renderer_backend* backend, vulkan_context* c
         kzero_tc(queue_families, VkQueueFamilyProperties, queue_family_count);
         vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &queue_family_count, queue_families);
 
-        u32 graphics_family_index = -1;
-        u32 present_family_index  = -1;
-        u32 compute_family_index  = -1;
-        u32 transfer_family_index = -1;
+        u32 graphics_family_index = INVALID_ID;
+        u32 present_family_index  = INVALID_ID;
+        u32 compute_family_index  = INVALID_ID;
+        u32 transfer_family_index = INVALID_ID;
         u32 graphics_family_count =  0;
         u32 present_family_count  =  0;
         u32 compute_family_count  =  0;
         u32 transfer_family_count =  0;
-        u8  min_transfer_score    = -1;
+        u8  min_transfer_score    = INVALID_ID;
 
         // Просмотр поддерживаемых очередей.
         // TODO: Пересмотреть алгоритм!
@@ -315,7 +315,7 @@ VkResult vulkan_create_devices_info(renderer_backend* backend, vulkan_context* c
             u32 family_count = queue_families[j].queueCount;
 
             // Графическая очередь?
-            if(graphics_family_index == -1 && queue_families[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            if(graphics_family_index == INVALID_ID && queue_families[j].queueFlags & VK_QUEUE_GRAPHICS_BIT)
             {
                 graphics_family_index = j;
                 graphics_family_count = family_count;
@@ -354,7 +354,7 @@ VkResult vulkan_create_devices_info(renderer_backend* backend, vulkan_context* c
             // NOTE: Если графическа очередь не поддерживает ищем первую попавшуюся!
             bool present_support_by_platform =
                 platform_window_get_vulkan_presentation_support(backend->window_state, physical_devices[i], j);
-            if(present_family_index == -1 && present_support_by_platform)
+            if(present_family_index == INVALID_ID && present_support_by_platform)
             {
                 present_family_index = j;
                 present_family_count = family_count;
@@ -425,7 +425,7 @@ void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices
     u32 device_count = darray_capacity(devices);
     const char* gpu_names[] = { "unknown", "integrated", "discrete", "virtual", "host cpu" };
     const char* is_support[] = { "YES", "NO" };
-    u32 gpu_index = -1;
+    u32 gpu_index = INVALID_ID;
 
     for(u32 i = 0; i < device_count; ++i)
     {
@@ -448,10 +448,10 @@ void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices
         u32 qc_compute  = devices[i].compute_queue.count;
         u32 qc_transfer = devices[i].transfer_queue.count;
 
-        const char* graphics_support = qi_graphics != -1 ? is_support[0]: is_support[1];
-        const char* present_support  = qi_present  != -1 ? is_support[0]: is_support[1];
-        const char* compute_support  = qi_compute  != -1 ? is_support[0]: is_support[1];
-        const char* transfer_support = qi_transfer != -1 ? is_support[0]: is_support[1];
+        const char* graphics_support = qi_graphics != INVALID_ID ? is_support[0]: is_support[1];
+        const char* present_support  = qi_present  != INVALID_ID ? is_support[0]: is_support[1];
+        const char* compute_support  = qi_compute  != INVALID_ID ? is_support[0]: is_support[1];
+        const char* transfer_support = qi_transfer != INVALID_ID ? is_support[0]: is_support[1];
 
         kdebug("[%2d] GPU Type: %s", i, gpu_names[gpu_type_index]);
         kdebug("[%2d] GPU Name: %s (driver ver. %d.%d.%d)", i, dev_name, drv_major, drv_minor, drv_patch);
@@ -494,7 +494,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
     // NOTE: Массив devices заполнялся без использования функций darray_push и darray_push_at!
     u32 physical_device_count = darray_capacity(devices);
     u32 best_score_device     = 0;
-    u32 index_physical_device = -1;
+    u32 index_physical_device = INVALID_ID;
 
     for(u32 i = 0; i < physical_device_count; ++i)
     {
@@ -531,7 +531,9 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
         }
 
         // Проверка на соответствие поддержки запрашиваемых очередей.
-        if(devices[i].graphics_queue.index == -1 || devices[i].present_queue.index  == -1 || devices[i].transfer_queue.index == -1)
+        if(devices[i].graphics_queue.index == INVALID_ID
+        || devices[i].present_queue.index  == INVALID_ID
+        || devices[i].transfer_queue.index == INVALID_ID)
         {
             kwarng("Vulkan device queues does not meet requirements! Skipping...");
             continue;
@@ -613,8 +615,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
         }
     }
 
-    // TODO: Заменить на константу U32_MAX_VALUE что-то в этом роде.
-    if(index_physical_device != -1)
+    if(index_physical_device != INVALID_ID)
     {
         kcopy_tc(&context->device, &devices[index_physical_device], vulkan_device, 1);
         return VK_SUCCESS;

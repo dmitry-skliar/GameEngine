@@ -187,7 +187,7 @@
         }
 
         platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
-        return wl_display_roundtrip(state->wdisplay) != -1;
+        return wl_display_roundtrip(state->wdisplay) != INVALID_ID;
     }
 
     void platform_window_set_on_close_handler(window* instance, PFN_window_handler_close handler)

@@ -286,7 +286,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     // Отметить все геометрии как недействительные.
     for(u32 i = 0; i < VULKAN_MAX_GEOMETRY_COUNT; ++i)
     {
-        context->geometries[i].id = INVALID_ID32;
+        context->geometries[i].id = INVALID_ID;
     }
 
     return true;
@@ -929,7 +929,7 @@ void vulkan_renderer_backend_destroy_texture(texture* texture)
     }
     else
     {
-        if(texture->generation != INVALID_ID32)
+        if(texture->generation != INVALID_ID)
         {
             kerror("Function '%s': Failed to get vulkan specific data of texture.", __FUNCTION__);
         }
@@ -967,9 +967,9 @@ void vulkan_renderer_backend_destroy_material(material* material)
         return;
     }
 
-    if(material->internal_id == INVALID_ID32)
+    if(material->internal_id == INVALID_ID)
     {
-        kerror("Function '%s' called with material internal_id = INVALID_ID32. Nothing was done.", __FUNCTION__);
+        kerror("Function '%s' called with material internal_id = INVALID_ID. Nothing was done.", __FUNCTION__);
         return;
     }
 
@@ -990,7 +990,7 @@ bool vulkan_renderer_backend_create_geometry(
     }
 
     // Проверка на повторную загрузку. Если это так, необходимо освободить старые данные после этого.
-    bool is_reupload = geometry->internal_id != INVALID_ID32;
+    bool is_reupload = geometry->internal_id != INVALID_ID;
     vulkan_geometry_data old_range;
 
     vulkan_geometry_data* internal_data = null;
@@ -1004,7 +1004,7 @@ bool vulkan_renderer_backend_create_geometry(
     {
         for(u32 i = 0; i < VULKAN_MAX_GEOMETRY_COUNT; ++i)
         {
-            if(context->geometries[i].id == INVALID_ID32)
+            if(context->geometries[i].id == INVALID_ID)
             {
                 // Поиск свободного индекса.
                 geometry->internal_id = i;
@@ -1052,7 +1052,7 @@ bool vulkan_renderer_backend_create_geometry(
         context->geometry_index_offset += internal_data->index_size;
     }
 
-    if(internal_data->generation == INVALID_ID32)
+    if(internal_data->generation == INVALID_ID)
     {
         internal_data->generation = 0;
     }
@@ -1078,7 +1078,7 @@ bool vulkan_renderer_backend_create_geometry(
 
 void vulkan_renderer_backend_destroy_geometry(geometry* geometry)
 {
-    if(!geometry || geometry->internal_id == INVALID_ID32)
+    if(!geometry || geometry->internal_id == INVALID_ID)
     {
         return;
     }
@@ -1097,14 +1097,14 @@ void vulkan_renderer_backend_destroy_geometry(geometry* geometry)
 
     // Освобождение диапазона для нового использования.
     kzero_tc(internal_data, vulkan_geometry_data, 1);
-    internal_data->id = INVALID_ID32;
-    internal_data->generation = INVALID_ID32;
+    internal_data->id = INVALID_ID;
+    internal_data->generation = INVALID_ID;
 }
 
 void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
 {
     // Игнорирование не загруженных геометрий.
-    if(!data.geometry || data.geometry->internal_id == INVALID_ID32)
+    if(!data.geometry || data.geometry->internal_id == INVALID_ID)
     {
         return;
     }
@@ -1136,6 +1136,7 @@ void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
             VK_INDEX_TYPE_UINT32
         );
         // Рисовать.
+        // TODO: VUID-vkCmdDrawIndexed-None-08114
         vkCmdDrawIndexed(command_buffer->handle, buffer_data->index_count, 1, 0, 0, 0);
     }
     else
