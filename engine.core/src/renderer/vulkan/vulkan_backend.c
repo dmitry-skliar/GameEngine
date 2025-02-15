@@ -634,6 +634,361 @@ bool vulkan_renderer_backend_end_renderpass(renderer_backend* backend, builtin_r
     return true;
 }
 
+void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
+{
+    // Игнорирование не загруженных геометрий.
+    if(!data.geometry || data.geometry->internal_id == INVALID_ID)
+    {
+        return;
+    }
+
+    vulkan_geometry_data* buffer_data = &context->geometries[data.geometry->internal_id];
+    vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
+
+    material* m = data.geometry->material;
+    if(!m)
+    {
+        m = material_system_get_default();
+    }
+
+    switch(m->type)
+    {
+        case MATERIAL_TYPE_WORLD:
+            vulkan_material_shader_set_model(context, &context->material_shader, &data.model);
+            vulkan_material_shader_apply_material(context, &context->material_shader, m);
+            break;
+        case MATERIAL_TYPE_UI:
+            vulkan_material_shader_set_model(context, &context->ui_shader, &data.model);
+            vulkan_material_shader_apply_material(context, &context->ui_shader, m);
+            break;
+        default:
+            kerror("Function '%s': Unknown material type. Just return!", __FUNCTION__);
+            return;
+    }
+
+    // Привязка буфера вершин co смещением.
+    VkDeviceSize offset[1] = { buffer_data->vertex_buffer_offset };
+    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context->object_vertex_buffer.handle, offset);
+
+    if(buffer_data->index_count > 0)
+    {
+        // Привязка буфера индексов.
+        vkCmdBindIndexBuffer(
+            command_buffer->handle, context->object_index_buffer.handle, buffer_data->index_buffer_offset,
+            VK_INDEX_TYPE_UINT32
+        );
+        // Рисовать.
+        // TODO: VUID-vkCmdDrawIndexed-None-08114
+        vkCmdDrawIndexed(command_buffer->handle, buffer_data->index_count, 1, 0, 0, 0);
+    }
+    else
+    {
+        // Рисовать.
+        vkCmdDraw(command_buffer->handle, buffer_data->vertex_count, 1, 0, 0);
+    }
+}
+
+void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels)
+{
+    // Создание data.
+    // TODO: Используется распределитель памяти тут.
+    texture->data = kallocate_tc(vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
+    vulkan_texture_data* data = texture->data;
+    VkDeviceSize image_size = texture->width * texture->height * texture->channel_count;
+
+    // NOTE: Предполагается 8 бит на канал.
+    VkFormat image_format = VK_FORMAT_R8G8B8A8_UNORM;
+
+    // Создание промежуточного буфера и загрузка данных в него.
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    vulkan_buffer staging;
+    vulkan_buffer_create(context, image_size, usage, memory_flags, true, &staging);
+
+    vulkan_buffer_load_data(context, &staging, 0, image_size, 0, pixels);
+
+    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
+    vulkan_image_create(
+        context, VK_IMAGE_TYPE_2D, texture->width, texture->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
+        &data->image
+    );
+
+    vulkan_command_buffer command_buffer;
+    VkCommandPool pool = context->device.graphics_queue.command_pool;
+    VkQueue queue = context->device.graphics_queue.handle;
+
+    vulkan_command_buffer_allocate_and_begin_single_use(context, pool, &command_buffer);
+
+    // Изменение текущий макета на оптимальный для приема данных.
+    vulkan_image_transition_layout(
+        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_UNDEFINED, 
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    );
+
+    // Копирование данных из буфера.
+    vulkan_image_copy_from_buffer(context, &data->image, staging.handle, &command_buffer);
+
+    // Переход от оптимальной компоновки для получения данных к оптимальной компоновке только для чтения шейдеров.
+    vulkan_image_transition_layout(
+        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    );
+
+    vulkan_command_buffer_end_single_use(context, pool, &command_buffer, queue);
+
+    // Уничтожение толко после записи буфера команд, потому что во время выполнение может оказаться нулевыми данными!
+    vulkan_buffer_destroy(context, &staging);
+
+    // Создание фильтрации для текстуры.
+    VkSamplerCreateInfo sampler_info = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+    // TODO: Эти фильтры должны быть настраиваемыми.
+    sampler_info.magFilter = VK_FILTER_LINEAR;
+    sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.anisotropyEnable = VK_TRUE;
+    sampler_info.maxAnisotropy = 16;
+    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    sampler_info.unnormalizedCoordinates = VK_FALSE;
+    sampler_info.compareEnable = VK_FALSE;
+    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.mipLodBias = 0.0f;
+    sampler_info.minLod = 0.0f;
+    sampler_info.maxLod = 0.0f;
+
+    VkResult result = vkCreateSampler(context->device.logical, &sampler_info, context->allocator, &data->sampler);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Function '%s': Error creating texture sampler: %s", __FUNCTION__, vulkan_result_get_string(result, true));
+        return;
+    }
+
+    texture->generation++;
+}
+
+void vulkan_renderer_backend_destroy_texture(texture* texture)
+{
+    vkDeviceWaitIdle(context->device.logical);
+
+    vulkan_texture_data* data = texture->data;
+
+    if(data)
+    {
+        vulkan_image_destroy(context, &data->image);
+        kzero_tc(&data->image, struct vulkan_image, 1);
+        vkDestroySampler(context->device.logical, data->sampler, context->allocator);
+        kfree_tc(texture->data, vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
+    }
+    else
+    {
+        if(texture->generation != INVALID_ID)
+        {
+            kerror("Function '%s': Failed to get vulkan specific data of texture.", __FUNCTION__);
+        }
+        else
+        {
+            kwarng("Function '%s': Texture was not created. Skipping...", __FUNCTION__);
+        }
+    }
+
+    kzero_tc(texture, struct texture, 1);
+}
+
+bool vulkan_renderer_backend_create_material(material* material)
+{
+    if(!material)
+    {
+        kerror("Function '%s' required a valid pointer to material. Return false!", __FUNCTION__);
+        return false;
+    }
+
+    switch(material->type)
+    {
+        case MATERIAL_TYPE_WORLD:
+            if(!vulkan_material_shader_acquire_resources(context, &context->material_shader, material))
+            {
+                kerror("Function '%s': Failed to acquire world shader resources. Return false!", __FUNCTION__);
+                return false;
+            }
+            break;
+        case MATERIAL_TYPE_UI:
+            if(!vulkan_material_shader_acquire_resources(context, &context->ui_shader, material))
+            {
+                kerror("Function '%s': Failed to acquire UI shader resources. Return false!", __FUNCTION__);
+                return false;
+            }
+            break;
+        default:
+            kerror("Function '%s': Unknown material type. Return false!", __FUNCTION__);
+            return false;
+    }
+
+    return true;
+}
+
+void vulkan_renderer_backend_destroy_material(material* material)
+{
+    if(!material)
+    {
+        kerror("Function '%s' required a valid pointer to material. Just return!", __FUNCTION__);
+        return;
+    }
+
+    if(material->internal_id == INVALID_ID)
+    {
+        kerror("Function '%s' called with material internal_id = INVALID_ID. Nothing was done.", __FUNCTION__);
+        return;
+    }
+
+    switch(material->type)
+    {
+        case MATERIAL_TYPE_WORLD:
+            vulkan_material_shader_release_resources(context, &context->material_shader, material);
+            break;
+        case MATERIAL_TYPE_UI:
+            vulkan_material_shader_release_resources(context, &context->ui_shader, material);
+            break;
+        default:
+            kerror("Function '%s': Unknown material type. Just return!", __FUNCTION__);
+            break;
+    }
+}
+
+bool vulkan_renderer_backend_create_geometry(
+    geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
+    const void* indices
+)
+{
+    if(!vertex_count || !vertices)
+    {
+        kerror(
+            "Function '%s' requires vertex data, and none was supplied. vertex_count=%d, vertices=%p",
+            __FUNCTION__, vertex_count, vertices
+        );
+        return false;
+    }
+
+    // Проверка на повторную загрузку. Если это так, необходимо освободить старые данные после этого.
+    bool is_reupload = geometry->internal_id != INVALID_ID;
+    vulkan_geometry_data old_range;
+
+    vulkan_geometry_data* internal_data = null;
+    if(is_reupload)
+    {
+        internal_data = &context->geometries[geometry->internal_id];
+        // Копия старого диапазона.
+        kcopy_tc(&old_range, internal_data, vulkan_geometry_data, 1);
+    }
+    else
+    {
+        for(u32 i = 0; i < VULKAN_MAX_GEOMETRY_COUNT; ++i)
+        {
+            if(context->geometries[i].id == INVALID_ID)
+            {
+                // Поиск свободного индекса.
+                geometry->internal_id = i;
+                context->geometries[i].id = i;
+                internal_data = &context->geometries[i];
+                break;
+            }
+        }
+    }
+
+    if(!internal_data)
+    {
+        kerror(
+            "Function '%s': Failed to find a free index for a new geometry upload. Adjust config to allow for more.",
+            __FUNCTION__
+        );
+        return false;
+    }
+
+    VkCommandPool pool = context->device.graphics_queue.command_pool;
+    VkQueue queue = context->device.graphics_queue.handle;
+    u32 total_size = 0;
+
+    // Данные вершин.
+    internal_data->vertex_buffer_offset = context->geometry_vertex_offset;
+    internal_data->vertex_count = vertex_count;
+    internal_data->vertex_element_size = vertex_size; // sizeof(vertex_3d)
+    total_size = vertex_count * vertex_size;
+    upload_data_range(
+        pool, null, queue, &context->object_vertex_buffer, internal_data->vertex_buffer_offset, total_size, vertices
+    );
+    // TODO: Следует использовать freelist вместо этого.
+    context->geometry_vertex_offset += total_size;
+
+    // Данные индексов, если поддерживается.
+    if(index_count && indices)
+    {
+        internal_data->index_buffer_offset = context->geometry_index_offset;
+        internal_data->index_count = index_count;
+        internal_data->index_element_size = index_size; // sizeof(u32)
+        total_size = index_count * index_size;
+        upload_data_range(
+            pool, null, queue, &context->object_index_buffer, internal_data->index_buffer_offset, total_size, indices
+        );
+        // TODO: Следует использовать freelist вместо этого.
+        context->geometry_index_offset += total_size;
+    }
+
+    if(internal_data->generation == INVALID_ID)
+    {
+        internal_data->generation = 0;
+    }
+    else
+    {
+        internal_data->generation++;
+    }
+
+    if(is_reupload)
+    {
+        // Освобождение данных вершин.
+        total_size = old_range.vertex_element_size * old_range.vertex_count;
+        free_data_range(&context->object_vertex_buffer, old_range.vertex_buffer_offset, total_size);
+
+        // Освобождение данных индексов, если доступно.
+        total_size = old_range.index_element_size * old_range.index_count;
+        if(total_size > 0)
+        {
+            free_data_range(&context->object_index_buffer, old_range.index_buffer_offset, total_size);
+        }
+    }
+
+    return true;
+}
+
+void vulkan_renderer_backend_destroy_geometry(geometry* geometry)
+{
+    if(!geometry || geometry->internal_id == INVALID_ID)
+    {
+        return;
+    }
+
+    vkDeviceWaitIdle(context->device.logical);
+    vulkan_geometry_data* internal_data = &context->geometries[geometry->internal_id];
+
+    // Освобождение данных вершин.
+    u32 total_size = internal_data->vertex_element_size * internal_data->vertex_count;
+    free_data_range(&context->object_vertex_buffer, internal_data->vertex_buffer_offset, total_size);
+
+    // Освобождение данных индексов, если доступно.
+    total_size = internal_data->index_element_size * internal_data->index_count;
+    if(total_size > 0)
+    {
+        free_data_range(&context->object_index_buffer, internal_data->index_buffer_offset, total_size);
+    }
+
+    // Освобождение диапазона для нового использования.
+    kzero_tc(internal_data, vulkan_geometry_data, 1);
+    internal_data->id = INVALID_ID;
+    internal_data->generation = INVALID_ID;
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data
@@ -948,318 +1303,4 @@ void free_data_range(vulkan_buffer* buffer, u64 offset, u64 size)
 {
     // TODO: Освободить в буфере.
     // TODO: Обновить freelist с этим диапазоном begin free.
-}
-
-void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels)
-{
-    // Создание data.
-    // TODO: Используется распределитель памяти тут.
-    texture->data = kallocate_tc(vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
-    vulkan_texture_data* data = texture->data;
-    VkDeviceSize image_size = texture->width * texture->height * texture->channel_count;
-
-    // NOTE: Предполагается 8 бит на канал.
-    VkFormat image_format = VK_FORMAT_R8G8B8A8_UNORM;
-
-    // Создание промежуточного буфера и загрузка данных в него.
-    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    vulkan_buffer staging;
-    vulkan_buffer_create(context, image_size, usage, memory_flags, true, &staging);
-
-    vulkan_buffer_load_data(context, &staging, 0, image_size, 0, pixels);
-
-    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
-    vulkan_image_create(
-        context, VK_IMAGE_TYPE_2D, texture->width, texture->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
-        &data->image
-    );
-
-    vulkan_command_buffer command_buffer;
-    VkCommandPool pool = context->device.graphics_queue.command_pool;
-    VkQueue queue = context->device.graphics_queue.handle;
-
-    vulkan_command_buffer_allocate_and_begin_single_use(context, pool, &command_buffer);
-
-    // Изменение текущий макета на оптимальный для приема данных.
-    vulkan_image_transition_layout(
-        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_UNDEFINED, 
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-    );
-
-    // Копирование данных из буфера.
-    vulkan_image_copy_from_buffer(context, &data->image, staging.handle, &command_buffer);
-
-    // Переход от оптимальной компоновки для получения данных к оптимальной компоновке только для чтения шейдеров.
-    vulkan_image_transition_layout(
-        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    );
-
-    vulkan_command_buffer_end_single_use(context, pool, &command_buffer, queue);
-
-    // Уничтожение толко после записи буфера команд, потому что во время выполнение может оказаться нулевыми данными!
-    vulkan_buffer_destroy(context, &staging);
-
-    // Создание фильтрации для текстуры.
-    VkSamplerCreateInfo sampler_info = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-    // TODO: Эти фильтры должны быть настраиваемыми.
-    sampler_info.magFilter = VK_FILTER_LINEAR;
-    sampler_info.minFilter = VK_FILTER_LINEAR;
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.anisotropyEnable = VK_TRUE;
-    sampler_info.maxAnisotropy = 16;
-    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    sampler_info.unnormalizedCoordinates = VK_FALSE;
-    sampler_info.compareEnable = VK_FALSE;
-    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
-    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    sampler_info.mipLodBias = 0.0f;
-    sampler_info.minLod = 0.0f;
-    sampler_info.maxLod = 0.0f;
-
-    VkResult result = vkCreateSampler(context->device.logical, &sampler_info, context->allocator, &data->sampler);
-    if(!vulkan_result_is_success(result))
-    {
-        kerror("Function '%s': Error creating texture sampler: %s", __FUNCTION__, vulkan_result_get_string(result, true));
-        return;
-    }
-
-    texture->generation++;
-}
-
-void vulkan_renderer_backend_destroy_texture(texture* texture)
-{
-    vkDeviceWaitIdle(context->device.logical);
-
-    vulkan_texture_data* data = texture->data;
-
-    if(data)
-    {
-        vulkan_image_destroy(context, &data->image);
-        kzero_tc(&data->image, struct vulkan_image, 1);
-        vkDestroySampler(context->device.logical, data->sampler, context->allocator);
-        kfree_tc(texture->data, vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
-    }
-    else
-    {
-        if(texture->generation != INVALID_ID)
-        {
-            kerror("Function '%s': Failed to get vulkan specific data of texture.", __FUNCTION__);
-        }
-        else
-        {
-            kwarng("Function '%s': Texture was not created. Skipping...", __FUNCTION__);
-        }
-    }
-
-    kzero_tc(texture, struct texture, 1);
-}
-
-bool vulkan_renderer_backend_create_material(material* material)
-{
-    if(!material)
-    {
-        kerror("Function '%s' required a valid pointer to material. Return false!", __FUNCTION__);
-        return false;
-    }
-
-    if(!vulkan_material_shader_acquire_resources(context, &context->material_shader, material))
-    {
-        kerror("Function '%s': Failed to acquire shader resource. Return false!", __FUNCTION__);
-        return false;
-    }
-
-    return true;
-}
-
-void vulkan_renderer_backend_destroy_material(material* material)
-{
-    if(!material)
-    {
-        kerror("Function '%s' required a valid pointer to material. Just return!", __FUNCTION__);
-        return;
-    }
-
-    if(material->internal_id == INVALID_ID)
-    {
-        kerror("Function '%s' called with material internal_id = INVALID_ID. Nothing was done.", __FUNCTION__);
-        return;
-    }
-
-    vulkan_material_shader_release_resources(context, &context->material_shader, material);
-}
-
-bool vulkan_renderer_backend_create_geometry(
-    geometry* geometry, u32 vertex_count, const vertex_3d* vertices, u32 index_count, const u32* indices
-)
-{
-    if(!vertex_count || !vertices)
-    {
-        kerror(
-            "Function '%s' requires vertex data, and none was supplied. vertex_count=%d, vertices=%p",
-            __FUNCTION__, vertex_count, vertices
-        );
-        return false;
-    }
-
-    // Проверка на повторную загрузку. Если это так, необходимо освободить старые данные после этого.
-    bool is_reupload = geometry->internal_id != INVALID_ID;
-    vulkan_geometry_data old_range;
-
-    vulkan_geometry_data* internal_data = null;
-    if(is_reupload)
-    {
-        internal_data = &context->geometries[geometry->internal_id];
-        // Копия старого диапазона.
-        kcopy_tc(&old_range, internal_data, vulkan_geometry_data, 1);
-    }
-    else
-    {
-        for(u32 i = 0; i < VULKAN_MAX_GEOMETRY_COUNT; ++i)
-        {
-            if(context->geometries[i].id == INVALID_ID)
-            {
-                // Поиск свободного индекса.
-                geometry->internal_id = i;
-                context->geometries[i].id = i;
-                internal_data = &context->geometries[i];
-                break;
-            }
-        }
-    }
-
-    if(!internal_data)
-    {
-        kerror(
-            "Function '%s': Failed to find a free index for a new geometry upload. Adjust config to allow for more.",
-            __FUNCTION__
-        );
-        return false;
-    }
-
-    VkCommandPool pool = context->device.graphics_queue.command_pool;
-    VkQueue queue = context->device.graphics_queue.handle;
-
-    // Данные вершин.
-    internal_data->vertex_buffer_offset = context->geometry_vertex_offset;
-    internal_data->vertex_count = vertex_count;
-    internal_data->vertex_size = sizeof(vertex_3d) * vertex_count;
-    upload_data_range(
-        pool, null, queue, &context->object_vertex_buffer, internal_data->vertex_buffer_offset,
-        internal_data->vertex_size, vertices
-    );
-    // TODO: Следует использовать freelist вместо этого.
-    context->geometry_vertex_offset += internal_data->vertex_size;
-
-    // Данные индексов, если поддерживается.
-    if(index_count && indices)
-    {
-        internal_data->index_buffer_offset = context->geometry_index_offset;
-        internal_data->index_count = index_count;
-        internal_data->index_size = sizeof(u32) * index_count;
-        upload_data_range(
-            pool, null, queue, &context->object_index_buffer, internal_data->index_buffer_offset,
-            internal_data->index_size, indices
-        );
-        // TODO: Следует использовать freelist вместо этого.
-        context->geometry_index_offset += internal_data->index_size;
-    }
-
-    if(internal_data->generation == INVALID_ID)
-    {
-        internal_data->generation = 0;
-    }
-    else
-    {
-        internal_data->generation++;
-    }
-
-    if(is_reupload)
-    {
-        // Освобождение данных вершин.
-        free_data_range(&context->object_vertex_buffer, old_range.vertex_buffer_offset, old_range.vertex_size);
-
-        // Освобождение данных индексов, если доступно.
-        if(old_range.index_size > 0)
-        {
-            free_data_range(&context->object_index_buffer, old_range.index_buffer_offset, old_range.index_size);
-        }
-    }
-
-    return true;
-}
-
-void vulkan_renderer_backend_destroy_geometry(geometry* geometry)
-{
-    if(!geometry || geometry->internal_id == INVALID_ID)
-    {
-        return;
-    }
-
-    vkDeviceWaitIdle(context->device.logical);
-    vulkan_geometry_data* internal_data = &context->geometries[geometry->internal_id];
-
-    // Освобождение данных вершин.
-    free_data_range(&context->object_vertex_buffer, internal_data->vertex_buffer_offset, internal_data->vertex_size);
-
-    // Освобождение данных индексов, если доступно.
-    if(internal_data->index_size > 0)
-    {
-        free_data_range(&context->object_index_buffer, internal_data->index_buffer_offset, internal_data->index_size);
-    }
-
-    // Освобождение диапазона для нового использования.
-    kzero_tc(internal_data, vulkan_geometry_data, 1);
-    internal_data->id = INVALID_ID;
-    internal_data->generation = INVALID_ID;
-}
-
-void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
-{
-    // Игнорирование не загруженных геометрий.
-    if(!data.geometry || data.geometry->internal_id == INVALID_ID)
-    {
-        return;
-    }
-
-    vulkan_geometry_data* buffer_data = &context->geometries[data.geometry->internal_id];
-    vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
-
-    // TODO: Действительно ли тут нужно.
-    vulkan_material_shader_use(context, &context->material_shader);
-
-    vulkan_material_shader_set_model(context, &context->material_shader, &data.model);
-
-    material* m = data.geometry->material;
-    if(!m)
-    {
-        m = material_system_get_default();
-    }
-    vulkan_material_shader_apply_material(context, &context->material_shader, m);
-
-    // Привязка буфера вершин co смещением.
-    VkDeviceSize offset[1] = { buffer_data->vertex_buffer_offset };
-    vkCmdBindVertexBuffers(command_buffer->handle, 0, 1, &context->object_vertex_buffer.handle, offset);
-
-    if(buffer_data->index_count > 0)
-    {
-        // Привязка буфера индексов.
-        vkCmdBindIndexBuffer(
-            command_buffer->handle, context->object_index_buffer.handle, buffer_data->index_buffer_offset,
-            VK_INDEX_TYPE_UINT32
-        );
-        // Рисовать.
-        // TODO: VUID-vkCmdDrawIndexed-None-08114
-        vkCmdDrawIndexed(command_buffer->handle, buffer_data->index_count, 1, 0, 0, 0);
-    }
-    else
-    {
-        // Рисовать.
-        vkCmdDraw(command_buffer->handle, buffer_data->vertex_count, 1, 0, 0);
-    }
 }

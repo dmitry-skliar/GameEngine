@@ -22,6 +22,8 @@ typedef struct geometry_system_state {
     geometry_system_config config;
     // @brief Геомертия по умолчанию.
     geometry default_geometry;
+    // @brief Геометрия по умолчанию 2d.
+    geometry default_2d_geometry;
     // @brief Массив геометрий.
     geometry_reference* geometries;
 } geometry_system_state;
@@ -174,7 +176,7 @@ void geometry_system_release(geometry* geometry)
 
     if(geometry->id == INVALID_ID)
     {
-        kwarng("Function '%s': Tried to release non-existent geometry.", __FUNCTION__);
+        kwarng("Function '%s' cannot release invalid geometry id.", __FUNCTION__);
         return;
     }
 
@@ -204,18 +206,30 @@ geometry* geometry_system_get_default()
     return &state_ptr->default_geometry;
 }
 
+geometry* geometry_system_get_default_2d()
+{
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return null;
+    }
+
+    return &state_ptr->default_2d_geometry;
+}
+
 bool default_geometries_create()
 {
     #define VERT_COUNT 4
+    #define INDEX_COUNT 6
+    const f32 f = 10.0f;
+
     vertex_3d verts[VERT_COUNT];
     kzero_tc(verts, vertex_3d, VERT_COUNT);
 
-    const f32 f = 10.0f;
-
-    verts[0].position.x = -0.5f * f;
-    verts[0].position.y = -0.5f * f;
-    verts[0].texcoord.x =  0.0f;
-    verts[0].texcoord.y =  0.0f;
+    verts[0].position.x = -0.5f * f; // 2    1
+    verts[0].position.y = -0.5f * f; //
+    verts[0].texcoord.x =  0.0f;     //
+    verts[0].texcoord.y =  0.0f;     // 0    3
 
     verts[1].position.x =  0.5f * f;
     verts[1].position.y =  0.5f * f;
@@ -232,17 +246,57 @@ bool default_geometries_create()
     verts[3].texcoord.x =  1.0f;
     verts[3].texcoord.y =  0.0f;
 
-    #define INDEX_COUNT 6
+    // Индексы должны идти против часовой.
     u32 indices[INDEX_COUNT] = { 0, 1, 2, 0, 3, 1 };
 
-    if(!renderer_create_geometry(&state_ptr->default_geometry, VERT_COUNT, verts, INDEX_COUNT, indices))
+    if(!renderer_create_geometry(
+        &state_ptr->default_geometry, sizeof(vertex_3d), VERT_COUNT, verts, sizeof(u32), INDEX_COUNT, indices
+    ))
     {
-        kerror("Function '%s': Failed to create default geometries.", __FUNCTION__);
+        kerror("Function '%s': Failed to create default geometry.", __FUNCTION__);
         return false;
     }
 
     // Установка материала по умолчанию.
     state_ptr->default_geometry.material = material_system_get_default();
+
+    // Создание 2d геометрии.
+    vertex_2d verts2d[VERT_COUNT];
+    kzero_tc(verts2d, vertex_2d, VERT_COUNT);
+
+    verts2d[0].position.x = -0.5f * f;  // 0    3
+    verts2d[0].position.y = -0.5f * f;  //
+    verts2d[0].texcoord.x =  0.0f;      //
+    verts2d[0].texcoord.y =  0.0f;      // 2    1
+
+    verts2d[1].position.x =  0.5f * f;
+    verts2d[1].position.y =  0.5f * f;
+    verts2d[1].texcoord.x =  1.0f;
+    verts2d[1].texcoord.y =  1.0f;
+
+    verts2d[2].position.x = -0.5f * f;
+    verts2d[2].position.y =  0.5f * f;
+    verts2d[2].texcoord.x =  0.0f;
+    verts2d[2].texcoord.y =  1.0f;
+
+    verts2d[3].position.x =  0.5f * f;
+    verts2d[3].position.y = -0.5f * f;
+    verts2d[3].texcoord.x =  1.0f;
+    verts2d[3].texcoord.y =  0.0f;
+
+    // Индексы должны идти против часовой.
+    u32 indices2d[INDEX_COUNT] = { 2, 1, 0, 3, 0, 1 };
+
+    if(!renderer_create_geometry(
+        &state_ptr->default_2d_geometry, sizeof(vertex_2d), VERT_COUNT, verts2d, sizeof(u32), INDEX_COUNT, indices2d
+    ))
+    {
+        kerror("Function '%s': Failed to create default 2d geometry.", __FUNCTION__);
+        return false;
+    }
+
+    // Установка материала по умолчанию.
+    state_ptr->default_2d_geometry.material = material_system_get_default();
 
     return true;
 }
@@ -250,7 +304,10 @@ bool default_geometries_create()
 bool geometry_create(geometry_config* config, geometry* g)
 {
     // Загрузка геометрии в память графического процессора.
-    if(!renderer_create_geometry(g, config->vertex_count, config->vertices, config->index_count, config->indices))
+    if(!renderer_create_geometry(
+        g, config->vetrex_size, config->vertex_count, config->vertices, config->index_size, config->index_count,
+        config->indices
+    ))
     {
         state_ptr->geometries[g->id].reference_count = 0;
         state_ptr->geometries[g->id].auto_release = false;
@@ -339,10 +396,14 @@ geometry_config geometry_system_generate_plane_config(
     // NOTE: В поисках искажения координат по оси z! Не забывай ОБНУЛЯТЬ выделенную ПАМЯТЬ,
     //       хоть через СТЕК, хоть через ХИП!!!!!!!!!!!!!
     geometry_config config;
+
     kzero_tc(&config, geometry_config, 1);
+    config.vetrex_size = sizeof(vertex_3d);
     config.vertex_count = x_segment_count * y_segment_count * 4;
     config.vertices = kallocate_tc(vertex_3d, config.vertex_count, MEMORY_TAG_ARRAY);
+
     kzero_tc(config.vertices, vertex_3d, config.vertex_count);
+    config.index_size = sizeof(u32);
     config.index_count = x_segment_count * y_segment_count * 6;
     config.indices = kallocate_tc(u32, config.index_count, MEMORY_TAG_ARRAY);
     kzero_tc(config.indices, u32, config.index_count);
@@ -368,10 +429,10 @@ geometry_config geometry_system_generate_plane_config(
             f32 max_uvy = ((y + 1) / (f32)y_segment_count) * tile_y;
 
             u32 v_offset = ((y * x_segment_count) + x) * 4;
-            vertex_3d* v0 = &config.vertices[v_offset + 0];
-            vertex_3d* v1 = &config.vertices[v_offset + 1];
-            vertex_3d* v2 = &config.vertices[v_offset + 2];
-            vertex_3d* v3 = &config.vertices[v_offset + 3];
+            vertex_3d* v0 = &((vertex_3d*)config.vertices)[v_offset + 0];
+            vertex_3d* v1 = &((vertex_3d*)config.vertices)[v_offset + 1];
+            vertex_3d* v2 = &((vertex_3d*)config.vertices)[v_offset + 2];
+            vertex_3d* v3 = &((vertex_3d*)config.vertices)[v_offset + 3];
 
             v0->position.x = min_x;
             v0->position.y = min_y;
@@ -395,12 +456,12 @@ geometry_config geometry_system_generate_plane_config(
 
             // Генерация индексов.
             u32 i_offset = ((y * x_segment_count) + x) * 6;
-            config.indices[i_offset + 0] = v_offset + 0;
-            config.indices[i_offset + 1] = v_offset + 1;
-            config.indices[i_offset + 2] = v_offset + 2;
-            config.indices[i_offset + 3] = v_offset + 0;
-            config.indices[i_offset + 4] = v_offset + 3;
-            config.indices[i_offset + 5] = v_offset + 1;
+            ((u32*)config.indices)[i_offset + 0] = v_offset + 0;
+            ((u32*)config.indices)[i_offset + 1] = v_offset + 1;
+            ((u32*)config.indices)[i_offset + 2] = v_offset + 2;
+            ((u32*)config.indices)[i_offset + 3] = v_offset + 0;
+            ((u32*)config.indices)[i_offset + 4] = v_offset + 3;
+            ((u32*)config.indices)[i_offset + 5] = v_offset + 1;
         }
     }
 

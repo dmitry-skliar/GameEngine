@@ -1,5 +1,6 @@
 // Собственные подключения.
 #include "resources/loaders/binary_loader.h"
+#include "resources/loaders/loader_util.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -15,15 +16,15 @@ bool binary_loader_load(resource_loader* self, const char* name, resource* out_r
     char full_file_path[512];
     string_format(full_file_path, format_str, resource_system_base_path(), name);
 
-    // TODO: Должен использоваться распределитель памяти.
-    out_resource->full_path = string_duplicate(full_file_path);
-
     file* f;
     if(!platform_file_open(full_file_path, FILE_MODE_READ | FILE_MODE_BINARY, &f))
     {
         kerror("Function '%s': Unable to open binary file '%s' for reading.", __FUNCTION__, full_file_path);
         return false;
     }
+
+    // TODO: Должен использоваться распределитель памяти.
+    out_resource->full_path = string_duplicate(full_file_path);
 
     u64 file_size = platform_file_size(f);
 
@@ -48,18 +49,7 @@ bool binary_loader_load(resource_loader* self, const char* name, resource* out_r
 
 void binary_loader_unload(resource_loader* self, resource* resource)
 {
-    if(string_length(resource->full_path) > 0)
-    {
-        string_free(resource->full_path);
-    }
-
-    if(resource->data)
-    {
-        kfree(resource->data, resource->data_size, MEMORY_TAG_FILE);
-        resource->data = null;
-        resource->data_size = 0;
-        resource->loader_id = INVALID_ID;
-    }
+    resource_unload(self, resource, MEMORY_TAG_FILE, __FUNCTION__);
 }
 
 resource_loader binary_resource_loader_create()

@@ -14,10 +14,12 @@ typedef struct geometry_system_config {
 } geometry_system_config;
 
 typedef struct geometry_config {
+    u32 vetrex_size;
     u32 vertex_count;
-    vertex_3d* vertices;
+    void* vertices;
+    u32 index_size;
     u32 index_count;
-    u32* indices;
+    void* indices;
     char name[GEOMETRY_NAME_MAX_LENGTH];
     char material_name[MATERIAL_NAME_MAX_LENGTH];
 } geometry_config;
@@ -45,6 +47,10 @@ void geometry_system_release(geometry* geometry);
 /*
 */
 geometry* geometry_system_get_default();
+
+/*
+*/
+geometry* geometry_system_get_default_2d();
 
 /*
     @brief Создает конфигурацию для плоской геометрии с учетом предоставленных параметров.

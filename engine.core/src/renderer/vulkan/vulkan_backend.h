@@ -33,7 +33,8 @@ bool vulkan_renderer_backend_create_material(material* material);
 void vulkan_renderer_backend_destroy_material(material* material);
 
 bool vulkan_renderer_backend_create_geometry(
-    geometry* geometry, u32 vertex_count, const vertex_3d* vertices, u32 index_count, const u32* indices
+    geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
+    const void* indices
 );
 
 void vulkan_renderer_backend_destroy_geometry(geometry* geometry);

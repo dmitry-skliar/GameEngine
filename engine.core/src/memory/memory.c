@@ -87,7 +87,7 @@ void* memory_allocate(u64 size, memory_tag tag)
 
     if(!block)
     {
-        kwarng("Function '%s' could not allocate memory and returned null.", __FUNCTION__);
+        kfatal("Function '%s' could not allocate memory and returned null.", __FUNCTION__);
     }
 
     if(state_ptr && block)

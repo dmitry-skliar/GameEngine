@@ -20,6 +20,7 @@
 
 // TODO: Временный тестовый код: начало.
 #include "math/kmath.h"
+#include "kstring.h"
 // TODO: Временный тестовый код: конец.
 
 typedef struct application_state {
@@ -60,6 +61,7 @@ typedef struct application_state {
 
     // TODO: Временный тестовый код: начало.
     geometry* test_geometry;
+    geometry* test_ui_geometry;
     // TODO: Временный тестовый код: конец.
 
 } application_state;
@@ -231,13 +233,50 @@ bool application_create(game* game_inst)
     kinfor("Geometry system started.");
 
     // TODO: Временный тестовый код: начало.
-
-    // TODO: Где-то опять повреждения памяти.
     geometry_config g_config = geometry_system_generate_plane_config(100.0f, 100.0f, 10, 10, 5.0f, 5.0f, "test geometry", "test_material");
     app_state->test_geometry = geometry_system_acquire_from_config(&g_config, true);
 
     kfree_tc(g_config.vertices, vertex_3d, g_config.vertex_count, MEMORY_TAG_ARRAY);
     kfree_tc(g_config.indices, u32, g_config.index_count, MEMORY_TAG_ARRAY);
+
+    // UI геометрия.
+
+    geometry_config ui_config;
+    ui_config.vetrex_size = sizeof(vertex_2d);
+    ui_config.vertex_count = 4;
+    ui_config.index_size = sizeof(u32);
+    ui_config.index_count = 6;
+    string_ncopy(ui_config.material_name, "test_ui_material", MATERIAL_NAME_MAX_LENGTH);
+    string_ncopy(ui_config.name, "test_ui_geometry", GEOMETRY_NAME_MAX_LENGTH);
+
+    const f32 f = 512.0f;
+    vertex_2d uiverts[4];
+
+    uiverts[0].position.x =  0.0f;  // 0    3
+    uiverts[0].position.y =  0.0f;  //
+    uiverts[0].texcoord.x =  0.0f;  //
+    uiverts[0].texcoord.y =  0.0f;  // 2    1
+
+    uiverts[1].position.x =  f;
+    uiverts[1].position.y =  f;
+    uiverts[1].texcoord.x =  1.0f;
+    uiverts[1].texcoord.y =  1.0f;
+
+    uiverts[2].position.x =  0.0f;
+    uiverts[2].position.y =  f;
+    uiverts[2].texcoord.x =  0.0f;
+    uiverts[2].texcoord.y =  1.0f;
+
+    uiverts[3].position.x =  f;
+    uiverts[3].position.y =  0.0f;
+    uiverts[3].texcoord.x =  1.0f;
+    uiverts[3].texcoord.y =  0.0f;
+    ui_config.vertices = uiverts;
+
+    u32 uiindices[6] = {2, 1, 0, 3, 0, 1};
+    ui_config.indices = uiindices;
+
+    app_state->test_ui_geometry = geometry_system_acquire_from_config(&ui_config, true);
 
     // app_state->test_geometry = geometry_system_get_default();
     event_register(EVENT_CODE_DEBUG_0, null, event_on_debug_event);
@@ -317,8 +356,12 @@ bool application_run()
             packet.geometry_count = 1;
             packet.geometries = &test_render;
 
-            packet.ui_geometry_count = 0;
-            packet.ui_geometries = null;
+            geometry_render_data test_ui_render;
+            test_ui_render.geometry = app_state->test_ui_geometry;
+            test_ui_render.model = mat4_translation((vec3){{0, 0, 0}});
+
+            packet.ui_geometry_count = 1;
+            packet.ui_geometries = &test_ui_render;
             // TODO: Временный тестовый код: конец.
 
             if(!renderer_draw_frame(&packet))

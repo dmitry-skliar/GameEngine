@@ -339,7 +339,7 @@ bool default_materials_create()
 
     if(!renderer_create_material(&state_ptr->default_material))
     {
-        kerror("Function '%s': Failed to acquire renderer resource for default texture.", __FUNCTION__);
+        kerror("Function '%s': Failed to acquire renderer resource for default material.", __FUNCTION__);
         return false;
     }
 
@@ -357,6 +357,9 @@ bool material_load(material_config* config, material* m)
 
     // Копирование имени материала.
     string_ncopy(m->name, config->name, MATERIAL_NAME_MAX_LENGTH);
+
+    // Тип.
+    m->type = config->type;
 
     // Цвет.
     m->diffuse_color = config->diffuse_color;

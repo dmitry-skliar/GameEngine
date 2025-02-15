@@ -1,5 +1,6 @@
 // Собственные подключения.
 #include "resources/loaders/material_loader.h"
+#include "resources/loaders/loader_util.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -16,9 +17,6 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
     char full_file_path[512];
     string_format(full_file_path, format_str, resource_system_base_path(), self->type_path, name, ".kmt");
 
-    // TODO: Должен использоваться распределитель памяти.
-    out_resource->full_path = string_duplicate(full_file_path);
-
     file* f;
     if(!platform_file_open(full_file_path, FILE_MODE_READ, &f))
     {
@@ -27,7 +25,11 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
     }
 
     // TODO: Должен использоваться распределитель памяти.
+    out_resource->full_path = string_duplicate(full_file_path);
+
+    // TODO: Должен использоваться распределитель памяти.
     material_config* resource_data = kallocate_tc(material_config, 1, MEMORY_TAG_MATERIAL);
+    resource_data->type = MATERIAL_TYPE_WORLD;
     resource_data->auto_release = true;
     resource_data->diffuse_color = vec4_one(); // белый.
     string_empty(resource_data->diffuse_map_name);
@@ -94,6 +96,23 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
                 // NOTE: Уже задано выше.
             }
         }
+        else if(string_equali(trimmed_var_name, "type"))
+        {
+            // TODO: другие типы.
+            if(string_equali(trimmed_value, "ui"))
+            {
+                resource_data->type = MATERIAL_TYPE_UI;
+            }
+            else if(string_equali(trimmed_value, "world"))
+            {
+                resource_data->type = MATERIAL_TYPE_WORLD;
+            }
+            else
+            {
+                kwarng("Error parsing type in file '%s'. Using default of world type instead.", full_file_path);
+                // NOTE: Уже задано выше.
+            }
+        }
 
         // TODO: Другие поля.
 
@@ -113,18 +132,7 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
 
 void material_loader_unload(resource_loader* self, resource* resource)
 {
-    if(string_length(resource->full_path) > 0)
-    {
-        string_free(resource->full_path);
-    }
-
-    if(resource->data)
-    {
-        kfree(resource->data, resource->data_size, MEMORY_TAG_MATERIAL);
-        resource->data = null;
-        resource->data_size = 0;
-        resource->loader_id = INVALID_ID;
-    }
+    resource_unload(self, resource, MEMORY_TAG_MATERIAL, __FUNCTION__);
 }
 
 resource_loader material_resource_loader_create()

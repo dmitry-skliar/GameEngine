@@ -56,7 +56,9 @@ typedef struct renderer_backend {
 
     void (*destroy_material)(material* material);
 
-    bool (*create_geometry)(geometry* geometry, u32 vertex_count, const vertex_3d* vertices, u32 index_count, const u32* indices);
+    bool (*create_geometry)(
+        geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count, const void* indices
+    );
 
     void (*destroy_geometry)(geometry* geometry);
 

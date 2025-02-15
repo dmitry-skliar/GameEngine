@@ -1,5 +1,6 @@
 // Собственные подключения.
 #include "resources/loaders/image_loader.h"
+#include "resources/loaders/loader_util.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -70,18 +71,7 @@ bool image_loader_load(resource_loader* self, const char* name, resource* out_re
 
 void image_loader_unload(resource_loader* self, resource* resource)
 {
-    if(string_length(resource->full_path) > 0)
-    {
-        string_free(resource->full_path);
-    }
-
-    if(resource->data)
-    {
-        kfree(resource->data, resource->data_size, MEMORY_TAG_TEXTURE);
-        resource->data = null;
-        resource->data_size = 0;
-        resource->loader_id = INVALID_ID;
-    }
+    resource_unload(self, resource, MEMORY_TAG_TEXTURE, __FUNCTION__);
 }
 
 resource_loader image_resource_loader_create()
@@ -95,4 +85,3 @@ resource_loader image_resource_loader_create()
 
     return loader;
 }
-
