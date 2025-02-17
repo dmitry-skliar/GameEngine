@@ -450,6 +450,7 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
             null, &context->image_index
     ))
     {
+        kerror("Function '%s': Failed to acquire next image index, booting.", __FUNCTION__);
         return false;
     }
 

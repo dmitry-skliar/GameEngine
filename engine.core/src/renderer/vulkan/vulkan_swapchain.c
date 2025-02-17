@@ -44,7 +44,7 @@ bool vulkan_swapchain_acquire_next_image_index(
     }
     else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
-        kfatal("Failed to acquire swapchain image!");
+        kfatal("Funtcion '%s': Failed to acquire swapchain image!", __FUNCTION__);
         return false;
     }
 
@@ -68,10 +68,11 @@ void vulkan_swapchain_present(
     if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
         vulkan_swapchain_recreate(context, context->framebuffer_width, context->framebuffer_height, swapchain);
+        kdebug("Function '%s': Swapchain recreated because swapchain returned out of date or suboptimal.", __FUNCTION__);
     }
     else if(result != VK_SUCCESS)
     {
-        kfatal("Failed to present swapchain image!");
+        kfatal("Function '%s': Failed to present swapchain image!", __FUNCTION__);
     }
 
     // Циклическое увеличение текущего кадра.
@@ -196,7 +197,10 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     VkResult result = vkCreateSwapchainKHR(context->device.logical, &swapchaininfo, context->allocator, &swapchain->handle);
     if(!vulkan_result_is_success(result))
     {
-        kfatal("Failed to create vulkan swapchain with result: %s.", vulkan_result_get_string(result, true));
+        kfatal(
+            "Function '%s': Failed to create vulkan swapchain with result: %s.",
+            __FUNCTION__, vulkan_result_get_string(result, true)
+        );
     }
 
     // Установка нулевого индекса кадра.
@@ -207,7 +211,10 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     result = vkGetSwapchainImagesKHR(context->device.logical, swapchain->handle, &swapchain->image_count, null);
     if(!vulkan_result_is_success(result))
     {
-        kfatal("Failed to get swapchain image count with result: %s", vulkan_result_get_string(result, true));
+        kfatal(
+            "Function '%s': Failed to get swapchain image count with result: %s",
+            __FUNCTION__, vulkan_result_get_string(result, true)
+        );
     }
 
     if(!swapchain->images)
@@ -223,7 +230,10 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     result = vkGetSwapchainImagesKHR(context->device.logical, swapchain->handle, &swapchain->image_count, swapchain->images);
     if(!vulkan_result_is_success(result))
     {
-        kfatal("Failed to create swapchain images with result: %s", vulkan_result_get_string(result, true));
+        kfatal(
+            "Function '%s': Failed to create swapchain images with result: %s",
+            __FUNCTION__, vulkan_result_get_string(result, true)
+        );
     }
 
     // Представления изображений цепочки.
@@ -242,7 +252,10 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
         result = vkCreateImageView(context->device.logical, &viewinfo, context->allocator, &swapchain->views[i]);
         if(!vulkan_result_is_success(result))
         {
-            kfatal("Failed to create swapchain image views with result: %s", vulkan_result_get_string(result, true));
+            kfatal(
+                "Function '%s': Failed to create swapchain image views with result: %s",
+                __FUNCTION__, vulkan_result_get_string(result, true)
+            );
         }
     }
 
@@ -250,7 +263,7 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     if(!vulkan_device_detect_depth_format(&context->device))
     {
         context->device.depth_format = VK_FORMAT_UNDEFINED;
-        kfatal("Failed to find a supported depth format.");
+        kfatal("Function '%s': Failed to find a supported depth format.", __FUNCTION__);
     }
 
     // Создание буфера глубины (изображение и его представление).

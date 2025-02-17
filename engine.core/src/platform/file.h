@@ -2,7 +2,7 @@
 
 #include <defines.h>
 
-// @brief Экземпляр файла.
+// @brief Контекст файла.
 typedef struct file file;
 
 // @brief Режим открытия файла, комбинируемый.

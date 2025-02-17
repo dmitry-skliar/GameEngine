@@ -138,27 +138,27 @@ const char* memory_system_usage_str()
     }
 
     static const char* memory_tag_strings[MEMORY_TAGS_MAX + 1] = {
-        "UNKNOWN          ",
-        "SYSTEM           ",
-        "FILE             ",
-        "ARRAY            ",
-        "DARRAY           ",
-        "HASHTABLE        ",
-        "LINEAR ALLOCATOR ",
-        "DICTIONARY       ",
-        "RING QUEUE       ",
-        "STRING           ",
-        "APPLICATION      ",
-        "JOB              ",
-        "TEXTURE          ",
-        "MATERIAL         ",
-        "RENDERER         ",
-        "GAME             ",
-        "TRANSFORM        ",
-        "ENTITY           ",
-        "ENTITY NODE      ",
-        "NODE             ",
-        "TOTAL            "
+        "UNKNOWN        ",
+        "SYSTEM         ",
+        "FILE           ",
+        "ARRAY          ",
+        "DARRAY         ",
+        "HASHTABLE      ",
+        "ALLOCATOR      ",
+        "DICTIONARY     ",
+        "RING QUEUE     ",
+        "STRING         ",
+        "APPLICATION    ",
+        "JOB            ",
+        "TEXTURE        ",
+        "MATERIAL       ",
+        "RENDERER       ",
+        "GAME           ",
+        "TRANSFORM      ",
+        "ENTITY         ",
+        "ENTITY NODE    ",
+        "NODE           ",
+        "TOTAL          "
     };
 
     const u64 gib = 1024 * 1024 * 1024;

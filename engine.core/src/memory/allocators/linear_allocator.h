@@ -2,7 +2,7 @@
 
 #include <defines.h>
 
-// @brief Экземпляр линейного распределителя памяти.
+// @brief Контекст линейного распределителя памяти.
 typedef struct linear_allocator linear_allocator;
 
 /*

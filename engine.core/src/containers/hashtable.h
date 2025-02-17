@@ -2,7 +2,7 @@
 
 #include <defines.h>
 
-// @brief Экземпляр хэш-таблицы.
+// @brief Контекст хэш-таблицы.
 typedef struct hashtable hashtable;
 
 // @brief Конфигурация хэш-таблицы.

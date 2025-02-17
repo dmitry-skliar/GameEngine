@@ -12,7 +12,7 @@ typedef struct window_config {
     i32 height;
 } window_config;
 
-// @brief Экземпляр контекста окна.
+// @brief Контекст окна.
 typedef struct window {
   // @brief Заголовок окна.
   const char* title;

@@ -203,7 +203,8 @@ typedef struct vulkan_material_shader_global_ubo {
 
 typedef struct vulkan_material_shader_instance_ubo {
     vec4 diffuse_color;    // 16 bytes.
-    vec4 m_reserved[3];    // 48 bytes.
+    vec4 v_reserved[3];    // 48 bytes.
+    // mat4 m_reserved[3];
 } vulkan_material_shader_instance_ubo;
 
 // TODO: Временно.

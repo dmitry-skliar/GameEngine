@@ -21,7 +21,7 @@ linear_allocator* linear_allocator_create(u64 size)
     }
 
     u64 total_size = sizeof(struct linear_allocator) + size;
-    linear_allocator* allocator = kallocate(total_size, MEMORY_TAG_LINEAR_ALLOCATOR);
+    linear_allocator* allocator = kallocate(total_size, MEMORY_TAG_ALLOCATOR);
 
     if(!allocator)
     {
@@ -43,7 +43,7 @@ void linear_allocator_destroy(linear_allocator* allocator)
     }
 
     u64 total_size = sizeof(struct linear_allocator) + allocator->size;
-    kfree(allocator, total_size, MEMORY_TAG_LINEAR_ALLOCATOR);
+    kfree(allocator, total_size, MEMORY_TAG_ALLOCATOR);
 }
 
 void* linear_allocator_allocate(linear_allocator* allocator, u64 size)

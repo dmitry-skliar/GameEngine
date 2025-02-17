@@ -318,10 +318,11 @@ void vulkan_material_shader_update_global_state(vulkan_context* context, vulkan_
     VkCommandBuffer command_buffer = context->graphics_command_buffers[image_index].handle;
     VkDescriptorSet global_descriptor = shader->global_descriptor_sets[image_index];
 
+    // NOTE: Позднее связывание.
     // Связывание глобального набор дескрипторов для обновления.
-    vkCmdBindDescriptorSets(
-        command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline.layout, 0, 1, &global_descriptor, 0, null
-    );
+    // vkCmdBindDescriptorSets(
+    //     command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline.layout, 0, 1, &global_descriptor, 0, null
+    // );
 
     // Настройка дескрипторов для указанного индекса.
     u32 range = sizeof(vulkan_material_shader_global_ubo);
@@ -346,11 +347,10 @@ void vulkan_material_shader_update_global_state(vulkan_context* context, vulkan_
 
     vkUpdateDescriptorSets(context->device.logical, 1, &descriptor_write, 0, null);
 
-    // TODO: Использовать позднее связывание, если не поддерживается картой! Ввести проверку на поддержку!
     // Связывание глобального набор дескрипторов для обновления.
-    // vkCmdBindDescriptorSets(
-    //     command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline.layout, 0, 1, &global_descriptor, 0, null
-    // );
+    vkCmdBindDescriptorSets(
+        command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->pipeline.layout, 0, 1, &global_descriptor, 0, null
+    );
 }
 
 void vulkan_material_shader_set_model(vulkan_context* context, vulkan_material_shader* shader, mat4* model)
