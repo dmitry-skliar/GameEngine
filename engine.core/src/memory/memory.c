@@ -68,13 +68,13 @@ void* memory_allocate(u64 size, memory_tag tag)
 {
     if(!size)
     {
-        kerror("Function '%s' requires a size greater than zero. Return null!", __FUNCTION__);
+        kerror("Function '%s' requires a size greater than zero.", __FUNCTION__);
         return null;
     }
 
     if(tag >= MEMORY_TAGS_MAX)
     {
-        kerror("Function '%s': Tag is out of bounds. Return null!", __FUNCTION__);
+        kerror("Function '%s': Tag is out of bounds.", __FUNCTION__);
         return null;
     }
 
@@ -104,19 +104,19 @@ void memory_free(void* block, u64 size, memory_tag tag)
 {
     if(!block)
     {
-        kerror("Function '%s' requires a non-null memory pointer. Just return!", __FUNCTION__);
+        kerror("Function '%s' requires a non-null memory pointer.", __FUNCTION__);
         return;
     }
 
     if(!size)
     {
-        kerror("Function '%s' requires a size greater than zero. Just return!", __FUNCTION__);
+        kerror("Function '%s' requires a size greater than zero.", __FUNCTION__);
         return;
     }
 
     if(tag >= MEMORY_TAGS_MAX)
     {
-        kerror("Function '%s': Tag is out of bounds. Just return!", __FUNCTION__);
+        kerror("Function '%s': Tag is out of bounds.", __FUNCTION__);
         return;
     }
 

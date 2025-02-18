@@ -663,7 +663,7 @@ void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
             vulkan_material_shader_apply_material(context, &context->ui_shader, m);
             break;
         default:
-            kerror("Function '%s': Unknown material type. Just return!", __FUNCTION__);
+            kerror("Function '%s': Unknown material type.", __FUNCTION__);
             return;
     }
 
@@ -803,7 +803,7 @@ bool vulkan_renderer_backend_create_material(material* material)
 {
     if(!material)
     {
-        kerror("Function '%s' required a valid pointer to material. Return false!", __FUNCTION__);
+        kerror("Function '%s' required a valid pointer to material.", __FUNCTION__);
         return false;
     }
 
@@ -812,19 +812,19 @@ bool vulkan_renderer_backend_create_material(material* material)
         case MATERIAL_TYPE_WORLD:
             if(!vulkan_material_shader_acquire_resources(context, &context->material_shader, material))
             {
-                kerror("Function '%s': Failed to acquire world shader resources. Return false!", __FUNCTION__);
+                kerror("Function '%s': Failed to acquire world shader resources.", __FUNCTION__);
                 return false;
             }
             break;
         case MATERIAL_TYPE_UI:
             if(!vulkan_material_shader_acquire_resources(context, &context->ui_shader, material))
             {
-                kerror("Function '%s': Failed to acquire UI shader resources. Return false!", __FUNCTION__);
+                kerror("Function '%s': Failed to acquire UI shader resources.", __FUNCTION__);
                 return false;
             }
             break;
         default:
-            kerror("Function '%s': Unknown material type. Return false!", __FUNCTION__);
+            kerror("Function '%s': Unknown material type.", __FUNCTION__);
             return false;
     }
 
@@ -835,7 +835,7 @@ void vulkan_renderer_backend_destroy_material(material* material)
 {
     if(!material)
     {
-        kerror("Function '%s' required a valid pointer to material. Just return!", __FUNCTION__);
+        kerror("Function '%s' required a valid pointer to material.", __FUNCTION__);
         return;
     }
 
@@ -854,7 +854,7 @@ void vulkan_renderer_backend_destroy_material(material* material)
             vulkan_material_shader_release_resources(context, &context->ui_shader, material);
             break;
         default:
-            kerror("Function '%s': Unknown material type. Just return!", __FUNCTION__);
+            kerror("Function '%s': Unknown material type.", __FUNCTION__);
             break;
     }
 }

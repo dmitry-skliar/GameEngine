@@ -398,6 +398,7 @@ u8 freelist_test6()
     u32 op_count = 0;
     const u32 max_op_count = 100000;
     u32 alloc_count = 0;
+    u64 node_count_at_peak = 0;
 
     while(op_count < max_op_count)
     {
@@ -441,6 +442,12 @@ u8 freelist_test6()
             }
         }
 
+        u64 node_count = freelist_block_count(list);
+        if(node_count_at_peak < node_count)
+        {
+            node_count_at_peak = node_count;
+        }
+
         op_count++;
     }
 
@@ -457,7 +464,7 @@ u8 freelist_test6()
         }
     }
 
-    ktrace("Freelist has block capacity: %lu.", freelist_block_capacity(list));
+    ktrace("Freelist has block count at peak: %lu (capacity: %lu).", node_count_at_peak, freelist_block_capacity(list));
 
     free_space = freelist_free_space(list);
     expect_should_be(total_size, free_space);

@@ -83,7 +83,7 @@
         pt_axis_value120, pt_axis_relative_direction
     };
 
-    static const char* message_missing_instance = "Function '%s' requires an instance of window. Just return!";
+    static const char* message_missing_instance = "Function '%s' requires an instance of window.";
 
     bool platform_window_create(u64* memory_requirement, window* instance, window_config* config)
     {

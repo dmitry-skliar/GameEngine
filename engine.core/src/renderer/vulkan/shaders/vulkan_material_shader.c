@@ -357,7 +357,7 @@ void vulkan_material_shader_set_model(vulkan_context* context, vulkan_material_s
 {
     if(!context || !shader || !model)
     {
-        kwarng("Function '%s' requires a valid pointers to context, shader and model. Just return!", __FUNCTION__);
+        kwarng("Function '%s' requires a valid pointers to context, shader and model.", __FUNCTION__);
         return;
     }
 
@@ -370,7 +370,7 @@ void vulkan_material_shader_apply_material(vulkan_context* context, vulkan_mater
 {
     if(!context || !shader || !material)
     {
-        kwarng("Function '%s' requires a valid pointers to context, shader and material. Just return!", __FUNCTION__);
+        kwarng("Function '%s' requires a valid pointers to context, shader and material.", __FUNCTION__);
         return;
     }
 

@@ -54,7 +54,7 @@ void* dynamic_array_resize(void* array, u64 capacity)
 
     if(capacity == 0 || capacity <= old_array->capacity)
     {
-        kwarng("Function '%s' requires a capacity more than %d. Return old array!", __FUNCTION__, old_array->capacity);
+        kwarng("Function '%s' requires a capacity more than %d. Returned old array!", __FUNCTION__, old_array->capacity);
         return array;
     }
 
@@ -74,7 +74,7 @@ void* dynamic_array_resize(void* array, u64 capacity)
         return (void*)((u8*)new_array + sizeof(struct dynamic_array_header));
     }
 
-    kerror("In function '%s' memory was not allocated! Returne old array!", __FUNCTION__);
+    kerror("In function '%s' memory was not allocated! Returned old array!", __FUNCTION__);
     return array;
 }
 
@@ -167,7 +167,7 @@ void dynamic_array_pop(void* array, void* dest)
         kcopy(dest, addr, header->stride);
     }
 
-    header->length -= 1;
+    header->length--;
 }
 
 void dynamic_array_pop_at(void* array, u64 index, void* dest)
@@ -204,7 +204,7 @@ void dynamic_array_pop_at(void* array, u64 index, void* dest)
         kmove(addr, addr + header->stride, header->stride * (header->length - (index + 1)));
     }
 
-    header->length -= 1;
+    header->length--;
 }
 
 void dynamic_array_clear(void* array)

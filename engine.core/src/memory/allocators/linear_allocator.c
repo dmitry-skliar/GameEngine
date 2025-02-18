@@ -38,7 +38,7 @@ void linear_allocator_destroy(linear_allocator* allocator)
 {
     if(!allocator)
     {
-        kerror("Function '%s' require a pointer to an instance of allocator. Just return!", __FUNCTION__);
+        kerror("Function '%s' require a pointer to an instance of allocator.", __FUNCTION__);
         return;
     }
 
@@ -76,7 +76,7 @@ void linear_allocator_free_all(linear_allocator* allocator)
 {
     if(!allocator)
     {
-        kerror("Function '%s' require a pointer to an instance of allocator. Just return!", __FUNCTION__);
+        kerror("Function '%s' require a pointer to an instance of allocator.", __FUNCTION__);
         return;
     }
 

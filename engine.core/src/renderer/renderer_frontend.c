@@ -23,13 +23,13 @@ typedef struct renderer_system_state {
 
 static renderer_system_state* state_ptr = null;
 static const char* message_not_initialized =
-    "Function '%s' requires the renderer system to be initialized. Call 'renderer_system_initialize' first.!";
+    "Function '%s' requires the renderer system to be initialized. Call 'renderer_system_initialize' first.";
 
 bool renderer_system_initialize(u64* memory_requirement, void* memory, window* window_state)
 {
     if(state_ptr)
     {
-        kwarng("Function '%s' was called more than once. Return false!", __FUNCTION__);
+        kwarng("Function '%s' was called more than once.", __FUNCTION__);
         return false;
     }
 

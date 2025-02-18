@@ -35,6 +35,12 @@ static void nodelist_resize(freelist* list);
 
 freelist* freelist_create(u64 total_size, u64* memory_requirement, void* memory)
 {
+    if(!total_size)
+    {
+        kerror("Function '%s' require a total_size greater than zero.", __FUNCTION__);
+        return null;
+    }
+
     if(!memory_requirement)
     {
         kerror("Function '%s' requires a valid pointer to memory_requiremet to obtain requirements.", __FUNCTION__);
@@ -56,7 +62,7 @@ freelist* freelist_create(u64 total_size, u64* memory_requirement, void* memory)
 
     if(!node)
     {
-        kerror("Function '%s': Failed to create dynamic array list. Return null!", __FUNCTION__);
+        kerror("Function '%s': Failed to create dynamic array list.", __FUNCTION__);
         return null;
     }
 
@@ -132,7 +138,7 @@ bool freelist_allocate_block(freelist* list, u64 size, u64* out_offset)
             return true;
         }
         // Если блок большего размера, то разделить его.
-        else if(node->size > size)
+        if(node->size > size)
         {
             *out_offset = node->offset;
             list->current_size -= size;
@@ -186,7 +192,6 @@ bool freelist_free_block(freelist* list, u64 size, u64 offset)
         node = node_get(list);
         node->size = size;
         node->offset = offset;
-        // node->next = null; - нет необходимости список и так содержит нули!
 
         list->current_size += size;
         list->head = node;
@@ -194,9 +199,9 @@ bool freelist_free_block(freelist* list, u64 size, u64 offset)
     }
 
     // Перелистывание элементов.
-    // NOTE: Левый   : prev = null, node.
-    //       Средний : prev, node.
-    //       Правый  : prev, node = null.
+    // Левый   : prev = null, node.
+    // Средний : prev, node.
+    // Правый  : prev, node = null.
     while(node && offset > node->offset)
     {
         prev = node;
@@ -245,7 +250,7 @@ bool freelist_free_block(freelist* list, u64 size, u64 offset)
     {
         freelist_node* new_node = node_get(list);
 
-        // FIX: Обновление node и prev.
+        // Обновление node и prev.
         if(list->nodes_updated_flag)
         {
             node = list->head;
@@ -283,7 +288,7 @@ bool freelist_resize(freelist* list, u64 new_size)
 {
     if(!list || !list->nodes)
     {
-        kerror("Function '%s' requires a valid pointer to list. Return false!", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointer to list.", __FUNCTION__);
         return false;
     }
 
@@ -307,7 +312,7 @@ void freelist_clear(freelist* list)
 {
     if(!list || !list->nodes)
     {
-        kerror("Function '%s' requires a valid pointer to list. Just return!", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointer to list.", __FUNCTION__);
         return;
     }
 
@@ -327,7 +332,7 @@ u64 freelist_free_space(freelist* list)
 {
     if(!list || !list->nodes)
     {
-        kerror("Function '%s' requires a valid pointer to list. Return 0!", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointer to list.", __FUNCTION__);
         return 0;
     }
 
@@ -338,7 +343,7 @@ u64 freelist_block_count(freelist* list)
 {
     if(!list || !list->nodes)
     {
-        kerror("Function '%s' requires a valid pointer to list. Return 0!", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointer to list.", __FUNCTION__);
         return 0;
     }
 
@@ -349,7 +354,7 @@ u64 freelist_block_capacity(freelist* list)
 {
     if(!list || !list->nodes)
     {
-        kerror("Function '%s' requires a valid pointer to list. Return 0!", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointer to list.", __FUNCTION__);
         return 0;
     }
 
@@ -358,6 +363,7 @@ u64 freelist_block_capacity(freelist* list)
 
 static freelist_node* node_get(freelist* list)
 {
+    // TODO: Что бы избавиться от флага, обновление можно вынести в отдельную функцию.
     // Расширение списка.
     if(list->node_count == list->node_capacity)
     {
@@ -370,7 +376,7 @@ static freelist_node* node_get(freelist* list)
     {
         if(list->nodes[i].size == 0)
         {
-            list->node_count += 1;
+            list->node_count++;
             return &list->nodes[i];
         }
     }
@@ -384,7 +390,7 @@ static void node_free(freelist* list, freelist_node* node)
     node->offset = 0;
     node->size = 0;
     node->next = null;
-    list->node_count -= 1;
+    list->node_count--;
 }
 
 static void nodelist_resize(freelist* list)

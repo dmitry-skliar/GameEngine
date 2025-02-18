@@ -23,8 +23,8 @@ typedef struct event_system_state {
 static event_system_state* state_ptr = null;
 static const char* message_not_initialized =
     "Function '%s' requires the event system to be initialized. Call 'event_system_initialize' first.";
-static const char* message_code_out_of_bounds = "Function '%s': Event code is out of bounds. Return false!";
-static const char* message_handler_not_present = "Function '%s' requires a handler function pointer. Return false!";
+static const char* message_code_out_of_bounds = "Function '%s': Event code is out of bounds.";
+static const char* message_handler_not_present = "Function '%s' requires a handler function pointer.";
 
 void event_system_initialize(u64* memory_requirement, void* memory)
 {
@@ -99,7 +99,7 @@ bool event_register(event_code code, void* listener, PFN_event_handler handler)
         && state_ptr->events[code].listeners[i].handler == handler)
         {
             kwarng(
-                "Function '%s': Event registered with code (%s), listener or/and function handler. Return false!",
+                "Function '%s': Event registered with code (%s), listener or/and function handler.",
                 __FUNCTION__, event_code_str(code)
             );
             return false;
@@ -133,7 +133,7 @@ bool event_unregister(event_code code, void* listener, PFN_event_handler handler
 
     if(state_ptr->events[code].listeners == null)
     {
-        kwarng("Function '%s': Event code (%s) has no listeners. Return false!", __FUNCTION__, event_code_str(code));
+        kwarng("Function '%s': Event code (%s) has no listeners.", __FUNCTION__, event_code_str(code));
         return false;
     }
 
@@ -151,7 +151,7 @@ bool event_unregister(event_code code, void* listener, PFN_event_handler handler
     }
 
     kwarng(
-        "Function '%s': Event code (%s) does not have a listener or/and function handler. Return false!",
+        "Function '%s': Event code (%s) does not have a listener or/and function handler.",
         __FUNCTION__, event_code_str(code)
     );
     return false;

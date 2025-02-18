@@ -108,13 +108,13 @@ bool application_create(game* game_inst)
 {
     if(app_state)
     {
-        kerror("Function '%s' was called more than once. Return false!", __FUNCTION__);
+        kerror("Function '%s' was called more than once.", __FUNCTION__);
         return false;
     }
 
     if(!game_inst)
     {
-        kerror("Function '%s' require a game structure. Return false!", __FUNCTION__);
+        kerror("Function '%s' require a game structure.", __FUNCTION__);
         return false;
     }
 
