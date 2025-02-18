@@ -8,6 +8,7 @@
 // Подключения тестов.
 #include "memory/linear_allocator_tests.h"
 #include "containers/hashtable_tests.h"
+#include "containers/freelist_test.h"
 #include "string/kstring_tests.h"
 
 int main()
@@ -26,6 +27,7 @@ int main()
         linear_allocator_register_tests();
         hashtable_register_tests();
         string_register_tests();
+        freelist_register_tests();
     }
     // INFO: Конец регистрации тестов.
 

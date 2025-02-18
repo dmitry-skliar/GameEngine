@@ -25,9 +25,11 @@ struct freelist {
     freelist_node* nodes;
     // Указатель на первый элемент списка.
     freelist_node* head;
+    // Флаг указывающий что были обнавлены указатели nodes и head.
+    bool nodes_updated_flag;
 };
 
-static freelist_node* node_get(freelist* list);
+static freelist_node* node_get(freelist* list); // При использовании проверять флаг nodes_updated_flag!
 static void node_free(freelist* list, freelist_node* node);
 static void nodelist_resize(freelist* list);
 
@@ -67,6 +69,7 @@ freelist* freelist_create(u64 total_size, u64* memory_requirement, void* memory)
     // Настройка заголовка.
     list->nodes = node;
     list->head = node;
+    list->nodes_updated_flag = false;
     list->node_capacity = NODE_START; //darray_capacity(list->nodes);
     list->node_count = 1;
     list->total_size = total_size;
@@ -183,7 +186,7 @@ bool freelist_free_block(freelist* list, u64 size, u64 offset)
         node = node_get(list);
         node->size = size;
         node->offset = offset;
-        node->next = null;
+        // node->next = null; - нет необходимости список и так содержит нули!
 
         list->current_size += size;
         list->head = node;
@@ -241,6 +244,22 @@ bool freelist_free_block(freelist* list, u64 size, u64 offset)
     if(!linked_flag)
     {
         freelist_node* new_node = node_get(list);
+
+        // FIX: Обновление node и prev.
+        if(list->nodes_updated_flag)
+        {
+            node = list->head;
+            prev = null;
+
+            while(node && offset > node->offset)
+            {
+                prev = node;
+                node = node->next;
+            }
+
+            list->nodes_updated_flag = false;
+        }
+
         new_node->offset = offset;
         new_node->size = size;
         new_node->next = node;
@@ -346,7 +365,8 @@ static freelist_node* node_get(freelist* list)
     }
 
     // Получение нового элемента.
-    for(u64 i = 0; i < list->node_capacity; ++i)
+    u64 i = list->nodes_updated_flag ? list->node_count : 0;
+    for(; i < list->node_capacity; ++i)
     {
         if(list->nodes[i].size == 0)
         {
@@ -370,8 +390,8 @@ static void node_free(freelist* list, freelist_node* node)
 static void nodelist_resize(freelist* list)
 {
     freelist_node* old_nodes = list->nodes; // Для удаления старого списка.
-    freelist_node* node = list->head;       // Для получения упорядоченого списка.
-    freelist_node* prev = null;             // Для воссоздания новых связей.
+    freelist_node* node = list->head;       // Для получения упорядоченого старого списка.
+    freelist_node* prev = null;             // Для воссоздания связей новго списка.
 
     u64 node_index = 0;
     u64 node_capacity_new = list->node_capacity * NODE_RESIZE_FACTOR;
@@ -381,7 +401,7 @@ static void nodelist_resize(freelist* list)
 
     while(node)
     {
-        list->nodes[node_index] = *node;
+        list->nodes[node_index] = *node;    // Копирование данных.
 
         if(prev)
         {
@@ -393,9 +413,9 @@ static void nodelist_resize(freelist* list)
         ++node_index;
     }
 
-    prev->next = null;        // Нужно обнулять указатель только у последнего элемента.
-    list->head = list->nodes; // Восстановление первого элемента списка.
+    prev->next = null;            // Нужно обнулять указатель только у последнего элемента.
+    list->head = list->nodes;     // Восстановление первого элемента списка.
     list->node_capacity = node_capacity_new;
-
-    darray_destroy(old_nodes);
+    list->nodes_updated_flag = true;
+    darray_destroy(old_nodes);    // Удаление старого массива.
 }

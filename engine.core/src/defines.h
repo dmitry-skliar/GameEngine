@@ -65,23 +65,23 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define false 0
 #define true  1
 
-#define U8_MIN  0x00
-#define I8_MIN  0x80
-#define U16_MIN 0x0000
-#define I16_MIN 0x8000
-#define U32_MIN 0x00000000
-#define I32_MIN 0x80000000
-#define U64_MIN 0x0000000000000000
-#define I64_MIN 0x8000000000000000
+#define U64_MAX 18446744073709551615UL
+#define U32_MAX 4294967295U
+#define U16_MAX 65535U
+#define U8_MAX  255U
+#define U64_MIN 0UL
+#define U32_MIN 0U
+#define U16_MIN 0U
+#define U8_MIN  0U
 
-#define U8_MAX  0xff
-#define I8_MAX  0x7f
-#define U16_MAX 0xffff
-#define I16_MAX 0x7fff
-#define U32_MAX 0xffffffff
-#define I32_MAX 0x7fffffff
-#define U64_MAX 0xffffffffffffffff
-#define I64_MAX 0x7fffffffffffffff
+#define I8_MAX  127
+#define I16_MAX 32767
+#define I32_MAX 2147483647
+#define I64_MAX 9223372036854775807L
+#define I8_MIN  (-I8_MAX  - 1)
+#define I16_MIN (-I16_MAX - 1)
+#define I32_MIN (-I32_MAX - 1)
+#define I64_MIN (-I64_MAX - 1)
 
 #define INVALID_ID -1
 
@@ -160,7 +160,6 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 */
 #define KCOPY1BYTE(dest, src) *((u8*)dest) = *((u8*)src)
 
-// TODO: Перенести в kmath начало.
 /*
     @brief Макрос усечения значения в указанных пределах.
     @param value Значение, которое нужно усечь.
@@ -185,5 +184,21 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     @return Максимальное значение.
 */
 #define KMAX(v0,v1) (v0 > v1 ? v0 : v1)
-// TODO: Перенести в kmath конец.
 
+// @brief Получает количество байтов из количества гибибайтов (ГиБ) (1024*1024*1024).
+#define GIBIBYTES(amount) ((amount) * 1024ULL * 1024ULL * 1024ULL)
+
+// @brief Получает количество байтов из количества мебибайт (МиБ) (1024*1024).
+#define MEBIBYTES(amount) ((amount) * 1024ULL * 1024ULL)
+
+// @brief Получает количество байтов из количества кибибайт (КиБ) (1024).
+#define KIBIBYTES(amount) ((amount) * 1024ULL)
+
+// @brief Получает количество байтов из количества гигабайт (ГБ) (1000*1000*1000).
+#define GIGABYTES(amount) ((amount) * 1000ULL * 1000ULL * 1000ULL)
+
+// @brief Получает количество байтов из количества мегабайт (МБ) (1000*1000).
+#define MEGABYTES(amount) ((amount) * 1000ULL * 1000ULL)
+
+// @brief Получает количество байтов из количества килобайт (КБ) (1000).
+#define KILOBYTES(amount) ((amount) * 1000ULL)
