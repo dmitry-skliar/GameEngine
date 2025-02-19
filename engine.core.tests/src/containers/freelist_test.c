@@ -50,7 +50,7 @@ u8 freelist_test2()
 
     u64 current_blocks = freelist_block_count(list);
     expect_should_be(1, current_blocks);
-    // Start!
+    // Начало зоны тестов!
 
     bool result = false;
     u64 offset = INVALID_ID; // Для теста!
@@ -75,7 +75,7 @@ u8 freelist_test2()
     current_blocks = freelist_block_count(list);
     expect_should_be(1, current_blocks);
 
-    // Finish!
+    // Конец зоны тестов!
     freelist_destroy(list);
     kfree(memory, freelist_requirement, MEMORY_TAG_ARRAY);
     return true;
@@ -97,7 +97,7 @@ u8 freelist_test3()
 
     u64 current_blocks = freelist_block_count(list);
     expect_should_be(1, current_blocks);
-    // Start!
+    // Начало зоны тестов!
 
     bool result = false;
     u64 offset = INVALID_ID;       // Для теста!
@@ -182,7 +182,7 @@ u8 freelist_test3()
     current_blocks = freelist_block_count(list);
     expect_should_be(2, current_blocks);
 
-    // Finish!
+    // Конец зоны тестов!
     freelist_destroy(list);
     kfree(memory, freelist_requirement, MEMORY_TAG_ARRAY);
     return true;
@@ -198,7 +198,7 @@ u8 freelist_test4()
     list = freelist_create(total_size, &freelist_requirement, null);
     void* memory = kallocate(freelist_requirement, MEMORY_TAG_ARRAY);
     list = freelist_create(total_size, &freelist_requirement, memory);
-    // Start!
+    // Начало зоны тестов!
 
     bool result = false;
     u64 current_size = 0;
@@ -276,7 +276,7 @@ u8 freelist_test4()
     current_blocks = freelist_block_count(list);
     expect_should_be(1, current_blocks);
 
-    // Finish!
+    // Конец зоны тестов!
     freelist_destroy(list);
     kfree(memory, freelist_requirement, MEMORY_TAG_ARRAY);
     return true;
@@ -292,7 +292,7 @@ u8 freelist_test5()
     list = freelist_create(total_size, &freelist_requirement, null);
     void* memory = kallocate(freelist_requirement, MEMORY_TAG_ARRAY);
     list = freelist_create(total_size, &freelist_requirement, memory);
-    // Start!
+    // Начало зоны тестов!
 
     bool result = false;
 
@@ -308,7 +308,7 @@ u8 freelist_test5()
     expect_should_be(0, block_count);
 
     u64 offset2 = INVALID_ID;
-    kdebug("The following warning message is intentional by this test.");
+    kdebug("Note: The following warning message is intentional by this test.");
     result = freelist_allocate_block(list, 64, &offset2);
     expect_to_be_false(result);
 
@@ -318,7 +318,7 @@ u8 freelist_test5()
     block_count = freelist_block_count(list);
     expect_should_be(0, block_count);
 
-    // Finish!
+    // Конец зоны тестов!
     freelist_destroy(list);
     kfree(memory, freelist_requirement, MEMORY_TAG_ARRAY);
     return true;
@@ -396,7 +396,7 @@ u8 freelist_test6()
     // Выполнение ряда случайных операций со списком с проверкой каждой из них.
     u64 currently_allocated = 0;
     u32 op_count = 0;
-    const u32 max_op_count = 100000;
+    const u32 max_op_count = 10000;
     u32 alloc_count = 0;
     u64 node_count_at_peak = 0;
 

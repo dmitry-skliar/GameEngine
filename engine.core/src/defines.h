@@ -202,3 +202,19 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 
 // @brief Получает количество байтов из количества килобайт (КБ) (1000).
 #define KILOBYTES(amount) ((amount) * 1000ULL)
+
+/*
+    @brief Вычисляет новый указатель относительно заданного указателя и смещения.
+    @param ptr Указатель для вычисления нового.
+    @param offset Смещение в байтах.
+    @return Новое значение указателя.
+*/
+#define OFFSET_PTR(ptr, offset) (void*)((u8*)ptr + offset)
+
+/*
+    @brief Получает значение поля структуры заданного типом и указателем.
+    @param type Тип структуры.
+    @param ptr Указатель на структуру.
+    @return Возращает значение поля структуры.
+*/
+#define MEMBER_GET(type, ptr, member) (((type*)(ptr))->member)

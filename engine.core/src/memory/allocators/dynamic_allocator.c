@@ -6,30 +6,33 @@
 #include "memory/memory.h"
 
 typedef struct dynamic_allocator_node {
+    // Служебная информация о размере памяти.
     u64 size;
+    // Слежебная информация о следующем блоке или часть выделенной памяти.
     struct dynamic_allocator_node * next;
-} dynamic_allocator_node ;
+} dynamic_allocator_node;
 
 struct dynamic_allocator {
     // Максимальный размера памяти.
     u64 total_size;
     // Доступный размер памяти в данный момент.
-    u64 current_size;
+    u64 free_size;
     // Указатель блок памяти.
-    void* memory_block;
+    void* memory;
     // Количество свободных блоков памяти.
     u64 block_count;
     // Указатель на первый свободный блок памяти.
-    dynamic_allocator_node * head;
+    dynamic_allocator_node* blocks;
 };
-
 
 dynamic_allocator* dynamic_allocator_create(u64 total_size, u64* memory_requirement, void* memory)
 {
-    u64 min_size = sizeof(dynamic_allocator_node); // Защита от дурака =)
-    if(!total_size || total_size < min_size)
+    if(!total_size || total_size < sizeof(dynamic_allocator_node))
     {
-        kerror("Function '%s' require total_size greater than or equal to %llu B.", __FUNCTION__, min_size);
+        kerror(
+            "Function '%s' require total_size greater than or equal to %llu B.",
+            __FUNCTION__, sizeof(dynamic_allocator_node)
+        );
         return null;
     }
 
@@ -39,13 +42,7 @@ dynamic_allocator* dynamic_allocator_create(u64 total_size, u64* memory_requirem
         return null;
     }
 
-    // Это минимум необходимый для работы распределителя памяти.
-    if(total_size < sizeof(dynamic_allocator_node ))
-    {
-        total_size = sizeof(dynamic_allocator_node );
-    }
-
-    *memory_requirement = sizeof(dynamic_allocator) + total_size;
+    *memory_requirement = sizeof(dynamic_allocator) + sizeof(u64) + total_size;
 
     if(!memory)
     {
@@ -56,28 +53,29 @@ dynamic_allocator* dynamic_allocator_create(u64 total_size, u64* memory_requirem
     dynamic_allocator* allocator = memory;
 
     // Настройка заголовка.
-    allocator->memory_block = (void*)((u8*)allocator + sizeof(dynamic_allocator));
-    allocator->head = allocator->memory_block;
+    allocator->memory = OFFSET_PTR(allocator, sizeof(dynamic_allocator));
+    allocator->blocks = allocator->memory;
     allocator->total_size = total_size;
-    allocator->current_size = total_size;
+    allocator->free_size = total_size;
     allocator->block_count = 1;
 
     // Настройка блока свободной памяти.
-    allocator->head->size = total_size; // Т.к. при выделении памяти, заголовок уничтожается!
-    allocator->head->next = null;
+    allocator->blocks->size = total_size;
+    allocator->blocks->next = null;
 
     return allocator;
 }
 
 void dynamic_allocator_destroy(dynamic_allocator* allocator)
 {
-    if(!allocator || !allocator->memory_block)
+    if(!allocator || !allocator->memory)
     {
         kerror("Function '%s' requires a valid pointer to dynamic allocator.", __FUNCTION__);
         return;
     }
 
-    if(allocator->current_size != allocator->total_size)
+    // TODO: Вынесити в главный распределитель!
+    if(allocator->free_size != allocator->total_size)
     {
         kwarng(
             "Function '%s' called when memory has not yet been freed. The operation will not be aborted!",
@@ -91,41 +89,40 @@ void dynamic_allocator_destroy(dynamic_allocator* allocator)
 
 void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size)
 {
-    if(!allocator || !allocator->memory_block)
+    if(!allocator || !allocator->memory)
     {
         kerror("Function '%s' requires a valid pointer to dynamic allocator.", __FUNCTION__);
         return null;
     }
 
-    if(!size)
+    // Минимально допустимый размер памяти.
+    if(size < sizeof(u64))
     {
-        kerror("Function '%s' requires a size greater than zero.", __FUNCTION__);
-        return null;
+        kwarng("Function '%s': Requested size is less than %llu B, it will be equal to it.", __FUNCTION__, sizeof(u64));
+        size = sizeof(u64);
     }
 
-    // Минимально допустимый размер выделения участак памяти, решает 2 проблемы:
-    // 1. При освобождении участка такого размера, есть место для записи служебной структуры.
-    // 2. При выделении участка памяти, в моменте когда идет разделения куска может возникнуть
-    //    опасная ситуация, что служебные структуры могут наложиться и запись повредит обе!
-    u64 min_size = sizeof(dynamic_allocator_node);
-
-    // Маленькая хитрость, если все же есть необходимость выделить больше нуля, но меньше необходимого,
-    // тогда просто отдадим минимально допустимый кусок памяти. 
-    if(size < min_size)
-    {
-        size = min_size;
-    }
-
-    if(size > allocator->current_size)
+    if(size > allocator->free_size)
     {
         goto j_remaining;
     }
 
-    dynamic_allocator_node* node = allocator->head;
+    dynamic_allocator_node* node = allocator->blocks;
     dynamic_allocator_node* prev = null;
 
     while(node)
     {
+        bool greater_than = node->size > size;
+
+        // Упреждающая проверка:
+        // - Возможность хранить служемную информацию при разделении блока.
+        // - Избавляет от вложенного вызова выделения памяти.
+        if(greater_than && (node->size - size) < sizeof(dynamic_allocator_node))
+        {
+            size = node->size;
+        }
+
+        // Получение существующего блока.
         if(node->size == size)
         {
             if(prev)
@@ -134,20 +131,23 @@ void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size)
             }
             else
             {
-                allocator->head = node->next;
+                allocator->blocks = node->next;
             }
 
             allocator->block_count--;
-            allocator->current_size -= size;
-            return node;
+            allocator->free_size -= size;
+            return OFFSET_PTR(node, sizeof(u64));
         }
 
-        if(node->size > size)
+        // Резделение блока (см. упреждаюую проверку).
+        if(greater_than)
         {
-            // Данный способ исключает дробление в первую очередь большого куска памяти
-            // на мелкие, если у нас уже есть свободные подходящего размера.
-            dynamic_allocator_node* piece = (void*)((u8*)node + size);
-            piece->size = node->size - size;
+            // Резервирование места под хранимую служебную информацию (размер блока только).
+            u64 offset = size + sizeof(u64);
+
+            // Данный способ исключает дробление большого куска памяти на мелкие в первую очередь.
+            dynamic_allocator_node* piece = (void*)((u8*)node + offset);
+            piece->size = node->size - offset;
             piece->next = node->next;
 
             if(prev)
@@ -156,11 +156,12 @@ void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size)
             }
             else
             {
-                allocator->head = piece;
+                allocator->blocks = piece;
             }
 
-            allocator->current_size -= size;
-            return node;
+            node->size = size;
+            allocator->free_size -= offset;
+            return OFFSET_PTR(node, sizeof(u64));
         }
 
         prev = node;
@@ -168,67 +169,52 @@ void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size)
     }
 
 j_remaining:
-    // На всякий случай, что бы потом не потерять голову! =)
-    if(size == min_size)
-    {
-        kwarng(
-            "Function '%s': If the requested size is less than %llu, it will be equal to it.",
-            __FUNCTION__, min_size
-        );
-    }
-
     kwarng(
-        "Function '%s': No block with enough free space found. Requested: %llu B, remaining: %llu B (blocks %llu).",
-        __FUNCTION__, size, allocator->current_size, allocator->block_count
+        "Function '%s': No block with enough free space found. Requested %llu B, remaining %llu B (blocks %llu).",
+        __FUNCTION__, size, allocator->free_size, allocator->block_count
     );
     return null;
 }
 
-bool dynamic_allocator_free(dynamic_allocator* allocator, void* block, u64 size)
+bool dynamic_allocator_free(dynamic_allocator* allocator, void* block)
 {
-    if(!allocator || !allocator->memory_block || !block)
+    if(!allocator || !allocator->memory)
     {
-        kerror("Function '%s' requires a valid pointer to dynamic allocator and block of memory.", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointer to dynamic allocator.", __FUNCTION__);
         return false;
     }
 
-    void* min_area = allocator->memory_block;
-    void* max_area = (u8*)min_area + allocator->total_size;
-    void* block_offset_right = (u8*)block + size;
+    if(!block)
+    {
+        kerror("Function '%s' requires a valid pointer to block of memory.", __FUNCTION__);
+        return false;
+    }
 
-    if(block < min_area || block >= max_area || block_offset_right > max_area)
+    void* block_offset_right = block;
+    block = OFFSET_PTR(block, -sizeof(u64));
+
+    // Получение доступа к служебной информации.
+    u64 block_size = MEMBER_GET(dynamic_allocator_node, block, size);
+    block_offset_right = OFFSET_PTR(block_offset_right, block_size);
+
+    void* min_area = allocator->memory;
+    void* max_area = OFFSET_PTR(min_area, sizeof(u64) + allocator->total_size);
+
+    if(block < min_area || block_offset_right > max_area)
     {
         kerror("Function '%s': Attempting to free memory out of range.", __FUNCTION__);
         return false;
     }
 
-    // Максимально возможный размер памяти который на данный момент можно вернуть.
-    u64 max_size = allocator->total_size - allocator->current_size;
-
-    if(!size || size > max_size)
-    {
-        kerror(
-            "Function '%s' requires a size greater than zero and less than or equal to %llu.",
-            __FUNCTION__, max_size
-        );
-        return false;
-    }
-
-    u64 min_size = sizeof(dynamic_allocator_node);
-
-    if(size < min_size)
-    {
-        size = min_size;
-    }
-
-    dynamic_allocator_node* node  = allocator->head;
+    dynamic_allocator_node* node  = allocator->blocks;
     dynamic_allocator_node* prev  = null;
 
     if(!node)
     {
-        allocator->head = block;
-        allocator->head->size = size;
-        allocator->head->next = null;
+        allocator->blocks = block;
+        allocator->blocks->size = block_size;
+        allocator->blocks->next = null;
+        allocator->free_size += block_size;
         allocator->block_count++;
         return true;
     }
@@ -243,7 +229,7 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block, u64 size)
         node = node->next;
     }
 
-    void* block_offset_left = prev ? (u8*)prev + prev->size : null;
+    void* block_offset_left = prev ? OFFSET_PTR(prev, sizeof(u64) + prev->size) : null;
 
     // Проверка на коллизию границ.
     if((prev && block_offset_left > block) || (node && block_offset_right > (void*)node))
@@ -257,7 +243,8 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block, u64 size)
     // Попытка присоединить слева.
     if(prev && block_offset_left == block)
     {
-        prev->size += size;
+        prev->size += block_size + sizeof(u64);
+        allocator->free_size += sizeof(u64);
         linked = true;
     }
 
@@ -266,15 +253,17 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block, u64 size)
     // Попытка присоединить справа.
     if(node && block_offset_right == node)
     {
+        u64 node_size = node->size + sizeof(u64);
+        
         if(linked)
         {
-            prev->size += node->size;
+            prev->size += node_size;
             prev->next = node->next;
             allocator->block_count--;
         }
         else
         {
-            entry->size = node->size + size;
+            entry->size += node_size;
             entry->next = node->next;
 
             if(prev)
@@ -283,16 +272,17 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block, u64 size)
             }
             else
             {
-                allocator->head = entry;
+                allocator->blocks = entry;
             }
 
             linked = true;
         }
+
+        allocator->free_size += sizeof(u64);
     }
 
     if(!linked)
     {
-        entry->size = size;
         entry->next = node;
 
         if(prev)
@@ -301,30 +291,30 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block, u64 size)
         }
         else
         {
-            allocator->head = entry;
+            allocator->blocks = entry;
         }
 
         allocator->block_count++;
     }
 
-    allocator->current_size += size;
+    allocator->free_size += block_size;
     return true;
 }
 
 u64 dynamic_allocator_free_space(dynamic_allocator* allocator)
 {
-    if(!allocator || !allocator->memory_block)
+    if(!allocator || !allocator->memory)
     {
         kerror("Function '%s' requires a valid pointer to dynamic allocator.", __FUNCTION__);
         return 0;
     }
 
-    return allocator->current_size;
+    return allocator->free_size;
 }
 
-u64 dynamic_allocator_block_count(dynamic_allocator* allocator)
+u64 dynamic_allocator_free_blocks(dynamic_allocator* allocator)
 {
-    if(!allocator || !allocator->memory_block)
+    if(!allocator || !allocator->memory)
     {
         kerror("Function '%s' requires a valid pointer to dynamic allocator.", __FUNCTION__);
         return 0;

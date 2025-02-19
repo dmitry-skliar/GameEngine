@@ -19,7 +19,7 @@ KAPI void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size);
 
 /*
 */
-KAPI bool dynamic_allocator_free(dynamic_allocator* allocator, void* block, u64 size);
+KAPI bool dynamic_allocator_free(dynamic_allocator* allocator, void* block);
 
 /*
 */
@@ -27,4 +27,4 @@ KAPI u64 dynamic_allocator_free_space(dynamic_allocator* allocator);
 
 /*
 */
-KAPI u64 dynamic_allocator_block_count(dynamic_allocator* allocator);
+KAPI u64 dynamic_allocator_free_blocks(dynamic_allocator* allocator);
