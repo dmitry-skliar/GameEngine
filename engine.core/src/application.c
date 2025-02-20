@@ -114,17 +114,7 @@ bool application_create(game* game_inst)
         return false;
     }
 
-    // Создание контекста приложения.
-    app_state = kallocate_tc(application_state, 1, MEMORY_TAG_APPLICATION); // NOTE: Первый возов до инициализации системы памяти.
-    kzero_tc(app_state, application_state, 1);
-    app_state->game_inst = game_inst;
-    game_inst->application_state = app_state;
-
     // TODO: Сделать менеджер систем и подсистем. Решит проблему правильной инициализации и завершения.
-    // Создание системного линейного распределителя памяти.
-    u64 systems_allocator_total_size = 64 * 1024 * 1024; // 64 Mb                         // NOTE: Второй вызов внутри линейного распределителя до инициализации системы памяти.
-    app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size); // TODO: Реарганизовать!
-
     // Система контроля памяти.
     memory_system_config memory_cfg;
     memory_cfg.total_allocation_size = GIBIBYTES(1);
@@ -134,6 +124,16 @@ bool application_create(game* game_inst)
         return false;
     }
     kinfor("Memory system started.");
+
+    // Создание контекста приложения.
+    app_state = kallocate_tc(application_state, 1, MEMORY_TAG_APPLICATION);
+    kzero_tc(app_state, application_state, 1);
+    app_state->game_inst = game_inst;
+    game_inst->application_state = app_state;
+
+    // Создание системного линейного распределителя памяти.
+    u64 systems_allocator_total_size = MEBIBYTES(64);
+    app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size); // TODO: Реарганизовать!
 
     // Система событий (должно быть инициализировано до создания окна приложения).
     event_system_initialize(&app_state->event_system_memory_requirement, null);
@@ -431,9 +431,6 @@ bool application_run()
     event_system_shutdown();
     kinfor("Event system stopped.");
 
-    memory_system_shutdown();
-    kinfor("Memory system stopped.");
-
     linear_allocator_free_all(app_state->systems_allocator);
     linear_allocator_destroy(app_state->systems_allocator);
     app_state->systems_allocator = null;
@@ -441,6 +438,9 @@ bool application_run()
 
     kfree_tc(app_state, application_state, 1, MEMORY_TAG_APPLICATION);
     app_state = null;
+
+    memory_system_shutdown();
+    kinfor("Memory system stopped.");
 
     return true;
 }

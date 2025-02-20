@@ -34,6 +34,14 @@ void vulkan_buffer_unlock_memory(vulkan_context* context, vulkan_buffer* buffer)
 
 /*
 */
+bool vulkan_buffer_allocate(vulkan_buffer* buffer, u64 size, u64* out_offset);
+
+/*
+*/
+bool vulkan_buffer_free(vulkan_buffer* buffer, u64 size, u64 offset);
+
+/*
+*/
 void vulkan_buffer_load_data(
     vulkan_context* context, vulkan_buffer* buffer, u64 offset, u64 size, u32 flags, const void* data
 );

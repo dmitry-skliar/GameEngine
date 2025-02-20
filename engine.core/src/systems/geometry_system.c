@@ -249,6 +249,10 @@ bool default_geometries_create()
     // Индексы должны идти против часовой.
     u32 indices[INDEX_COUNT] = { 0, 1, 2, 0, 3, 1 };
 
+    // Настройка геометрии по умолчанию.
+    state_ptr->default_geometry.material = material_system_get_default();
+    state_ptr->default_geometry.internal_id = INVALID_ID;
+
     if(!renderer_create_geometry(
         &state_ptr->default_geometry, sizeof(vertex_3d), VERT_COUNT, verts, sizeof(u32), INDEX_COUNT, indices
     ))
@@ -256,9 +260,6 @@ bool default_geometries_create()
         kerror("Function '%s': Failed to create default geometry.", __FUNCTION__);
         return false;
     }
-
-    // Установка материала по умолчанию.
-    state_ptr->default_geometry.material = material_system_get_default();
 
     // Создание 2d геометрии.
     vertex_2d verts2d[VERT_COUNT];
@@ -287,6 +288,10 @@ bool default_geometries_create()
     // Индексы должны идти против часовой.
     u32 indices2d[INDEX_COUNT] = { 2, 1, 0, 3, 0, 1 };
 
+    // Настройка 2d геометрии по умолчанию.
+    state_ptr->default_2d_geometry.material = material_system_get_default();
+    state_ptr->default_2d_geometry.internal_id = INVALID_ID;
+
     if(!renderer_create_geometry(
         &state_ptr->default_2d_geometry, sizeof(vertex_2d), VERT_COUNT, verts2d, sizeof(u32), INDEX_COUNT, indices2d
     ))
@@ -294,9 +299,6 @@ bool default_geometries_create()
         kerror("Function '%s': Failed to create default 2d geometry.", __FUNCTION__);
         return false;
     }
-
-    // Установка материала по умолчанию.
-    state_ptr->default_2d_geometry.material = material_system_get_default();
 
     return true;
 }

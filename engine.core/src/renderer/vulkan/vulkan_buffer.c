@@ -3,10 +3,18 @@
 #include "renderer/vulkan/vulkan_command_buffer.h"
 #include "renderer/vulkan/vulkan_utils.h"
 
-
-// Internal includies.
+// Внутренние подключения.
 #include "logger.h"
 #include "memory/memory.h"
+#include "containers/freelist.h"
+
+void cleanup_freelist(vulkan_buffer* buffer)
+{
+    freelist_destroy(buffer->buffer_freelist);
+    kfree(buffer->freelist_memory, buffer->freelist_memory_requirement, MEMORY_TAG_RENDERER);
+    buffer->freelist_memory_requirement = 0;
+    buffer->freelist_memory = null;
+}
 
 bool vulkan_buffer_create(
     vulkan_context* context, u64 size, VkBufferUsageFlagBits usage, u32 memory_property_flags,
@@ -17,6 +25,17 @@ bool vulkan_buffer_create(
     out_buffer->total_size = size;
     out_buffer->usage = usage;
     out_buffer->memory_property_flags = memory_property_flags;
+
+    // Создание списка свободной памяти.
+    out_buffer->freelist_memory_requirement = 0;
+    freelist_create(size, &out_buffer->freelist_memory_requirement, null);
+    out_buffer->freelist_memory = kallocate(out_buffer->freelist_memory_requirement, MEMORY_TAG_RENDERER);
+    out_buffer->buffer_freelist = freelist_create(size, &out_buffer->freelist_memory_requirement, out_buffer->freelist_memory);
+    if(!out_buffer->buffer_freelist)
+    {
+        kerror("Function '%s': Failed to create freelist of buffer.", __FUNCTION__);
+        return false;
+    }
 
     VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buffer_info.size = size;
@@ -37,6 +56,9 @@ bool vulkan_buffer_create(
     if(out_buffer->memory_index == INVALID_ID)
     {
         kerror("Function '%s': Failed to find required memory type index.", __FUNCTION__);
+
+        // Обязательное уничтожение списка.
+        cleanup_freelist(out_buffer);
         return false;
     }
 
@@ -49,6 +71,9 @@ bool vulkan_buffer_create(
     if(!vulkan_result_is_success(result))
     {
         kerror("Function '%s': Failed to allocate memory with result: %s", __FUNCTION__, vulkan_result_get_string(result, true));
+
+        // Обязательное уничтожение списка.
+        cleanup_freelist(out_buffer);
         return false;
     }
 
@@ -62,6 +87,11 @@ bool vulkan_buffer_create(
 
 void vulkan_buffer_destroy(vulkan_context* context, vulkan_buffer* buffer)
 {
+    if(buffer->freelist_memory)
+    {
+        cleanup_freelist(buffer);
+    }
+
     if(buffer->memory)
     {
         vkFreeMemory(context->device.logical, buffer->memory, context->allocator);
@@ -77,6 +107,19 @@ void vulkan_buffer_destroy(vulkan_context* context, vulkan_buffer* buffer)
 
 bool vulkan_buffer_resize(vulkan_context* context, u64 new_size, vulkan_buffer* buffer, VkQueue queue, VkCommandPool pool)
 {
+    if(new_size < buffer->total_size)
+    {
+        kerror("Function '%s' requires that new size be larger than the old.", __FUNCTION__);
+        return false;
+    }
+
+    // Изменение размера списка свободной памяти.
+    if(!freelist_resize(buffer->buffer_freelist, new_size))
+    {
+        kerror("Function '%s': Failed to resize internal freelist.", __FUNCTION__);
+        return false;
+    }
+
     // Создание нового буфера.
     VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buffer_info.size = new_size;
@@ -166,6 +209,28 @@ void* vulkan_buffer_lock_memory(vulkan_context* context, vulkan_buffer* buffer, 
 void vulkan_buffer_unlock_memory(vulkan_context* context, vulkan_buffer* buffer)
 {
     vkUnmapMemory(context->device.logical, buffer->memory);    
+}
+
+bool vulkan_buffer_allocate(vulkan_buffer* buffer, u64 size, u64* out_offset)
+{
+    if(!buffer || !size || !out_offset)
+    {
+        kerror("Function '%s' requires a valid pointer to buffer, out_offset and size greater than zero.", __FUNCTION__);
+        return false;
+    }
+
+    return freelist_allocate_block(buffer->buffer_freelist, size, out_offset);
+}
+
+bool vulkan_buffer_free(vulkan_buffer* buffer, u64 size, u64 offset)
+{
+    if(!buffer || !size)
+    {
+        kerror("Function '%s' requires a valid pointer to buffer and size greater than zero.", __FUNCTION__);
+        return false;
+    }
+
+    return freelist_free_block(buffer->buffer_freelist, size, offset);
 }
 
 void vulkan_buffer_load_data(

@@ -41,8 +41,8 @@ void sync_objects_destroy();
 bool swapchain_recreate(renderer_backend* backend);
 bool buffers_create(vulkan_context* context);
 void buffers_destroy(vulkan_context* context);
-void upload_data_range(
-    VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset, u64 size, const void* data
+bool upload_data_range(
+    VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64* out_offset, u64 size, const void* data
 );
 void free_data_range(vulkan_buffer* buffer, u64 offset, u64 size);
 
@@ -913,28 +913,32 @@ bool vulkan_renderer_backend_create_geometry(
     u32 total_size = 0;
 
     // Данные вершин.
-    internal_data->vertex_buffer_offset = context->geometry_vertex_offset;
     internal_data->vertex_count = vertex_count;
     internal_data->vertex_element_size = vertex_size; // sizeof(vertex_3d)
     total_size = vertex_count * vertex_size;
-    upload_data_range(
-        pool, null, queue, &context->object_vertex_buffer, internal_data->vertex_buffer_offset, total_size, vertices
-    );
-    // TODO: Следует использовать freelist вместо этого.
-    context->geometry_vertex_offset += total_size;
+
+    if(!upload_data_range(
+        pool, null, queue, &context->object_vertex_buffer, &internal_data->vertex_buffer_offset, total_size, vertices
+    ))
+    {
+        kerror("Function '%s': Failed to upload to the vertex buffer.", __FUNCTION__);
+        return false;
+    }
 
     // Данные индексов, если поддерживается.
     if(index_count && indices)
     {
-        internal_data->index_buffer_offset = context->geometry_index_offset;
         internal_data->index_count = index_count;
         internal_data->index_element_size = index_size; // sizeof(u32)
         total_size = index_count * index_size;
-        upload_data_range(
-            pool, null, queue, &context->object_index_buffer, internal_data->index_buffer_offset, total_size, indices
-        );
-        // TODO: Следует использовать freelist вместо этого.
-        context->geometry_index_offset += total_size;
+
+        if(!upload_data_range(
+            pool, null, queue, &context->object_index_buffer, &internal_data->index_buffer_offset, total_size, indices
+        ))
+        {
+            kerror("Function '%s': Failed to upload to the index buffer.", __FUNCTION__);
+            return false;
+        }
     }
 
     if(internal_data->generation == INVALID_ID)
@@ -1262,8 +1266,6 @@ bool buffers_create(vulkan_context* context)
         return false;
     }
 
-    context->geometry_vertex_offset = 0;
-
     // Буфер индексов.
     const u64 index_buffer_size = sizeof(u32) * 1024 * 1024;
     if(!vulkan_buffer_create(context, index_buffer_size, index_usage_flags, memory_property_flags, true, &context->object_index_buffer))
@@ -1281,27 +1283,41 @@ void buffers_destroy(vulkan_context* context)
     vulkan_buffer_destroy(context, &context->object_index_buffer);
 }
 
-void upload_data_range(
-    VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64 offset, u64 size, const void* data
+bool upload_data_range(
+    VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64* out_offset, u64 size, const void* data
 )
 {
-    // Создание host-видимую память для загрузки на устройство.
+    // Выделение памяти в буфере.
+    if(!vulkan_buffer_allocate(buffer, size, out_offset))
+    {
+        kerror("Function '%s': Failed to allocate from the given buffer!", __FUNCTION__);
+        return false;
+    }
+    
+    // Создание host-видимого промежуточный буфер для загрузки на устройство.
     VkBufferUsageFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     vulkan_buffer staging;
     vulkan_buffer_create(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, flags, true, &staging);
 
-    // Загрузка данных в staging буфер.
+    // Загрузка данных в промежуточный буфер.
     vulkan_buffer_load_data(context, &staging, 0, size, 0, data);
 
-    // Загрузка из staging буфера в локальный буфер устройства.
-    vulkan_buffer_copy_to(context, pool, fence, queue, staging.handle, 0, buffer->handle, offset, size);
+    // Загрузка из промежуточного буфера в локальный буфер устройства.
+    vulkan_buffer_copy_to(context, pool, fence, queue, staging.handle, 0, buffer->handle, *out_offset, size);
 
-    // Уничтожение staging буфера.
+    // Уничтожение промежуточного буфера.
     vulkan_buffer_destroy(context, &staging);
+
+    return true;
 }
 
 void free_data_range(vulkan_buffer* buffer, u64 offset, u64 size)
 {
-    // TODO: Освободить в буфере.
-    // TODO: Обновить freelist с этим диапазоном begin free.
+    if(!buffer || !size)
+    {
+        kerror("Function '%s' requires a valid pointer to buffer and szie greater than zero.", __FUNCTION__);
+        return;
+    }
+
+    vulkan_buffer_free(buffer, size, offset);
 }

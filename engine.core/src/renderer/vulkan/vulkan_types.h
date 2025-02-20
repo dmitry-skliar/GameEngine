@@ -1,8 +1,9 @@
 #pragma once
 
 #include <defines.h>
-#include <renderer/renderer_types.h>
 #include <vulkan/vulkan.h>
+#include <renderer/renderer_types.h>
+#include <containers/freelist.h>
 
 typedef struct vulkan_image {
     VkImage handle;
@@ -42,14 +43,28 @@ typedef struct vulkan_renderpass {
     vulkan_renderpass_state state;
 } vulkan_renderpass;
 
+// @brief Буфер Vulkan. Используется для загрузки данных на видеокарту. 
 typedef struct vulkan_buffer {
+    // @brief Размер буфера.
     u64 total_size;
+    // @brief Экземпляр буфера.
     VkBuffer handle;
+    // @brief Флаги использования буфера.
     VkBufferUsageFlagBits usage;
+    // @brief Указывает если буфер заблокирован.
     bool is_locked;
+    // @brief Используемая память для буфера.
     VkDeviceMemory memory;
+    // @brief Индекс используемый буфером.
     i32 memory_index;
+    // @brief Флаги памяти.
     u32 memory_property_flags;
+    // @brief Требования памяти списка.
+    u64 freelist_memory_requirement;
+    // @brief Блок памяти выделенный под список.
+    void* freelist_memory;
+    // @brief Экземпляр списка.
+    freelist* buffer_freelist;
 } vulkan_buffer;
 
 typedef struct vulkan_swapchain {
@@ -184,15 +199,24 @@ typedef struct vulkan_material_shader_instance_state {
 // TODO: Сделать настраиваемым.
 #define VULKAN_MAX_GEOMETRY_COUNT 4096
 
+// @brief Представляет данные геометрии в буфере.
 typedef struct vulkan_geometry_data {
+    // @brief Уникальный идентификатор геометрии.
     u32 id;
+    // @brief Счетчик изменений. Увеличивается постоянно.
     u32 generation;
+    // @brief Количество вершин в буфере вершин.
     u32 vertex_count;
+    // @brief Размер вершины в байтах.
     u32 vertex_element_size;
-    u32 vertex_buffer_offset;
+    // @brief Смещение вершин в буфере вершин.
+    u64 vertex_buffer_offset;
+    // @brief Количество индексов в буфере индексов.
     u32 index_count;
+    // @brief Размер индекса в байтах.
     u32 index_element_size;
-    u32 index_buffer_offset;
+    // @brief Смещение индексов в буфере индексов.
+    u64 index_buffer_offset;
 } vulkan_geometry_data;
 
 typedef struct vulkan_material_shader_global_ubo {
@@ -237,9 +261,10 @@ typedef struct vulkan_material_shader {
     vulkan_pipeline pipeline;
 
     // TODO: Временно.
-    vulkan_shader_type shader_type;    
+    vulkan_shader_type shader_type;
 } vulkan_material_shader;
 
+// @brief Экземпляр контекста визуализатора Vulkan.
 typedef struct vulkan_context {
     f32 frame_delta_time;
     u32 framebuffer_width;
@@ -257,9 +282,7 @@ typedef struct vulkan_context {
     vulkan_renderpass main_renderpass;
     vulkan_renderpass ui_renderpass;
 
-    u64 geometry_vertex_offset;
     vulkan_buffer object_vertex_buffer;
-    u64 geometry_index_offset;
     vulkan_buffer object_index_buffer;
 
     // TODO: Сделать динамическим размер.
