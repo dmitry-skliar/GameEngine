@@ -4,14 +4,13 @@
 // Внутренние подключения.
 #include "logger.h"
 #include "event.h"
+#include "input.h"
+#include "clock.h"
 #include "platform/window.h"
-#include "platform/memory.h"
 #include "platform/time.h"
 #include "platform/thread.h"
 #include "memory/memory.h"
 #include "memory/allocators/linear_allocator.h"
-#include "input.h"
-#include "clock.h"
 #include "renderer/renderer_frontend.h"
 #include "systems/texture_system.h"
 #include "systems/material_system.h"
@@ -31,9 +30,6 @@ typedef struct application_state {
     f64   last_time;
 
     linear_allocator* systems_allocator;
-
-    u64 memory_system_memory_requirement;
-    void* memory_system_state;
 
     u64 event_system_memory_requirement;
     void* event_system_state;
@@ -119,20 +115,24 @@ bool application_create(game* game_inst)
     }
 
     // Создание контекста приложения.
-    app_state = kallocate_tc(application_state, 1, MEMORY_TAG_APPLICATION);
+    app_state = kallocate_tc(application_state, 1, MEMORY_TAG_APPLICATION); // NOTE: Первый возов до инициализации системы памяти.
     kzero_tc(app_state, application_state, 1);
     app_state->game_inst = game_inst;
     game_inst->application_state = app_state;
 
     // TODO: Сделать менеджер систем и подсистем. Решит проблему правильной инициализации и завершения.
     // Создание системного линейного распределителя памяти.
-    u64 systems_allocator_total_size = 64 * 1024 * 1024; // 64 Mb
-    app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size);
+    u64 systems_allocator_total_size = 64 * 1024 * 1024; // 64 Mb                         // NOTE: Второй вызов внутри линейного распределителя до инициализации системы памяти.
+    app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size); // TODO: Реарганизовать!
 
     // Система контроля памяти.
-    memory_system_initialize(&app_state->memory_system_memory_requirement, null);
-    app_state->memory_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->memory_system_memory_requirement);
-    memory_system_initialize(&app_state->memory_system_memory_requirement, app_state->memory_system_state);
+    memory_system_config memory_cfg;
+    memory_cfg.total_allocation_size = GIBIBYTES(1);
+    if(!memory_system_initialize(&memory_cfg))
+    {
+        kerror("Failed to initialize memory system. Aborted!");
+        return false;
+    }
     kinfor("Memory system started.");
 
     // Система событий (должно быть инициализировано до создания окна приложения).
@@ -282,6 +282,9 @@ bool application_create(game* game_inst)
     event_register(EVENT_CODE_DEBUG_0, null, event_on_debug_event);
     // TODO: Временный тестовый код: конец.
 
+    // Выделение памяти под состояние игры.
+    game_inst->state = kallocate(game_inst->state_memory_requirement, MEMORY_TAG_GAME);
+
     // Инициализация приложения пользователя (игры, 3d приложения).
     if(!game_inst->initialize(game_inst))
     {
@@ -399,6 +402,8 @@ bool application_run()
             app_state->last_time = current_time;
         }
     }
+
+    kfree(app_state->game_inst->state, app_state->game_inst->state_memory_requirement, MEMORY_TAG_GAME);
     kinfor("Game stopped.");
 
     // NOTE: Что бы исключить нежелательные эффекты!
@@ -469,7 +474,7 @@ void application_on_keyboard_key(u32 keycode, bool pressed)
     {
         const char* meminfo = memory_system_usage_str();
         kinfor(meminfo);
-        platform_memory_free((void*)meminfo);
+        string_free(meminfo);
     }
 
     input_update_keyboard_key(keycode, pressed);

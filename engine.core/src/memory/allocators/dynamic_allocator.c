@@ -74,7 +74,6 @@ void dynamic_allocator_destroy(dynamic_allocator* allocator)
         return;
     }
 
-    // TODO: Вынесити в главный распределитель!
     if(allocator->free_size != allocator->total_size)
     {
         kwarng(
@@ -98,7 +97,8 @@ void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size)
     // Минимально допустимый размер памяти.
     if(size < sizeof(u64))
     {
-        kwarng("Function '%s': Requested size is less than %llu B, it will be equal to it.", __FUNCTION__, sizeof(u64));
+        // NOTE: Включить, если необходима.
+        // kwarng("Function '%s': Requested size is less than %llu B, it will be equal to it.", __FUNCTION__, sizeof(u64));
         size = sizeof(u64);
     }
 

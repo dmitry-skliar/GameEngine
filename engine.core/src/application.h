@@ -18,7 +18,9 @@ typedef struct game {
     bool (*render)(struct game* inst, f32 delta_time);
     // @brief Указатель на функцию изменения размера окна игры.
     void (*on_resize)(struct game* inst, i32 width, i32 height);
-    // @brief Указатель на данные игры.
+    // @brief Требования к памяти в байтах (sizeof(game_state)).
+    u64 state_memory_requirement;
+    // @brief Указатель на состояние приложения.
     void* state;
     // @brief Указатель на контекст приложения.
     void* application_state;

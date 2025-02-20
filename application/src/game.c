@@ -18,14 +18,13 @@ bool game_create(game* inst)
     inst->render     = game_render;
     inst->on_resize  = game_on_resize;
 
-    inst->state = kallocate_tc(game_state, 1, MEMORY_TAG_GAME);
+    inst->state_memory_requirement = sizeof(game_state);
 
     return true;
 }
 
 void game_destroy(game* inst)
 {
-    kfree_tc(inst->state, game_state, 1, MEMORY_TAG_GAME);
 }
 
 void recalculate_view_matrix(game_state* state)
@@ -81,9 +80,8 @@ bool game_update(game* inst, f32 delta_time)
     {
         static u64 alloc_count = 0;
         u64 prev_alloc_count = alloc_count;
-        alloc_count = memory_system_alloc_count();
-
-        kdebug("Allocations: %llu (%llu this frame)", alloc_count, alloc_count - prev_alloc_count);
+        alloc_count = memory_system_allocation_count();
+        kdebug("Allocations last: %llu, total %llu.", alloc_count - prev_alloc_count, alloc_count);
     }
 
     if(input_keyboard_key_press_detect('T'))

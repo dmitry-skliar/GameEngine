@@ -28,3 +28,8 @@ KAPI u64 dynamic_allocator_free_space(dynamic_allocator* allocator);
 /*
 */
 KAPI u64 dynamic_allocator_free_blocks(dynamic_allocator* allocator);
+
+// TODO: Для наблюдения за фрагментацией памяти, реализовать функцию, которая
+// выдеат структуру с информацией по памяти:
+//       - Весь размер памяти
+//       - Смещения участков свободных относительно нуля и размер каждого.

@@ -32,7 +32,6 @@ void string_free(const char* str)
     kfree_tc(str, char, length, MEMORY_TAG_STRING);
 }
 
-// TODO: Есть ли тут проблемы?
 char* string_trim(char* str)
 {
     if(!str) return null;

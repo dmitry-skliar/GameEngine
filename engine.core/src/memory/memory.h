@@ -28,15 +28,23 @@ typedef enum memory_tag {
     MEMORY_TAGS_MAX
 } memory_tag;
 
+// @brief Конфигурация системы памяти.
+typedef struct memory_system_config {
+    // @brief Общий размер памяти в байтах, используемый этой этой системой для разпределения.
+    u64 total_allocation_size;
+} memory_system_config;
+
 /*
     @brief Запускает систему менеджмента и контроля памяти.
-    @param memory_requirement Указатель на переменную для получения требований к памяти.
-    @param memory Указатель на выделенную память, для получения требований к памяти передать null.
+    @param config Указатель на конфигурацию системы памяти.
+    @return True завершилась успешно, false если не удалось.
 */
-KAPI void memory_system_initialize(u64* memory_requirement, void* memory);
+KAPI bool memory_system_initialize(memory_system_config* config);
 
 /*
     @brief Останавливает систему менеджмента и контроля памяти.
+    NOTE: Если по окончании работы осталась не освобожденная памяти,
+          то система уведомит об этом в логах.
 */
 KAPI void memory_system_shutdown();
 
@@ -51,7 +59,7 @@ KAPI const char* memory_system_usage_str();
     @brief Запрашивает количество операций выделения памяти.
     @return Количество операций выделения памяти.
 */
-KAPI u64 memory_system_alloc_count();
+KAPI u64 memory_system_allocation_count();
 
 /*
     @brief Запрашивает память у системы.

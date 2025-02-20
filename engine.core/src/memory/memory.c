@@ -1,48 +1,93 @@
 // Cобственные подключения.
 #include "memory/memory.h"
+#include "memory/allocators/dynamic_allocator.h"
 
 // Внутренние подключения.
 #include "logger.h"
+#include "kstring.h"
 #include "platform/memory.h"
 
-// Внешние подключения.
-// TODO: Удалить после создания обертки над функциями.
-#include <string.h>
-#include <stdio.h>
-
+// TODO: Сделать отдельную подсистему для профилировки памяти, таймкода, стека вызовов и др. И вынести это туда!
 typedef struct memory_stats {
     u64 total_allocated;
     u64 tagged_allocated[MEMORY_TAGS_MAX];
 } memory_stats;
 
 typedef struct memory_system_state {
+    // Конфигурация системы.
+    memory_system_config config;
+    // Требования системы памяти.
+    u64 system_requirement;
     // Статистика по используемой памяти.
     memory_stats stats;
     // Счетчик вызова функции выделения памяти.
-    u64 alloc_count;
+    u64 allocation_count;
+    // Указатель на динамический распределитель памяти.
+    dynamic_allocator* allocator;
 } memory_system_state;
 
 static memory_system_state* state_ptr = null;
 static const char* message_not_initialized =
     "Function '%s' requires the memory system to be initialized. Call 'memory_system_initialize' first.";
 
-void memory_system_initialize(u64* memory_requirement, void* memory)
+bool memory_system_initialize(memory_system_config* config)
 {
     if(state_ptr)
     {
         kwarng("Function '%s' was called more than once!", __FUNCTION__);
-        return;
+        return false;
     }
 
-    *memory_requirement = sizeof(struct memory_system_state);
+    if(!config || !config->total_allocation_size)
+    {
+        kerror(
+            "Function '%s' requires a valid pointer to config and total_allocation_size greater than zero.",
+            __FUNCTION__
+        );
+        return false;
+    }
+
+    // Требования состояния системы.
+    u64 state_memory_requirement = sizeof(struct memory_system_state);
+
+    // Требования динамического распределителя памяти.
+    u64 allocator_memory_requirement = 0;
+    dynamic_allocator_create(config->total_allocation_size, &allocator_memory_requirement, null);
+
+    // Выделение требуемой памяти платформой.
+    u64 memory_requirement = state_memory_requirement + allocator_memory_requirement;
+    void* memory = platform_memory_allocate(memory_requirement);
 
     if(!memory)
     {
-        return;
+        // TODO: Сделать обертку для вывода количества байт в зависимости
+        // от длинны c соответствующей единице измерения.
+        kfatal(
+            "Function '%s': Failed to allocate %lu B of memory to the system. Cannot continue.",
+            __FUNCTION__, memory_requirement
+        );
+        return false;
     }
 
-    platform_memory_zero(memory, *memory_requirement);
+    platform_memory_zero(memory, sizeof(struct memory_system_state));
     state_ptr = memory;
+
+    // Копирование конфигурации системы.
+    state_ptr->config.total_allocation_size = config->total_allocation_size;
+    state_ptr->system_requirement = memory_requirement;
+
+    // Создание динамического распределителя памяти.
+    void* allocator_memory = OFFSET_PTR(state_ptr, state_memory_requirement);
+    state_ptr->allocator = dynamic_allocator_create(config->total_allocation_size, &allocator_memory_requirement, allocator_memory);
+
+    if(!state_ptr->allocator)
+    {
+        kfatal("Function '%s': Unable to setup internal allocator.", __FUNCTION__);
+        return false;
+    }
+
+    ktrace("Function '%s': Memory system has %lu B of memory to use.", __FUNCTION__, memory_requirement);
+    return true;
 }
 
 void memory_system_shutdown()
@@ -53,17 +98,25 @@ void memory_system_shutdown()
         return;
     }
 
+    // Выводит информацию об утечках памяти.
     if(state_ptr->stats.total_allocated > 0)
     {
         kwarng("Detecting memory leaks...");
         const char* meminfo = memory_system_usage_str();
         kwarng(meminfo);
-        platform_memory_free((void*)meminfo);
+        string_free(meminfo);
     }
+
+    // Уничтожение динамического распределителя памяти.
+    dynamic_allocator_destroy(state_ptr->allocator);
+
+    // Уничтожение памяти выделенной платформой.
+    platform_memory_free(state_ptr);
 
     state_ptr = null;
 }
 
+// TODO: Выравнимание памяти.
 void* memory_allocate(u64 size, memory_tag tag)
 {
     if(!size)
@@ -83,18 +136,29 @@ void* memory_allocate(u64 size, memory_tag tag)
         kwarng("Memory allocation with MEMORY_TAG_UNKNOWN. Re-class this allocation.");
     }
 
-    void* block = platform_memory_allocate(size);
+    void* block = null;
+
+    // Выбирается способ выделения памяти в соответствии с состоянием системы памяти.
+    if(state_ptr)
+    {
+        block = dynamic_allocator_allocate(state_ptr->allocator, size);
+
+        if(block)
+        {
+            state_ptr->stats.tagged_allocated[tag] += size;
+            state_ptr->stats.total_allocated += size;
+            state_ptr->allocation_count++;
+        }
+    }
+    else
+    {
+        kwarng("Function '%s' called before the memory system is initialized.", __FUNCTION__);
+        block = platform_memory_allocate(size);
+    }
 
     if(!block)
     {
         kfatal("Function '%s' could not allocate memory and returned null.", __FUNCTION__);
-    }
-
-    if(state_ptr && block)
-    {
-        state_ptr->stats.tagged_allocated[tag] += size;
-        state_ptr->stats.total_allocated += size;
-        state_ptr->alloc_count++;
     }
 
     return block;
@@ -120,13 +184,19 @@ void memory_free(void* block, u64 size, memory_tag tag)
         return;
     }
 
-    if(state_ptr)
+    // NOTE: Если по какой-либо причине не получится освободиться память
+    //       динамическим распределителем памяти, то вероятно она была
+    //       выделена до инициализации системы памяти. Тогда условие
+    //       станет ложным и память будет освобождена платформой.
+    if(state_ptr && dynamic_allocator_free(state_ptr->allocator, block))
     {
         state_ptr->stats.tagged_allocated[tag] -= size;
         state_ptr->stats.total_allocated -= size;
     }
-
-    platform_memory_free(block);
+    else
+    {
+        platform_memory_free(block);
+    }
 }
 
 const char* memory_system_usage_str()
@@ -134,7 +204,7 @@ const char* memory_system_usage_str()
     if(!state_ptr)
     {
         kerror(message_not_initialized, __FUNCTION__);
-        return "<void>";
+        return "";
     }
 
     static const char* memory_tag_strings[MEMORY_TAGS_MAX + 1] = {
@@ -167,7 +237,7 @@ const char* memory_system_usage_str()
 
     char buffer[8000] = "System memory use (tagged):\n";
     // TODO: Использовать обертку над функцией.
-    u64 offset = strlen(buffer);
+    u64 offset = string_length(buffer);
 
     for(u32 i = 0; i <= MEMORY_TAGS_MAX; ++i)
     {
@@ -206,17 +276,19 @@ const char* memory_system_usage_str()
             amount = (f32)size;
         }
 
-        // TODO: Использовать обертку над функцией.
-        i32 length = snprintf(buffer + offset, 8000, "\t%s: %7.2f %s\n", memory_tag_strings[i], amount, unit);
+        i32 length = string_format(buffer + offset, "\t%s: %7.2f %s\n", memory_tag_strings[i], amount, unit);
         offset += length;
     }
 
-    // TODO: Использовать обертку!
-    return strdup(buffer);
+    return string_duplicate(buffer);
 }
 
-u64 memory_system_alloc_count()
+u64 memory_system_allocation_count()
 {
-    if(!state_ptr) return 0;
-    return state_ptr->alloc_count;
+    if(!state_ptr)
+    {
+        return 0;
+    }
+
+    return state_ptr->allocation_count;
 }

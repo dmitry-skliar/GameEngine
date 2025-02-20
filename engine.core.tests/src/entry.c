@@ -14,11 +14,10 @@
 
 int main()
 {
-    // Вуделение памяти и включение менеджера памяти.
-    u64 requirement;
-    memory_system_initialize(&requirement, null);
-    void* memory = kallocate(requirement, MEMORY_TAG_SYSTEM);
-    memory_system_initialize(&requirement, memory);
+    // Использование менеджера памяти.
+    memory_system_config conf;
+    conf.total_allocation_size = GIBIBYTES(1);
+    memory_system_initialize(&conf);
 
     // Инициализация менеджера тестирования.
     test_manager_init();
@@ -41,9 +40,8 @@ int main()
     // Завершение работы менеджера тестирования.
     test_manager_shutdown();
 
-    // Освобождение памяти и завершение работы менеджера.
+    // Завершение работы менеджера.
     memory_system_shutdown();
-    kfree(memory, requirement, MEMORY_TAG_SYSTEM);
 
     return 0;
 }
