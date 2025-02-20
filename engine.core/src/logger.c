@@ -3,12 +3,11 @@
 
 // Внутренние подключения.
 #include "platform/console.h"
+#include "kstring.h"
 #include "debug/assert.h"
 
 // Внешние подключения.
 #include <stdarg.h>
-// TODO: Убрать после замены printf, vsnprintf.
-#include <stdio.h>
 
 // Функиця обработки сообщения по умолчанию.
 void log_output_default_hook(log_level level, const char* message);
@@ -35,8 +34,7 @@ void log_output(log_level level, const char* message, ...)
     {
         __builtin_va_list args;
         va_start(args, message);
-        // TODO: создать обертку и вынести в оделный заголовочный файл.
-        i32 length = vsnprintf(&buffer[LOG_BUFFER_OFFSET], LOG_BUFFER_SIZE - LOG_BUFFER_OFFSET, message, args);
+        i32 length = string_formatv(&buffer[LOG_BUFFER_OFFSET], LOG_BUFFER_SIZE - LOG_BUFFER_OFFSET, message, args);
         va_end(args);
 
         KCOPY2BYTES(&buffer[LOG_BUFFER_OFFSET + length], "\n");

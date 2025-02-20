@@ -42,6 +42,16 @@
         return written;
     }
 
+    i32 platform_string_formatv(char* dest, u64 length, const char* format, void* va_list)
+    {
+        if(!dest || !length || !format || !va_list)
+        {
+            return -1;
+        }
+
+        return vsnprintf(dest, length, format, va_list);
+    }
+
     char* platform_string_copy(char* dest, const char* src)
     {
         return strcpy(dest, src);

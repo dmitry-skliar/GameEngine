@@ -38,6 +38,16 @@
 #define string_format(dest, format, ...) platform_string_format(dest, format, ##__VA_ARGS__)
 
 /*
+    @brief Выполняет форматирование строки в соответствии с заданным форматом
+           строки и указателем на переменные.
+    @param dest Указатель на память куда записать отформатированную строку.
+    @param format Формат строки, который указывает как должна выглядеть строка.
+    @param va_list Указатель на параметры строки формата.
+    @return Количество записаных символов отформатированной строки.
+*/
+#define string_formatv(dest, length, format, va_list) platform_string_formatv(dest, length, format, va_list)
+
+/*
     @brief Создает дубликат строки.
     NOTE: После использования удалить с помощью функуии 'string_free'.
     @param str Указатель на строку.
