@@ -33,6 +33,14 @@ typedef double f64;
 // @brief Логическое значение.
 typedef _Bool bool;
 
+// @brief Диапазон памяти.
+typedef struct range {
+    // @brief Смещение в байтах.
+    i32 offset;
+    // @brief Размер в байтах.
+    i32 size;
+} range;
+
 #if __cplusplus
     /*
         @brief Выполняет проверку утверждения во время компиляции, и выводит сообщение если оно ложно.
@@ -209,7 +217,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     @param offset Смещение в байтах.
     @return Новое значение указателя.
 */
-#define OFFSET_PTR(ptr, offset) (void*)((u8*)ptr + offset)
+#define POINTER_GET_OFFSET(ptr, offset) (void*)((u8*)ptr + offset)
 
 /*
     @brief Получает значение поля структуры заданного типом и указателем.
@@ -217,4 +225,26 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     @param ptr Указатель на структуру.
     @return Возращает значение поля структуры.
 */
-#define MEMBER_GET(type, ptr, member) (((type*)(ptr))->member)
+#define MEMBER_GET_VALUE(type, ptr, member) (((type*)(ptr))->member)
+
+/*
+    @brief Получает смещение поля структуры заданного типом и указателем.
+    @param type Тип структуры.
+    @param ptr Указатель на структуру.
+    @return Возращает смещение поля структуры.
+*/
+#define MEMBER_GET_OFFSET(type, ptr, member) (((type*)null)->member)
+
+/*
+*/
+KINLINE u64 get_aligned(u64 operand, u64 granularity)
+{
+    return ((operand + (granularity - 1)) & ~(granularity - 1));
+}
+
+/*
+*/
+KINLINE range get_aligned_range(u64 offset, u64 size, u64 granularity)
+{
+    return (range){get_aligned(offset, granularity), get_aligned(size, granularity)};
+}

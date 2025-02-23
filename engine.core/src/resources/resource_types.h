@@ -40,7 +40,7 @@ typedef struct texture {
     bool has_transparency;
     u32 generation;
     char name[TEXTURE_NAME_MAX_LENGTH];
-    void* data;
+    void* internal_data;
 } texture;
 
 typedef enum texture_use {

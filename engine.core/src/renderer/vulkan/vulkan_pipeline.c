@@ -5,14 +5,13 @@
 // Internal includies.
 #include "logger.h"
 #include "memory/memory.h"
-#include "math/math_types.h"
 
 bool vulkan_graphics_pipeline_create(
     vulkan_context* context, vulkan_renderpass* renderpass, u32 stride, u32 attribute_count, 
     VkVertexInputAttributeDescription* attributes, u32 descriptor_set_layout_count, 
     VkDescriptorSetLayout* descriptor_set_layouts, u32 stage_count,
-    VkPipelineShaderStageCreateInfo* stages, VkViewport viewport,
-    VkRect2D scissor, bool is_wireframe, bool depth_test_enabled, vulkan_pipeline* out_pipeline
+    VkPipelineShaderStageCreateInfo* stages, VkViewport viewport, VkRect2D scissor, bool is_wireframe,
+    bool depth_test_enabled, u32 push_constant_range_count, range* push_constant_ranges, vulkan_pipeline* out_pipeline
 )
 {
     // Область экрана.
@@ -106,18 +105,38 @@ bool vulkan_graphics_pipeline_create(
     input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     input_assembly_info.primitiveRestartEnable = VK_FALSE;
 
-    // Передача констант.
-    VkPushConstantRange push_constant;
-    push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    push_constant.offset = sizeof(mat4) * 0;
-    push_constant.size = sizeof(mat4) * 2;
-
     // Cоздание схемы конвейера (Layout конвейера): для использования uniform в шейдерах.
     VkPipelineLayoutCreateInfo pipeline_layout_info = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-    pipeline_layout_info.pushConstantRangeCount = 1;
-    pipeline_layout_info.pPushConstantRanges = &push_constant;
     pipeline_layout_info.setLayoutCount = descriptor_set_layout_count;
     pipeline_layout_info.pSetLayouts = descriptor_set_layouts;
+
+    // Передача констант.
+    if(push_constant_range_count > 0)
+    {
+        if(push_constant_range_count > 32)
+        {
+            kerror("Function '%s' cannot have more that", __FUNCTION__);
+            return false;
+        }
+
+        VkPushConstantRange ranges[32];
+        kzero_tc(ranges, VkPushConstantRange, 32);
+
+        for(u32 i = 0; i < push_constant_range_count; ++i)
+        {
+            ranges[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            ranges[i].offset = push_constant_ranges[i].offset;
+            ranges[i].size = push_constant_ranges[i].size;
+        }
+
+        pipeline_layout_info.pushConstantRangeCount = push_constant_range_count;
+        pipeline_layout_info.pPushConstantRanges = ranges;
+    }
+    else
+    {
+        pipeline_layout_info.pushConstantRangeCount = 0;
+        pipeline_layout_info.pPushConstantRanges = null;
+    }
 
     VkResult result = vkCreatePipelineLayout(context->device.logical, &pipeline_layout_info, context->allocator, &out_pipeline->layout);
     if(!vulkan_result_is_success(result))
@@ -155,7 +174,7 @@ bool vulkan_graphics_pipeline_create(
     return true;
 }
 
-void vulkan_graphics_pipeline_destroy(vulkan_context* context, vulkan_pipeline* pipeline)
+void vulkan_pipeline_destroy(vulkan_context* context, vulkan_pipeline* pipeline)
 {
     if(!context || !pipeline)
     {

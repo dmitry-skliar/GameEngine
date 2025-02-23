@@ -77,7 +77,7 @@ bool memory_system_initialize(memory_system_config* config)
     state_ptr->system_requirement = memory_requirement;
 
     // Создание динамического распределителя памяти.
-    void* allocator_memory = OFFSET_PTR(state_ptr, state_memory_requirement);
+    void* allocator_memory = POINTER_GET_OFFSET(state_ptr, state_memory_requirement);
     state_ptr->allocator = dynamic_allocator_create(config->total_allocation_size, &allocator_memory_requirement, allocator_memory);
 
     if(!state_ptr->allocator)

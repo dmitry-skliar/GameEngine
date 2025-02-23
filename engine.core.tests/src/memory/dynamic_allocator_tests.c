@@ -165,8 +165,6 @@ u8 test3()
     free_blocks = dynamic_allocator_free_blocks(dalloc);
     expect_should_be(2, free_blocks);
 
-    // kdebug_break();
-
     // Освобождение среднего блока. На этом этапе должно произойти 2 объединения.
     result = dynamic_allocator_free(dalloc, blocks[1]);
     expect_to_be_true(result);

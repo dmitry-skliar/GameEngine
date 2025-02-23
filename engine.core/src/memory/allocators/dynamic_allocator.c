@@ -53,7 +53,7 @@ dynamic_allocator* dynamic_allocator_create(u64 total_size, u64* memory_requirem
     dynamic_allocator* allocator = memory;
 
     // Настройка заголовка.
-    allocator->memory = OFFSET_PTR(allocator, sizeof(dynamic_allocator));
+    allocator->memory = POINTER_GET_OFFSET(allocator, sizeof(dynamic_allocator));
     allocator->blocks = allocator->memory;
     allocator->total_size = total_size;
     allocator->free_size = total_size;
@@ -136,7 +136,7 @@ void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size)
 
             allocator->block_count--;
             allocator->free_size -= size;
-            return OFFSET_PTR(node, sizeof(u64));
+            return POINTER_GET_OFFSET(node, sizeof(u64));
         }
 
         // Резделение блока (см. упреждаюую проверку).
@@ -161,7 +161,7 @@ void* dynamic_allocator_allocate(dynamic_allocator* allocator, u64 size)
 
             node->size = size;
             allocator->free_size -= offset;
-            return OFFSET_PTR(node, sizeof(u64));
+            return POINTER_GET_OFFSET(node, sizeof(u64));
         }
 
         prev = node;
@@ -191,14 +191,14 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block)
     }
 
     void* block_offset_right = block;
-    block = OFFSET_PTR(block, -sizeof(u64));
+    block = POINTER_GET_OFFSET(block, -sizeof(u64));
 
     // Получение доступа к служебной информации.
-    u64 block_size = MEMBER_GET(dynamic_allocator_node, block, size);
-    block_offset_right = OFFSET_PTR(block_offset_right, block_size);
+    u64 block_size = MEMBER_GET_VALUE(dynamic_allocator_node, block, size);
+    block_offset_right = POINTER_GET_OFFSET(block_offset_right, block_size);
 
     void* min_area = allocator->memory;
-    void* max_area = OFFSET_PTR(min_area, sizeof(u64) + allocator->total_size);
+    void* max_area = POINTER_GET_OFFSET(min_area, sizeof(u64) + allocator->total_size);
 
     if(block < min_area || block_offset_right > max_area)
     {
@@ -229,7 +229,7 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block)
         node = node->next;
     }
 
-    void* block_offset_left = prev ? OFFSET_PTR(prev, sizeof(u64) + prev->size) : null;
+    void* block_offset_left = prev ? POINTER_GET_OFFSET(prev, sizeof(u64) + prev->size) : null;
 
     // Проверка на коллизию границ.
     if((prev && block_offset_left > block) || (node && block_offset_right > (void*)node))

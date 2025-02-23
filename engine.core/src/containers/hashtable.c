@@ -112,7 +112,7 @@ bool hashtable_set(hashtable* table, const char* name, const void* value, bool u
 
     if(table->entry_count_current >= table->entry_count_total)
     {
-        kerror("Function '%s': hashtable is crowded.", __FUNCTION__);
+        ktrace("Function '%s': hashtable is crowded.", __FUNCTION__);
         return false;
     }
 
@@ -121,15 +121,14 @@ bool hashtable_set(hashtable* table, const char* name, const void* value, bool u
     // Ничего не найдено.
     if(!hashtable_found_entry(table, name, &entry))
     {
-        // NOTE: Этой ситуации вообще не должно возникнуть!
-        kerror("Function '%s': free entry or duplicate not found.", __FUNCTION__);
+        ktrace("Function '%s': free entry or duplicate not found.", __FUNCTION__);
         return false;
     }
 
     // Найден дубликат и запрещена перезапись.
     if(entry->key && !update)
     {
-        kwarng("Function '%s': entry already exist.", __FUNCTION__);
+        ktrace("Function '%s': entry already exist.", __FUNCTION__);
         return false;
     }
 
@@ -163,7 +162,7 @@ bool hashtable_get(hashtable* table, const char* name, void* out_value)
     // Ничего не найдено или найдена пустая строка.
     if(!table->entry_count_current || !hashtable_found_entry(table, name, &entry) || !entry->key)
     {
-        kwarng("Function '%s': Entry not found.", __FUNCTION__);
+        ktrace("Function '%s': Entry not found.", __FUNCTION__);
         return false;
     }
 
