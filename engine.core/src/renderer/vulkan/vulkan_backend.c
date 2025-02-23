@@ -45,6 +45,7 @@ bool upload_data_range(
     VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64* out_offset, u64 size, const void* data
 );
 void free_data_range(vulkan_buffer* buffer, u64 offset, u64 size);
+bool vulkan_renderer_shader_id_valid(u32 shader_id, const char* func);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 {
@@ -273,65 +274,13 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     ktrace("Vulkan sync objects created.");
 
     // Создание шейдеров.
-    if(!vulkan_shader_create(
-        context, "Builtin.MaterialShader", &context->main_renderpass, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        1024, true, true, &context->material_shader
-    ))
+    // TODO: Сделать настраиваемым.
+    context->max_shader_count = 32;
+    context->shaders = kallocate_tc(vulkan_shader, context->max_shader_count, MEMORY_TAG_RENDERER);
+    for(u32 i = 0; i < context->max_shader_count; ++i)
     {
-        kerror("Function '%s': Error creating built-in material shader.", __FUNCTION__);
-        return false;
+        context->shaders[i].id = INVALID_ID;
     }
-
-    // Артибуты: Позиция и текстурные координаты.
-    vulkan_shader_add_attribute(&context->material_shader, "in_position", SHADER_ATTRIB_TYPE_FLOAT32_3);
-    vulkan_shader_add_attribute(&context->material_shader, "in_texcoord", SHADER_ATTRIB_TYPE_FLOAT32_2);
-
-    // Uniform: Глобально.
-    vulkan_shader_add_uniform_mat4(&context->material_shader, "projection", VULKAN_SHADER_SCOPE_GLOBAL, &context->material_shader_projection_location);
-    vulkan_shader_add_uniform_mat4(&context->material_shader, "view", VULKAN_SHADER_SCOPE_GLOBAL, &context->material_shader_view_location);
-
-    // Uniform: Экземпляр.
-    vulkan_shader_add_uniform_vec4(&context->material_shader, "diffuse_color", VULKAN_SHADER_SCOPE_INSTANCE, &context->material_shader_diffuse_color_location);
-    vulkan_shader_add_sampler(&context->material_shader, "diffuse_texture", VULKAN_SHADER_SCOPE_INSTANCE, &context->material_shader_diffuse_texture_location);
-
-    // Uniform: Локально.
-    vulkan_shader_add_uniform_mat4(&context->material_shader, "model", VULKAN_SHADER_SCOPE_LOCAL, &context->material_shader_mode_location);
-    if(!vulkan_shader_initialize(&context->material_shader))
-    {
-        kerror("Function '%s' Error initializing built-in material shader.", __FUNCTION__);
-        return false;
-    }
-    ktrace("Vulkan material shaders created.");
-
-    if(!vulkan_shader_create(
-        context, "Builtin.UIShader", &context->ui_renderpass, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        1024, true, true, &context->ui_shader
-    ))
-    {
-        kerror("Function '%s': Error creating built-in UI shader.", __FUNCTION__);
-        return false;
-    }
-
-    // Артибуты: Позиция и текстурные координаты.
-    vulkan_shader_add_attribute(&context->ui_shader, "in_position", SHADER_ATTRIB_TYPE_FLOAT32_2);
-    vulkan_shader_add_attribute(&context->ui_shader, "in_texcoord", SHADER_ATTRIB_TYPE_FLOAT32_2);
-
-    // Uniform: Глобально.
-    vulkan_shader_add_uniform_mat4(&context->ui_shader, "projection", VULKAN_SHADER_SCOPE_GLOBAL, &context->ui_shader_projection_location);
-    vulkan_shader_add_uniform_mat4(&context->ui_shader, "view", VULKAN_SHADER_SCOPE_GLOBAL, &context->ui_shader_view_location);
-
-    // Uniform: Экземпляр.
-    vulkan_shader_add_uniform_vec4(&context->ui_shader, "diffuse_color", VULKAN_SHADER_SCOPE_INSTANCE, &context->ui_shader_diffuse_color_location);
-    vulkan_shader_add_sampler(&context->ui_shader, "diffuse_texture", VULKAN_SHADER_SCOPE_INSTANCE, &context->ui_shader_diffuse_texture_location);
-
-    // Uniform: Локально.
-    vulkan_shader_add_uniform_mat4(&context->ui_shader, "model", VULKAN_SHADER_SCOPE_LOCAL, &context->ui_shader_mode_location);
-    if(!vulkan_shader_initialize(&context->ui_shader))
-    {
-        kerror("Function '%s' Error initializing built-in UI shader.", __FUNCTION__);
-        return false;
-    }
-    ktrace("Vulkan ui shaders created.");
 
     // Создание буферов данных в локальной памяти устройства (видеокарте).
     if(!buffers_create(context))
@@ -361,11 +310,7 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     ktrace("Vulkan buffers destroyed.");
 
     // Уничтожение шейдеров.
-    vulkan_shader_destroy(&context->ui_shader);
-    ktrace("Vulkan ui shaders destroyed.");
-
-    vulkan_shader_destroy(&context->material_shader);
-    ktrace("Vulkan material shaders destroyed.");
+    kfree_tc(context->shaders, vulkan_shader, context->max_shader_count, MEMORY_TAG_RENDERER);
 
     // Уничтожение объектов сингхронизации.
     sync_objects_destroy();
@@ -531,28 +476,6 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     return true;
 }
 
-void vulkan_renderer_update_global_world_state(mat4 projection, mat4 view, vec3 view_position, vec4 ambient_color, i32 mode)
-{
-    vulkan_shader_use(&context->material_shader);
-
-    // Глобально.
-    vulkan_shader_bind_globals(&context->material_shader);
-    vulkan_shader_set_uniform_mat4(&context->material_shader, context->material_shader_projection_location, projection);
-    vulkan_shader_set_uniform_mat4(&context->material_shader, context->material_shader_view_location, view);
-    vulkan_shader_apply_globals(&context->material_shader);
-}
-
-void vulkan_renderer_update_global_ui_state(mat4 projection, mat4 view, i32 mode)
-{
-    vulkan_shader_use(&context->ui_shader);
-
-    // Глобально.
-    vulkan_shader_bind_globals(&context->ui_shader);
-    vulkan_shader_set_uniform_mat4(&context->ui_shader, context->ui_shader_projection_location, projection);
-    vulkan_shader_set_uniform_mat4(&context->ui_shader, context->ui_shader_view_location, view);
-    vulkan_shader_apply_globals(&context->ui_shader);
-}
-
 bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time)
 {
     VkResult result = VK_ERROR_UNKNOWN;
@@ -614,7 +537,7 @@ bool vulkan_renderer_backend_end_frame(renderer_backend* backend, f32 delta_time
     return true;
 }
 
-bool vulkan_renderer_backend_begin_renderpass(renderer_backend* backend, builtin_renderpass renderpass_id)
+bool vulkan_renderer_begin_renderpass(renderer_backend* backend, builtin_renderpass renderpass_id)
 {
     vulkan_renderpass* renderpass = null;
     VkFramebuffer framebuffer = null;
@@ -638,20 +561,10 @@ bool vulkan_renderer_backend_begin_renderpass(renderer_backend* backend, builtin
 
     vulkan_renderpass_begin(command_buffer, renderpass, framebuffer);
 
-    // switch(renderpass_id)
-    // {
-    //     case BUILTIN_RENDERPASS_WORLD:
-    //         vulkan_shader_use(&context->material_shader);
-    //         break;
-    //     case BUILTIN_RENDERPASS_UI:
-    //         vulkan_shader_use(&context->ui_shader);
-    //         break;
-    // }
-
     return true;
 }
 
-bool vulkan_renderer_backend_end_renderpass(renderer_backend* backend, builtin_renderpass renderpass_id)
+bool vulkan_renderer_end_renderpass(renderer_backend* backend, builtin_renderpass renderpass_id)
 {
     vulkan_renderpass* renderpass = null;
     u32 image_index = context->image_index;
@@ -675,7 +588,7 @@ bool vulkan_renderer_backend_end_renderpass(renderer_backend* backend, builtin_r
     return true;
 }
 
-void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
+void vulkan_renderer_draw_geometry(geometry_render_data data)
 {
     // Игнорирование не загруженных геометрий.
     if(!data.geometry || data.geometry->internal_id == INVALID_ID)
@@ -686,32 +599,32 @@ void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
     vulkan_geometry_data* buffer_data = &context->geometries[data.geometry->internal_id];
     vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
 
-    material* m = data.geometry->material;
-    if(!m)
-    {
-        m = material_system_get_default();
-    }
+    // material* m = data.geometry->material;
+    // if(!m)
+    // {
+    //     m = material_system_get_default();
+    // }
 
-    switch(m->type)
-    {
-        case MATERIAL_TYPE_WORLD:
-            vulkan_shader_bind_instance(&context->material_shader, m->internal_id);
-            vulkan_shader_set_uniform_vec4(&context->material_shader, context->material_shader_diffuse_color_location, m->diffuse_color);
-            vulkan_shader_set_sampler(&context->material_shader, context->material_shader_diffuse_texture_location, m->diffuse_map.texture);
-            vulkan_shader_set_uniform_mat4(&context->material_shader, context->material_shader_mode_location, data.model);
-            vulkan_shader_apply_instance(&context->material_shader);
-            break;
-        case MATERIAL_TYPE_UI:
-            vulkan_shader_bind_instance(&context->ui_shader, m->internal_id);
-            vulkan_shader_set_uniform_vec4(&context->ui_shader, context->ui_shader_diffuse_color_location, m->diffuse_color);
-            vulkan_shader_set_sampler(&context->ui_shader, context->ui_shader_diffuse_texture_location, m->diffuse_map.texture);
-            vulkan_shader_set_uniform_mat4(&context->ui_shader, context->ui_shader_mode_location, data.model);
-            vulkan_shader_apply_instance(&context->ui_shader);
-            break;
-        default:
-            kerror("Function '%s': Unknown material type.", __FUNCTION__);
-            return;
-    }
+    // switch(m->type)
+    // {
+    //     case MATERIAL_TYPE_WORLD:
+    //         vulkan_shader_bind_instance(&context->material_shader, m->internal_id);
+    //         vulkan_shader_set_uniform_vec4(&context->material_shader, context->material_shader_diffuse_color_location, m->diffuse_color);
+    //         vulkan_shader_set_sampler(&context->material_shader, context->material_shader_diffuse_texture_location, m->diffuse_map.texture);
+    //         vulkan_shader_set_uniform_mat4(&context->material_shader, context->material_shader_mode_location, data.model);
+    //         vulkan_shader_apply_instance(&context->material_shader);
+    //         break;
+    //     case MATERIAL_TYPE_UI:
+    //         vulkan_shader_bind_instance(&context->ui_shader, m->internal_id);
+    //         vulkan_shader_set_uniform_vec4(&context->ui_shader, context->ui_shader_diffuse_color_location, m->diffuse_color);
+    //         vulkan_shader_set_sampler(&context->ui_shader, context->ui_shader_diffuse_texture_location, m->diffuse_map.texture);
+    //         vulkan_shader_set_uniform_mat4(&context->ui_shader, context->ui_shader_mode_location, data.model);
+    //         vulkan_shader_apply_instance(&context->ui_shader);
+    //         break;
+    //     default:
+    //         kerror("Function '%s': Unknown material type.", __FUNCTION__);
+    //         return;
+    // }
 
     // Привязка буфера вершин co смещением.
     VkDeviceSize offset[1] = { buffer_data->vertex_buffer_offset };
@@ -735,7 +648,7 @@ void vulkan_renderer_backend_draw_geometry(geometry_render_data data)
     }
 }
 
-void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels)
+void vulkan_renderer_create_texture(texture* texture, const void* pixels)
 {
     // Создание data.
     // TODO: Используется распределитель памяти тут.
@@ -817,7 +730,7 @@ void vulkan_renderer_backend_create_texture(texture* texture, const void* pixels
     texture->generation++;
 }
 
-void vulkan_renderer_backend_destroy_texture(texture* texture)
+void vulkan_renderer_destroy_texture(texture* texture)
 {
     vkDeviceWaitIdle(context->device.logical);
 
@@ -845,7 +758,7 @@ void vulkan_renderer_backend_destroy_texture(texture* texture)
     kzero_tc(texture, struct texture, 1);
 }
 
-bool vulkan_renderer_backend_create_material(material* material)
+bool vulkan_renderer_create_material(material* material)
 {
     if(!material)
     {
@@ -856,19 +769,19 @@ bool vulkan_renderer_backend_create_material(material* material)
     switch(material->type)
     {
         case MATERIAL_TYPE_WORLD:
-            if(!vulkan_shader_acquire_instance_resources(&context->material_shader, &material->internal_id))
-            {
-                kerror("Function '%s': Failed to acquire world shader resources.", __FUNCTION__);
-                return false;
-            }
-            break;
+            // if(!vulkan_shader_acquire_instance_resources(&context->material_shader, &material->internal_id))
+            // {
+            //     kerror("Function '%s': Failed to acquire world shader resources.", __FUNCTION__);
+            //     return false;
+            // }
+            // break;
         case MATERIAL_TYPE_UI:
-            if(!vulkan_shader_acquire_instance_resources(&context->ui_shader, &material->internal_id))
-            {
-                kerror("Function '%s': Failed to acquire UI shader resources.", __FUNCTION__);
-                return false;
-            }
-            break;
+            // if(!vulkan_shader_acquire_instance_resources(&context->ui_shader, &material->internal_id))
+            // {
+            //     kerror("Function '%s': Failed to acquire UI shader resources.", __FUNCTION__);
+            //     return false;
+            // }
+            // break;
         default:
             kerror("Function '%s': Unknown material type.", __FUNCTION__);
             return false;
@@ -877,7 +790,7 @@ bool vulkan_renderer_backend_create_material(material* material)
     return true;
 }
 
-void vulkan_renderer_backend_destroy_material(material* material)
+void vulkan_renderer_destroy_material(material* material)
 {
     if(!material)
     {
@@ -894,18 +807,18 @@ void vulkan_renderer_backend_destroy_material(material* material)
     switch(material->type)
     {
         case MATERIAL_TYPE_WORLD:
-            vulkan_shader_release_instance_resources(&context->material_shader, material->internal_id);
-            break;
+            // vulkan_shader_release_instance_resources(&context->material_shader, material->internal_id);
+            // break;
         case MATERIAL_TYPE_UI:
-            vulkan_shader_release_instance_resources(&context->ui_shader, material->internal_id);
-            break;
+            // vulkan_shader_release_instance_resources(&context->ui_shader, material->internal_id);
+            // break;
         default:
             kerror("Function '%s': Unknown material type.", __FUNCTION__);
             break;
     }
 }
 
-bool vulkan_renderer_backend_create_geometry(
+bool vulkan_renderer_create_geometry(
     geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
     const void* indices
 )
@@ -1013,7 +926,7 @@ bool vulkan_renderer_backend_create_geometry(
     return true;
 }
 
-void vulkan_renderer_backend_destroy_geometry(geometry* geometry)
+void vulkan_renderer_destroy_geometry(geometry* geometry)
 {
     if(!geometry || geometry->internal_id == INVALID_ID)
     {
@@ -1038,6 +951,328 @@ void vulkan_renderer_backend_destroy_geometry(geometry* geometry)
     kzero_tc(internal_data, vulkan_geometry_data, 1);
     internal_data->id = INVALID_ID;
     internal_data->generation = INVALID_ID;
+}
+
+bool vulkan_renderer_shader_id_valid(u32 shader_id, const char* func)
+{
+    if(shader_id == INVALID_ID || context->shaders[shader_id].id == INVALID_ID)
+    {
+        kerror("Function '%s': Shader id(%u) is invalid.", func, shader_id);
+        return false;
+    }
+
+    return true;
+}
+
+bool vulkan_renderer_shader_create(
+    const char* name, builtin_renderpass renderpass_id, shader_stage stages, bool use_instances, bool use_local,
+    u32* out_shader_id
+)
+{
+    *out_shader_id = INVALID_ID;
+
+    for(u32 i = 0; i < context->max_shader_count; ++i)
+    {
+        if(context->shaders[i].id == INVALID_ID)
+        {
+            *out_shader_id = i;
+            break;
+        }
+    }
+
+    if(*out_shader_id == INVALID_ID)
+    {
+        kerror("Function '%s': Failed to find free shader id slot.", __FUNCTION__);
+        return false;
+    }
+
+    // TODO: Динамический проходчик визуализатора.
+    vulkan_renderpass* renderpass = renderpass_id == 1 ? &context->main_renderpass : &context->ui_renderpass;
+
+    // TODO: Сделать нормальную трансляцию.
+    VkShaderStageFlags vk_stages = 0;
+    if((stages & SHADER_STAGE_VERTEX) != 0)
+    {
+        vk_stages |= VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    if((stages & SHADER_STAGE_FRAGMENT) != 0)
+    {
+        vk_stages |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    if((stages & SHADER_STAGE_COMPUTE) != 0)
+    {
+        kwarng("Function '%s': SHADER_STAGE_COMPUTE is set but not yet supported.", __FUNCTION__);
+        // vk_stages |= VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    if((stages & SHADER_STAGE_GEOMETRY) != 0)
+    {
+        kwarng("Function '%s': SHADER_STAGE_GEOMETRY is set but not yet supported.", __FUNCTION__);
+        // vk_stages |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    }
+
+    // TODO: Настраиваемый.
+    u16 max_descriptor_allocate_count = 1024;
+
+    bool result = vulkan_shader_create(
+        context, name, renderpass, vk_stages, max_descriptor_allocate_count, use_instances, use_local,
+        &context->shaders[*out_shader_id]
+    );
+
+    if(result)
+    {
+        context->shaders[*out_shader_id].id = *out_shader_id;
+    }
+    else
+    {
+        vulkan_shader_destroy(&context->shaders[*out_shader_id]);
+        kzero_tc(&context->shaders[*out_shader_id], vulkan_shader, 1);
+        context->shaders[*out_shader_id].id = INVALID_ID;
+        *out_shader_id = INVALID_ID;
+    }
+
+    return result;
+}
+
+void vulkan_renderer_shader_destroy(u32 shader_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return;
+    vulkan_shader_destroy(&context->shaders[shader_id]);
+    kzero_tc(&context->shaders[shader_id], vulkan_shader, 1);
+    context->shaders[shader_id].id = INVALID_ID;
+}
+
+bool vulkan_renderer_shader_add_attribute(u32 shader_id, const char* name, shader_attribute_type type)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_attribute(&context->shaders[shader_id], name, type);
+}
+
+bool vulkan_renderer_shader_add_sampler(u32 shader_id, const char* sampler_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_sampler(&context->shaders[shader_id], sampler_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_i8(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_i8(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_i16(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_i16(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_i32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_i32(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_u8(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_u8(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_u16(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_u16(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_u32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_u32(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_f32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_f32(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_vec2(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_vec2(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_vec3(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_vec3(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_vec4(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_vec4(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_mat4(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_mat4(&context->shaders[shader_id], uniform_name, scope, out_location);
+}
+
+bool vulkan_renderer_shader_add_uniform_custom(u32 shader_id, const char* uniform_name, u32 size, shader_scope scope, u32* out_location)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_add_uniform_custom(&context->shaders[shader_id], uniform_name, size, scope, out_location);
+}
+
+bool vulkan_renderer_shader_initialize(u32 shader_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_initialize(&context->shaders[shader_id]);
+}
+
+bool vulkan_renderer_shader_use(u32 shader_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_use(&context->shaders[shader_id]);
+}
+
+bool vulkan_renderer_shader_bind_globals(u32 shader_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_bind_globals(&context->shaders[shader_id]);
+}
+
+bool vulkan_renderer_shader_bind_instance(u32 shader_id, u32 instance_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_bind_instance(&context->shaders[shader_id], instance_id);
+}
+
+bool vulkan_renderer_shader_apply_globals(u32 shader_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_apply_globals(&context->shaders[shader_id]);
+}
+
+bool vulkan_renderer_shader_apply_instance(u32 shader_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_apply_instance(&context->shaders[shader_id]);
+}
+
+bool vulkan_renderer_shader_acquire_instance_resource(u32 shader_id, u32* out_instance_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_acquire_instance_resources(&context->shaders[shader_id], out_instance_id);
+}
+
+bool vulkan_renderer_shader_release_instance_resource(u32 shader_id, u32 instance_id)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_release_instance_resources(&context->shaders[shader_id], instance_id);
+}
+
+u32 vulkan_renderer_shader_uniform_location(u32 shader_id, const char* uniform_name)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return INVALID_ID;
+    return vulkan_shader_uniform_location(&context->shaders[shader_id], uniform_name);
+}
+
+bool vulkan_renderer_shader_set_sampler(u32 shader_id, u32 location, texture* t)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_sampler(&context->shaders[shader_id], location, t);
+}
+
+bool vulkan_renderer_shader_set_uniform_i8(u32 shader_id, u32 location, i8 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_i8(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_i16(u32 shader_id, u32 location, i16 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_i16(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_i32(u32 shader_id, u32 location, i32 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_i32(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_u8(u32 shader_id, u32 location, u8 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_u8(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_u16(u32 shader_id, u32 location, u16 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_u16(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_u32(u32 shader_id, u32 location, u32 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_u32(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_f32(u32 shader_id, u32 location, f32 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_f32(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_vec2(u32 shader_id, u32 location, vec2 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_vec2(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_vec2f(u32 shader_id, u32 location, f32 value_0, f32 value_1)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_vec2f(&context->shaders[shader_id], location, value_0, value_1);
+}
+
+bool vulkan_renderer_shader_set_uniform_vec3(u32 shader_id, u32 location, vec3 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_vec3(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_vec3f(u32 shader_id, u32 location, f32 value_0, f32 value_1, f32 value_2)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_vec3f(&context->shaders[shader_id], location, value_0, value_1, value_2);
+}
+
+bool vulkan_renderer_shader_set_uniform_vec4(u32 shader_id, u32 location, vec4 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_vec4(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_vec4f(u32 shader_id, u32 location, f32 value_0, f32 value_1, f32 value_2, f32 value_3)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_vec4f(&context->shaders[shader_id], location, value_0, value_1, value_2, value_3);
+}
+
+bool vulkan_renderer_shader_set_uniform_mat4(u32 shader_id, u32 location, mat4 value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_mat4(&context->shaders[shader_id], location, value);
+}
+
+bool vulkan_renderer_shader_set_uniform_custom(u32 shader_id, u32 location, void* value)
+{
+    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
+    return vulkan_shader_set_uniform_custom(&context->shaders[shader_id], location, value);
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(

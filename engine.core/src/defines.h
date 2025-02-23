@@ -92,6 +92,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define I64_MIN (-I64_MAX - 1)
 
 #define INVALID_ID -1
+#define INVALID_ID_U8 U8_MAX
 
 // Определение нулевого указателя.
 #define null  ((void*)0)

@@ -180,7 +180,7 @@ typedef struct vulkan_device {
 #define VULKAN_SHADER_MAX_MATERIAL_COUNT    1024 
 #define VULKAN_SHADER_MAX_GEOMETRY_COUNT    4096
 #define VULKAN_SHADER_MAX_GLOBAL_TEXTURES   31
-#define VULKAN_SHADER_MAX_INSTANCE_TEXTURES 16
+#define VULKAN_SHADER_MAX_INSTANCE_TEXTURES 31
 #define VULKAN_SHADER_MAX_STAGES            2
 #define VULKAN_SHADER_MAX_ATTRIBUTES        16
 #define VULKAN_SHADER_MAX_UNIFORMS          128
@@ -197,50 +197,6 @@ typedef struct vulkan_pipeline {
     VkPipelineLayout layout;
 } vulkan_pipeline;
 
-// TODO: Перенести в frontend.
-// @brief Тип атрибута шейдера.
-typedef enum shader_attribute_type {
-    SHADER_ATTRIB_TYPE_FLOAT32,
-    SHADER_ATTRIB_TYPE_FLOAT32_2,
-    SHADER_ATTRIB_TYPE_FLOAT32_3,
-    SHADER_ATTRIB_TYPE_FLOAT32_4,
-    SHADER_ATTRIB_TYPE_MATRIX_4,
-    SHADER_ATTRIB_TYPE_INT8,
-    SHADER_ATTRIB_TYPE_INT8_2,
-    SHADER_ATTRIB_TYPE_INT8_3,
-    SHADER_ATTRIB_TYPE_INT8_4,
-    SHADER_ATTRIB_TYPE_UINT8,
-    SHADER_ATTRIB_TYPE_UINT8_2,
-    SHADER_ATTRIB_TYPE_UINT8_3,
-    SHADER_ATTRIB_TYPE_UINT8_4,
-    SHADER_ATTRIB_TYPE_INT16,
-    SHADER_ATTRIB_TYPE_INT16_2,
-    SHADER_ATTRIB_TYPE_INT16_3,
-    SHADER_ATTRIB_TYPE_INT16_4,
-    SHADER_ATTRIB_TYPE_UINT16,
-    SHADER_ATTRIB_TYPE_UINT16_2,
-    SHADER_ATTRIB_TYPE_UINT16_3,
-    SHADER_ATTRIB_TYPE_UINT16_4,
-    SHADER_ATTRIB_TYPE_INT32,
-    SHADER_ATTRIB_TYPE_INT32_2,
-    SHADER_ATTRIB_TYPE_INT32_3,
-    SHADER_ATTRIB_TYPE_INT32_4,
-    SHADER_ATTRIB_TYPE_UINT32,
-    SHADER_ATTRIB_TYPE_UINT32_2,
-    SHADER_ATTRIB_TYPE_UINT32_3,
-    SHADER_ATTRIB_TYPE_UINT32_4,
-} shader_attribute_type;
-
-// @brief Область действия шейдера.
-typedef enum vulkan_shader_scope {
-    // @brief Глобальная облась действия (обновление каждый кадр).
-    VULKAN_SHADER_SCOPE_GLOBAL   = 0,
-    // @brief Область действия экземпляра (обновление экземпляра).
-    VULKAN_SHADER_SCOPE_INSTANCE = 1,
-    // @brief Локальная область действия (обновление объекта).
-    VULKAN_SHADER_SCOPE_LOCAL    = 2
-} vulkan_shader_scope;
-
 // @brief Состояние шейдера.
 typedef enum vulkan_shader_state {
     // @brief Не создан (Не готов).
@@ -254,7 +210,7 @@ typedef enum vulkan_shader_state {
 // @brief Конфигурация набора дескрипторов.
 typedef struct vulkan_descriptor_set_config {
     // @brief Количество прикреплений.
-    u32 binding_count;
+    u8 binding_count;
     // @brief Прикрепления.
     VkDescriptorSetLayoutBinding bindings[VULKAN_SHADER_MAX_BINDINGS];
 } vulkan_descriptor_set_config;
@@ -270,27 +226,27 @@ typedef struct vulkan_shader_stage_config {
 // @brief Конфигурация шейдера (перед этапом инициализации).
 typedef struct vulkan_shader_config {
     // @brief Количество стадий.
-    u32 stage_count;
+    u8 stage_count;
     // @brief Массив стадий конвейера.
     vulkan_shader_stage_config stages[VULKAN_SHADER_MAX_STAGES];
+    // @brief Массив резмеров пулов дескрипторных наборов (ubo, image sampler).
+    VkDescriptorPoolSize pool_sizes[2];
+    // @brief Максимальное количество дескрипторов.
+    u16 max_descriptor_set_count;
+    // @brief Количество дескрипторов.
+    u8 descriptor_set_count;
+    // @brief Массив дескрипторов (global_ubo, instances_ubo).
+    vulkan_descriptor_set_config descriptor_sets[2];
     // @brief Количество атрибутов шейдерного модуля.
-    u32 attribute_count;
+    u8 attribute_count;
     // @brief Размер одного атрибута шейдерного модуля.
-    u32 attribute_stride;
+    u16 attribute_stride;
     // @brief Массив атрибутов шейдерного модуля.
     VkVertexInputAttributeDescription attributes[VULKAN_SHADER_MAX_ATTRIBUTES];
     // @brief Количество констант шейдерного модуля.
-    u32 push_constant_range_count;
+    u8 push_constant_range_count;
     // @brief Массив диапазоно констант шейдерного модуля.
     range push_constant_ranges[VULKAN_SHADER_MAX_PUSH_CONST_RANGES];
-    // @brief Максимальное количество дескрипторов.
-    u32 max_descriptor_set_count;
-    // @brief Количество дескрипторов.
-    u32 descriptor_set_count;
-    // @brief Массив дескрипторов (global_ubo, instances_ubo).
-    vulkan_descriptor_set_config descriptor_sets[2];
-    // @brief Массив резмеров пулов дескрипторных наборов (ubo, image sampler).
-    VkDescriptorPoolSize pool_sizes[2];
 } vulkan_shader_config;
 
 // @brief Стадия конкретного модуля шейдера (+конвейер).
@@ -304,7 +260,7 @@ typedef struct vulkan_shader_stage {
 } vulkan_shader_stage;
 
 typedef struct vulkan_descriptor_state {
-    u32 generations[5];                    // TODO: image_count == 5!
+    u8 generations[5];                    // TODO: image_count == 5!
     u32 ids[5];
 } vulkan_descriptor_state;
 
@@ -316,10 +272,9 @@ typedef struct vulkan_shader_descriptor_set_state {
 typedef struct vulkan_shader_instance_state {
     VkDescriptorSet descriptor_sets[5];    // TODO: image_count == 5!
     vulkan_shader_descriptor_set_state descriptor_set_state;
-    vulkan_descriptor_state descriptor_states[VULKAN_SHADER_MAX_DESCRIPTOR_COUNT];
-    u64 id;
+    u32 id;
     u64 offset;
-    texture* instance_textures[VULKAN_SHADER_MAX_INSTANCE_TEXTURES];
+    texture** instance_textures;
 } vulkan_shader_instance_state;
 
 typedef struct vulkan_shader_global_ubo {
@@ -335,16 +290,18 @@ typedef struct vulkan_shader_instance_ubo {
 } vulkan_shader_instance_ubo;
 
 typedef struct vulkan_uniform_lookup_entry {
-    vulkan_shader_scope scope;
-    u32 location;
-    u32 index;
-    u32 set_index;
-    u32 offset;
-    u32 size;
+    u64 offset;
+    u16 location;
+    u16 index;
+    u16 size;
+    u8 set_index;
+    shader_scope scope;
 } vulkan_uniform_lookup_entry;
 
 // @brief Контекст шейдера.
 typedef struct vulkan_shader {
+    // @brief Идентификатор шейдера.
+    u32 id;
     // @brief Имя шейдера.
     char name[VULKAN_SHADER_MAX_NAME_LENGTH];
     // @brief Текущее состояние шейдера.
@@ -359,13 +316,12 @@ typedef struct vulkan_shader {
     vulkan_shader_config config;
     // @brief Пул дескрипторов.
     VkDescriptorPool descriptor_pool;
-    // @brief Массив наборов дескрипторов на кадр.
-    VkDescriptorSetLayout descriptor_set_layouts[5]; // TODO: image_count == 5!
+    // @brief Массив наборов дескрипторов: Индекс 0 - глобально, 1 - локально.
+    VkDescriptorSetLayout descriptor_set_layouts[2];
     // @brief Массив набора дескрипторов на кадр.
     VkDescriptorSet global_descriptor_sets[5];       // TODO: image_count == 5!
-
-    // @brief Запрашиваемое выравнивание ubo.        // TODO: сделать настраиваемым.
-    u32 required_ubo_aligment;
+    // @brief Запрашиваемое выравнивание ubo.
+    u32 required_ubo_aligment;                       // TODO: сделать настраиваемым.
     // @brief Ширина ... в байтах.
     u32 global_ubo_stride;
     // @brief Размер ... в байтах.
@@ -381,13 +337,15 @@ typedef struct vulkan_shader {
     // @brief Промежуточная привязка ubo смещения.
     u64 bound_ubo_offset;
     // @brief Количество uniform.
-    u32 uniform_count;
+    u8 uniform_count;
     // @brief Буфер uniform.
     vulkan_buffer uniform_buffer;
     // @brief Трансляция памяти буфера uniform (привязка).
     void* uniform_buffer_mapped_block;
     // @brief Глобальная uniform.
     vulkan_shader_global_ubo global_ubo;
+    // @brief Количество экземпляров.
+    u32 instance_count;
     // @brief ... TODO: Сделать динамическим.
     vulkan_shader_instance_state instance_states[VULKAN_SHADER_MAX_MATERIAL_COUNT];
     // @brief Массив uniform.
@@ -399,7 +357,9 @@ typedef struct vulkan_shader {
     // @brief Таблица местоположения для uniform.
     hashtable* uniform_lookup;
     // @brief Количество текстур глобально.
-    u32 global_texture_count;
+    u8 global_texture_count;
+    // @brief Количество текстур экземпляров.
+    u8 instance_texture_count;
     // @brief Массив указателей на текстуры.
     texture* global_textures[VULKAN_SHADER_MAX_GLOBAL_TEXTURES];
     // @brief Количество констант.
@@ -478,19 +438,8 @@ typedef struct vulkan_context {
     vulkan_renderpass main_renderpass;
     vulkan_renderpass ui_renderpass;
 
-    vulkan_shader material_shader;
-    u32 material_shader_projection_location;
-    u32 material_shader_view_location;
-    u32 material_shader_diffuse_color_location;
-    u32 material_shader_diffuse_texture_location;
-    u32 material_shader_mode_location;
-
-    vulkan_shader ui_shader;
-    u32 ui_shader_projection_location;
-    u32 ui_shader_view_location;
-    u32 ui_shader_diffuse_color_location;
-    u32 ui_shader_diffuse_texture_location;
-    u32 ui_shader_mode_location;
+    u32 max_shader_count;
+    vulkan_shader* shaders;
 
     vulkan_buffer object_vertex_buffer;
     vulkan_buffer object_index_buffer;

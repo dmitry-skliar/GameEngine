@@ -19,7 +19,7 @@
 */
 bool vulkan_shader_create(
     vulkan_context* context, const char* name, vulkan_renderpass* renderpass, VkShaderStageFlags stages,
-    u32 max_descriptor_set_count, bool use_instances, bool use_local, vulkan_shader* out_shader);
+    u16 max_descriptor_set_count, bool use_instances, bool use_local, vulkan_shader* out_shader);
 
 /*
     @brief Освобождает предоставленный шейдер.
@@ -46,7 +46,7 @@ bool vulkan_shader_add_attribute(vulkan_shader* shader, const char* name, shader
     @param scope Область применения.
     @param out_location Указатель для хранения будущего атрибута.
 */
-bool vulkan_shader_add_sampler(vulkan_shader* shader, const char* sampler_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_sampler(vulkan_shader* shader, const char* sampler_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новое знаковое 8-bit целое в uniform шейдера.
@@ -55,7 +55,7 @@ bool vulkan_shader_add_sampler(vulkan_shader* shader, const char* sampler_name, 
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_i8(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_i8(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новое знаковое 16-bit целое в uniform шейдера.
@@ -64,7 +64,7 @@ bool vulkan_shader_add_uniform_i8(vulkan_shader* shader, const char* uniform_nam
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_i16(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_i16(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новое знаковое 32-bit целое в uniform шейдера.
@@ -73,7 +73,7 @@ bool vulkan_shader_add_uniform_i16(vulkan_shader* shader, const char* uniform_na
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_i32(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_i32(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новое беззнаковое 8-bit целое в uniform шейдера.
@@ -82,7 +82,7 @@ bool vulkan_shader_add_uniform_i32(vulkan_shader* shader, const char* uniform_na
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_u8(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_u8(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новое беззнаковое 16-bit целое в uniform шейдера.
@@ -91,7 +91,7 @@ bool vulkan_shader_add_uniform_u8(vulkan_shader* shader, const char* uniform_nam
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_u16(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_u16(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новое беззнаковое 32-bit целое в uniform шейдера.
@@ -100,7 +100,7 @@ bool vulkan_shader_add_uniform_u16(vulkan_shader* shader, const char* uniform_na
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_u32(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_u32(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новое вещественное 32-bit с плавающей точкой в uniform шейдера.
@@ -109,7 +109,7 @@ bool vulkan_shader_add_uniform_u32(vulkan_shader* shader, const char* uniform_na
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_f32(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_f32(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новый 2х элементный вектор (2x 32-bit floats) в uniform шейдера.
@@ -118,7 +118,7 @@ bool vulkan_shader_add_uniform_f32(vulkan_shader* shader, const char* uniform_na
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_vec2(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_vec2(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новый 3х элементный вектор (3x 32-bit floats) в uniform шейдера.
@@ -127,7 +127,7 @@ bool vulkan_shader_add_uniform_vec2(vulkan_shader* shader, const char* uniform_n
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_vec3(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_vec3(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новый 4х элементный вектор (4x 32-bit floats) в uniform шейдера.
@@ -136,7 +136,7 @@ bool vulkan_shader_add_uniform_vec3(vulkan_shader* shader, const char* uniform_n
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_vec4(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_vec4(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
 
 /*
     @brief Добавляет новую матрицу 4x4 (16x 32-bit floats) в uniform шейдера.
@@ -145,7 +145,17 @@ bool vulkan_shader_add_uniform_vec4(vulkan_shader* shader, const char* uniform_n
     @param scope Область применения.
     @param out_location Указатель для хранения будущего uniform.
 */
-bool vulkan_shader_add_uniform_mat4(vulkan_shader* shader, const char* uniform_name, vulkan_shader_scope scope, u32* out_location);
+bool vulkan_shader_add_uniform_mat4(vulkan_shader* shader, const char* uniform_name, shader_scope scope, u32* out_location);
+
+/*
+    @brief Добавляет произвольный тип в uniform шейдера.
+    @param shader Указатель на шейдер куда добавлять.
+    @param uniform_name Имя uniform.
+    @param size Размер произвольного типа в байтах.
+    @param scope Область применения.
+    @param out_location Указатель для хранения будущего uniform.
+*/
+bool vulkan_shader_add_uniform_custom(vulkan_shader* shader, const char* uniform_name, u32 size, shader_scope scope, u32* out_location);
 
 /*
     @brief Инициализарует настроенный шейдер. Автоматически освобождается при ошибке на этом шаге.
@@ -356,3 +366,12 @@ bool vulkan_shader_set_uniform_vec4f(vulkan_shader* shader, u32 location, f32 va
     @return True в случае успеха, false в случае неудачи.
 */
 bool vulkan_shader_set_uniform_mat4(vulkan_shader* shader, u32 location, mat4 value);
+
+/*
+    @brief Устанавливает значение произвольного типа в указанном месте.
+    @param shader Указатель на шейдер, для установки значения.
+    @param location Местоположение для установки значения.
+    @param value Указатель на значение произвольного типа для установки.
+    @return True в случае успеха, false в случае неудачи.
+*/
+bool vulkan_shader_set_uniform_custom(vulkan_shader* shader, u32 location, void* value);
