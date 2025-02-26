@@ -19,17 +19,18 @@ typedef struct resource_loader {
 
 /*
 */
-bool resource_system_initialize(u64* memory_requirement, void* memory, resource_system_config* config);
+KAPI bool resource_system_initialize(u64* memory_requirement, void* memory, resource_system_config* config);
 
 /*
 */
-void resource_system_shutdown();
+KAPI void resource_system_shutdown();
 
 /*
 */
 KAPI bool resource_system_register_loader(resource_loader loader);
 
 /*
+    NOTE: Не создает ресурс! Подается готовая структура!
 */
 KAPI bool resource_system_load(const char* name, resource_type type, resource* out_resource);
 

@@ -4,6 +4,7 @@
 // Внутренние подключения.
 #include "memory/memory.h"
 #include "platform/string.h"
+#include "containers/darray.h"
 
 char* string_duplicate(const char* str)
 {
@@ -235,5 +236,86 @@ bool string_to_bool(char* str, bool* value)
 {
     if(!str) return false;
 
-    return platform_string_equal(str, "1") || platform_string_equali(str, "true");
+    *value = str[0] == '1' || platform_string_equali(str, "true");
+    return *value;
+}
+
+u32 string_split(const char* str, char delim, bool trime_entries, bool include_empty, char*** str_darray)
+{
+    if(!str || !str_darray)
+    {
+        return 0;
+    }
+
+    // Копирование строки для манипуляций.
+    // NOTE: Модифицированный буфер, нужно удалять вручную!
+    u64 strbuf_length = platform_string_length(str) + 1;
+    char* strbuf = kallocate(strbuf_length, MEMORY_TAG_STRING);
+    kcopy(strbuf, str, strbuf_length);
+
+    char* head = strbuf;
+    char* ptr = strbuf;
+    u32 length = 0;
+    u32 count = 0;
+    bool end_detect = false;
+
+    while(true)
+    {
+        // Поиск разделителя.
+        while(*ptr && *ptr != delim)
+        {
+            length++;
+            ptr++;
+        }
+
+        // Проверка на конец строки для обработки.
+        if(!(*ptr))
+        {
+            end_detect = true;
+        }
+
+        // Добавление строки.
+        if(length > 0 || include_empty)
+        {
+            count++;
+            length++;
+            *ptr = '\0';
+
+            if(trime_entries)
+            {
+                head = string_trim(head);
+            }
+
+            char* new = kallocate(length, MEMORY_TAG_STRING);
+            kcopy(new, head, length);
+            darray_push(*str_darray, new);
+        }
+
+        // Конец считываемой строки.
+        if(end_detect)
+        {
+            break;
+        }
+
+        length = 0;
+        head = ++ptr;
+    }
+
+    kfree(strbuf, strbuf_length, MEMORY_TAG_STRING);
+    return count;
+}
+
+void string_cleanup_split_array(char** str_darray)
+{
+    if(!str_darray)
+    {
+        return;
+    }
+
+    u32 count = darray_length(str_darray);
+
+    for(u32 i = 0; i < count; ++i)
+    {
+        string_free(str_darray[i]);
+    }
 }

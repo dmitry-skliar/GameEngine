@@ -29,7 +29,7 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
 
     // TODO: Должен использоваться распределитель памяти.
     material_config* resource_data = kallocate_tc(material_config, 1, MEMORY_TAG_MATERIAL);
-    resource_data->type = MATERIAL_TYPE_WORLD;
+    resource_data->shader_name = "Builtin.Material";
     resource_data->auto_release = true;
     resource_data->diffuse_color = vec4_one(); // белый.
     string_empty(resource_data->diffuse_map_name);
@@ -61,17 +61,19 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
                 "Potential formatting issue found in file '%s': '=' token not found. Skipping line %u.",
                 full_file_path, line_number
             );
+            line_number++;
+            continue;
         }
 
         // Максимальное количество символов для имени переменной - 64.
         char raw_var_name[64];
-        kzero(raw_var_name, sizeof(char) * 64);
+        kzero_tc(raw_var_name, char, 64);
         string_mid(raw_var_name, trimmed, 0, equal_index);
         char* trimmed_var_name = string_trim(raw_var_name);
 
         // Максимальное количество символов для значения - 446 (511–65).
         char raw_value[446];
-        kzero(raw_value, sizeof(char) * 446);
+        kzero_tc(raw_value, char, 446);
         string_mid(raw_value, trimmed, equal_index + 1, -1);
         char* trimmed_value = string_trim(raw_value);
 
@@ -96,22 +98,9 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
                 // NOTE: Уже задано выше.
             }
         }
-        else if(string_equali(trimmed_var_name, "type"))
+        else if(string_equali(trimmed_var_name, "shader"))
         {
-            // TODO: другие типы.
-            if(string_equali(trimmed_value, "ui"))
-            {
-                resource_data->type = MATERIAL_TYPE_UI;
-            }
-            else if(string_equali(trimmed_value, "world"))
-            {
-                resource_data->type = MATERIAL_TYPE_WORLD;
-            }
-            else
-            {
-                kwarng("Error parsing type in file '%s'. Using default of world type instead.", full_file_path);
-                // NOTE: Уже задано выше.
-            }
+            resource_data->shader_name = string_duplicate(trimmed_value);
         }
 
         // TODO: Другие поля.
@@ -132,6 +121,9 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
 
 void material_loader_unload(resource_loader* self, resource* resource)
 {
+    material_config* data = resource->data;
+    string_free(data->shader_name);
+
     resource_unload(self, resource, MEMORY_TAG_MATERIAL, __FUNCTION__);
 }
 

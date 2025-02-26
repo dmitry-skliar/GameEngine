@@ -305,7 +305,7 @@ VkResult vulkan_create_devices_info(renderer_backend* backend, vulkan_context* c
         u32 present_family_count  =  0;
         u32 compute_family_count  =  0;
         u32 transfer_family_count =  0;
-        u8  min_transfer_score    = INVALID_ID;
+        u8  min_transfer_score    = INVALID_ID_U8;
 
         // Просмотр поддерживаемых очередей.
         // TODO: Пересмотреть алгоритм!

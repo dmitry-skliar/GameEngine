@@ -4,17 +4,15 @@
 #include <debug/assert.h>
 #include <vulkan/vulkan.h>
 #include <containers/freelist.h>
-#include <containers/hashtable.h>
 #include <renderer/renderer_types.h>
 
 /*
     @brief Проверяет возвразаемое значение указанного выражения на соответствие VK_SUCCESS.
     @param Выражение, результат которого следует проверить. 
 */
-#define VK_CHECK(expr) KASSERT(expr == VK_SUCCESS, "")
+#define VK_CHECK(expr) kassert(expr == VK_SUCCESS, "")
 
-// @brief Обявление типа контекста Vulkan.
-typedef struct vulkan_context vulkan_context;
+struct vulkan_context;
 
 /*
     @brief Контекст буфер Vulkan.
@@ -41,6 +39,8 @@ typedef struct vulkan_buffer {
     void* freelist_memory;
     // @brief Экземпляр списка.
     freelist* buffer_freelist;
+    //
+    bool has_freelist;
 } vulkan_buffer;
 
 typedef struct vulkan_image {
@@ -176,19 +176,6 @@ typedef struct vulkan_device {
     VkFormat depth_format;
 } vulkan_device;
 
-#define VULKAN_SHADER_MAX_NAME_LENGTH       256
-#define VULKAN_SHADER_MAX_MATERIAL_COUNT    1024 
-#define VULKAN_SHADER_MAX_GEOMETRY_COUNT    4096
-#define VULKAN_SHADER_MAX_GLOBAL_TEXTURES   31
-#define VULKAN_SHADER_MAX_INSTANCE_TEXTURES 31
-#define VULKAN_SHADER_MAX_STAGES            2
-#define VULKAN_SHADER_MAX_ATTRIBUTES        16
-#define VULKAN_SHADER_MAX_UNIFORMS          128
-#define VULKAN_SHADER_MAX_BINDINGS          32
-#define VULKAN_SHADER_MAX_PUSH_CONST_RANGES 32
-#define VULKAN_SHADER_MAX_DESCRIPTOR_COUNT  2
-#define VULKAN_SHADER_SAMPLER_COUNT         1
-
 // @brief Контекст конвейера.
 typedef struct vulkan_pipeline {
     // @brief Экземпляр конвейера.
@@ -197,184 +184,19 @@ typedef struct vulkan_pipeline {
     VkPipelineLayout layout;
 } vulkan_pipeline;
 
-// @brief Состояние шейдера.
-typedef enum vulkan_shader_state {
-    // @brief Не создан (Не готов).
-    VULKAN_SHADER_STATE_NOT_CREATED,
-    // @brief Создан, но не инициализирован (Готов к конфигурированию).
-    VULKAN_SHADER_STATE_UNINITIALIZED,
-    // @brief Создан и инициализирован (Готов к работе).
-    VULKAN_SHADER_STATE_INITIALIZED
-} vulkan_shader_state;
-
-// @brief Конфигурация набора дескрипторов.
-typedef struct vulkan_descriptor_set_config {
-    // @brief Количество прикреплений.
-    u8 binding_count;
-    // @brief Прикрепления.
-    VkDescriptorSetLayoutBinding bindings[VULKAN_SHADER_MAX_BINDINGS];
-} vulkan_descriptor_set_config;
-
-// @brief Конкретная конфигурация стадии шейдера на конвейере.
-typedef struct vulkan_shader_stage_config {
-    // @brief Стадия конвейера.
-    VkShaderStageFlagBits stage;
-    // @brief Строковое наименование стадии.
-    char stage_str[8];
-} vulkan_shader_stage_config;
-
-// @brief Конфигурация шейдера (перед этапом инициализации).
-typedef struct vulkan_shader_config {
-    // @brief Количество стадий.
-    u8 stage_count;
-    // @brief Массив стадий конвейера.
-    vulkan_shader_stage_config stages[VULKAN_SHADER_MAX_STAGES];
-    // @brief Массив резмеров пулов дескрипторных наборов (ubo, image sampler).
-    VkDescriptorPoolSize pool_sizes[2];
-    // @brief Максимальное количество дескрипторов.
-    u16 max_descriptor_set_count;
-    // @brief Количество дескрипторов.
-    u8 descriptor_set_count;
-    // @brief Массив дескрипторов (global_ubo, instances_ubo).
-    vulkan_descriptor_set_config descriptor_sets[2];
-    // @brief Количество атрибутов шейдерного модуля.
-    u8 attribute_count;
-    // @brief Размер одного атрибута шейдерного модуля.
-    u16 attribute_stride;
-    // @brief Массив атрибутов шейдерного модуля.
-    VkVertexInputAttributeDescription attributes[VULKAN_SHADER_MAX_ATTRIBUTES];
-    // @brief Количество констант шейдерного модуля.
-    u8 push_constant_range_count;
-    // @brief Массив диапазоно констант шейдерного модуля.
-    range push_constant_ranges[VULKAN_SHADER_MAX_PUSH_CONST_RANGES];
-} vulkan_shader_config;
-
-// @brief Стадия конкретного модуля шейдера (+конвейер).
-typedef struct vulkan_shader_stage {
-    // @brief Модуль шейдера (после связывания с pipline может быть уничтожен).
-    VkShaderModule handle;
-    // @brief Информация модуля шейдера.
-    VkShaderModuleCreateInfo create_info;
-    // @brief Информация модуля для pipeline.
-    VkPipelineShaderStageCreateInfo shader_stage_create_info;
-} vulkan_shader_stage;
-
-typedef struct vulkan_descriptor_state {
-    u8 generations[5];                    // TODO: image_count == 5!
-    u32 ids[5];
-} vulkan_descriptor_state;
-
-typedef struct vulkan_shader_descriptor_set_state {
-    VkDescriptorSet descriptor_sets[5];    // TODO: image_count == 5!
-    vulkan_descriptor_state descriptor_states[VULKAN_SHADER_MAX_BINDINGS];
-} vulkan_shader_descriptor_set_state;
-
-typedef struct vulkan_shader_instance_state {
-    VkDescriptorSet descriptor_sets[5];    // TODO: image_count == 5!
-    vulkan_shader_descriptor_set_state descriptor_set_state;
-    u32 id;
-    u64 offset;
-    texture** instance_textures;
-} vulkan_shader_instance_state;
-
-typedef struct vulkan_shader_global_ubo {
-    mat4 projection;       // 64 bytes.
-    mat4 view;             // 64 bytes.
-    mat4 m_reserved[2];    // 128 bytes зарезервировано.
-} vulkan_shader_global_ubo;
-
-typedef struct vulkan_shader_instance_ubo {
-    vec4 diffuse_color;    // 16 bytes.
-    vec4 v_reserved[3];    // 48 bytes.
-    mat4 m_reserved[3];
-} vulkan_shader_instance_ubo;
-
-typedef struct vulkan_uniform_lookup_entry {
-    u64 offset;
-    u16 location;
-    u16 index;
-    u16 size;
-    u8 set_index;
-    shader_scope scope;
-} vulkan_uniform_lookup_entry;
-
-// @brief Контекст шейдера.
-typedef struct vulkan_shader {
-    // @brief Идентификатор шейдера.
-    u32 id;
-    // @brief Имя шейдера.
-    char name[VULKAN_SHADER_MAX_NAME_LENGTH];
-    // @brief Текущее состояние шейдера.
-    vulkan_shader_state state;
-    // @brief Конкретные cтадии шейдера (вершиная, фрагментная ...).
-    vulkan_shader_stage stages[VULKAN_SHADER_MAX_STAGES];
-    // @brief Указывает на использование экземпляров.
-    bool use_instances;
-    // @brief Указывает на использование констант (локально).
-    bool use_push_constants;
-    // @brief Конфигурация шейдера (перед этапом инициализации).
-    vulkan_shader_config config;
-    // @brief Пул дескрипторов.
-    VkDescriptorPool descriptor_pool;
-    // @brief Массив наборов дескрипторов: Индекс 0 - глобально, 1 - локально.
-    VkDescriptorSetLayout descriptor_set_layouts[2];
-    // @brief Массив набора дескрипторов на кадр.
-    VkDescriptorSet global_descriptor_sets[5];       // TODO: image_count == 5!
-    // @brief Запрашиваемое выравнивание ubo.
-    u32 required_ubo_aligment;                       // TODO: сделать настраиваемым.
-    // @brief Ширина ... в байтах.
-    u32 global_ubo_stride;
-    // @brief Размер ... в байтах.
-    u32 global_ubo_size;
-    // @brief Ширина ... в байтах.
-    u32 ubo_stride;
-    // @brief Размер ... в байтах.
-    u32 ubo_size;
-    // @brief Промежуточная привязка глобалоного смещения.
-    u64 global_ubo_offset;
-    // @brief Промежуточная привязка идентификатора экземпляра.
-    u32 bound_instance_id;
-    // @brief Промежуточная привязка ubo смещения.
-    u64 bound_ubo_offset;
-    // @brief Количество uniform.
-    u8 uniform_count;
-    // @brief Буфер uniform.
-    vulkan_buffer uniform_buffer;
-    // @brief Трансляция памяти буфера uniform (привязка).
-    void* uniform_buffer_mapped_block;
-    // @brief Глобальная uniform.
-    vulkan_shader_global_ubo global_ubo;
-    // @brief Количество экземпляров.
-    u32 instance_count;
-    // @brief ... TODO: Сделать динамическим.
-    vulkan_shader_instance_state instance_states[VULKAN_SHADER_MAX_MATERIAL_COUNT];
-    // @brief Массив uniform.
-    vulkan_uniform_lookup_entry uniforms[VULKAN_SHADER_MAX_UNIFORMS];
-    // @brief Требования к памяти для таблицы hashtable.
-    u64 uniform_lookup_memory_requirement;
-    // @brief Указатель на выделеную память для таблицы hashtable.
-    void* uniform_lookup_memory;
-    // @brief Таблица местоположения для uniform.
-    hashtable* uniform_lookup;
-    // @brief Количество текстур глобально.
-    u8 global_texture_count;
-    // @brief Количество текстур экземпляров.
-    u8 instance_texture_count;
-    // @brief Массив указателей на текстуры.
-    texture* global_textures[VULKAN_SHADER_MAX_GLOBAL_TEXTURES];
-    // @brief Количество констант.
-    u32 push_constant_count;
-    // @brief Ширина констант.
-    u32 push_constant_stride;
-    // @brief Размер константы.
-    u32 push_constants_size;
-    // @brief Конвейер визуализации.
-    vulkan_pipeline pipeline;
-    // @brief Проходчик визуализации.
-    vulkan_renderpass* renderpass;
-    // @brief Контекст Vulkan (TODO: убрать после перемещения в vulkan_backend).
-    vulkan_context* context;
-} vulkan_shader;
+#define VULKAN_SHADER_MAX_NAME_LENGTH       256
+#define VULKAN_SHADER_MAX_MATERIAL_COUNT    1024 
+#define VULKAN_SHADER_MAX_GEOMETRY_COUNT    4096
+#define VULKAN_SHADER_MAX_GLOBAL_TEXTURES   31
+#define VULKAN_SHADER_MAX_INSTANCE_TEXTURES 31
+#define VULKAN_SHADER_MAX_STAGES            8
+#define VULKAN_SHADER_MAX_ATTRIBUTES        16
+#define VULKAN_SHADER_MAX_UNIFORMS          128
+#define VULKAN_SHADER_MAX_BINDINGS          32
+#define VULKAN_SHADER_MAX_PUSH_CONST_RANGES 32
+#define VULKAN_SHADER_MAX_DESCRIPTOR_COUNT  2
+#define VULKAN_SHADER_SAMPLER_COUNT         1
+#define VULKAN_SHADER_MAX_UI_COUNT          1024
 
 // @brief Контекст данных геометрии в буфере.
 typedef struct vulkan_geometry_data {
@@ -396,11 +218,101 @@ typedef struct vulkan_geometry_data {
     u64 index_buffer_offset;
 } vulkan_geometry_data;
 
-// @brief Контекст данных текстуры.
-typedef struct vulkan_texture_data {
-    vulkan_image image;
-    VkSampler sampler;
-} vulkan_texture_data;
+// @brief Конкретная конфигурация стадии шейдера на конвейере.
+typedef struct vulkan_shader_stage_config {
+    // @brief Стадия конвейера.
+    VkShaderStageFlagBits stage;
+    // @brief Имя файла стадии.
+    char file_name[255];
+} vulkan_shader_stage_config;
+
+// @brief Конфигурация набора дескрипторов.
+typedef struct vulkan_descriptor_set_config {
+    // @brief Количество прикреплений.
+    u8 binding_count;
+    // @brief Прикрепления.
+    VkDescriptorSetLayoutBinding bindings[VULKAN_SHADER_MAX_BINDINGS];
+} vulkan_descriptor_set_config;
+
+// @brief Конфигурация шейдера (перед этапом инициализации).
+typedef struct vulkan_shader_config {
+    // @brief Количество стадий.
+    u8 stage_count;
+    // @brief Массив стадий конвейера.
+    vulkan_shader_stage_config stages[VULKAN_SHADER_MAX_STAGES];
+    // @brief Массив резмеров пулов дескрипторных наборов (ubo, image sampler).
+    VkDescriptorPoolSize pool_sizes[2];
+    // @brief Максимальное количество дескрипторных наборов, которое может предоставить шейдер.
+    u16 max_descriptor_set_count;
+    // @brief Количество дескрипторов.
+    u8 descriptor_set_count;
+    // @brief Массив наборов дескрипторов (0 - глобальные, 1- экземпляров).
+    vulkan_descriptor_set_config descriptor_sets[2];
+    // @brief Массив атрибутов шейдерного модуля.
+    VkVertexInputAttributeDescription attributes[VULKAN_SHADER_MAX_ATTRIBUTES];
+} vulkan_shader_config;
+
+// @brief Состояние дескриптора на кадре.
+typedef struct vulkan_descriptor_state {
+    u8 generations[5];                    // TODO: image_count == 5!
+    u32 ids[5];
+} vulkan_descriptor_state;
+
+// @brief Состояние набора дескрипторов. Используется для отслеживания обновлений, пропуская те, которые не нуждаются!
+typedef struct vulkan_shader_descriptor_set_state {
+    VkDescriptorSet descriptor_sets[5];    // TODO: image_count == 5!
+    vulkan_descriptor_state descriptor_states[VULKAN_SHADER_MAX_BINDINGS];
+} vulkan_shader_descriptor_set_state;
+
+// @brief Состояние шейдера на уровне экземпляра.
+typedef struct vulkan_shader_instance_state {
+    // @brief Идентификатор экземпляра.
+    u32 id;
+    // @brief Смещение в байтах в uniform-буфере.
+    u64 offset;
+    // @brief Состояние набора дескрипторов.
+    vulkan_shader_descriptor_set_state descriptor_set_state;
+    // @brief Указатель на текстуры экземпляра.
+    texture** instance_textures;
+} vulkan_shader_instance_state;
+
+// @brief Стадия конкретного модуля шейдера (+конвейер).
+typedef struct vulkan_shader_stage {
+    // @brief Модуль шейдера (после связывания с pipline может быть уничтожен).
+    VkShaderModule handle;
+    // @brief Информация модуля шейдера.
+    VkShaderModuleCreateInfo create_info;
+    // @brief Информация модуля для pipeline.
+    VkPipelineShaderStageCreateInfo shader_stage_create_info;
+} vulkan_shader_stage;
+
+// @brief Контекст шейдера.
+typedef struct vulkan_shader {
+    // @brief Идентификатор шейдера.
+    u32 id;
+    // @brief Конкретные cтадии шейдера (вершиная, фрагментная ...).
+    vulkan_shader_stage stages[VULKAN_SHADER_MAX_STAGES];
+    // @brief Конфигурация шейдера (перед этапом инициализации).
+    vulkan_shader_config config;
+    // @brief Пул дескрипторов.
+    VkDescriptorPool descriptor_pool;
+    // @brief Массив наборов дескрипторов: Индекс 0 - глобально, 1 - локально.
+    VkDescriptorSetLayout descriptor_set_layouts[2];
+    // @brief Массив набора дескрипторов на кадр.
+    VkDescriptorSet global_descriptor_sets[5];       // TODO: image_count == 5!
+    // @brief Буфер uniform переменных.
+    vulkan_buffer uniform_buffer;
+    // @brief Трансляция памяти буфера uniform (привязка).
+    void* uniform_buffer_mapped_block;
+    // @brief Количество экземпляров.
+    u32 instance_count;
+    // @brief Массив состояний экземпляров.
+    vulkan_shader_instance_state instance_states[VULKAN_SHADER_MAX_MATERIAL_COUNT];
+    // @brief Конвейер визуализации привязаный к шейдеру.
+    vulkan_pipeline pipeline;
+    // @brief Проходчик визуализации.
+    vulkan_renderpass* renderpass;
+} vulkan_shader;
 
 // @brief Контекст визуализатора.
 typedef struct vulkan_context {
@@ -438,9 +350,6 @@ typedef struct vulkan_context {
     vulkan_renderpass main_renderpass;
     vulkan_renderpass ui_renderpass;
 
-    u32 max_shader_count;
-    vulkan_shader* shaders;
-
     vulkan_buffer object_vertex_buffer;
     vulkan_buffer object_index_buffer;
 
@@ -452,3 +361,9 @@ typedef struct vulkan_context {
 
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;
+
+// @brief Контекст данных текстуры.
+typedef struct vulkan_texture_data {
+    vulkan_image image;
+    VkSampler sampler;
+} vulkan_texture_data;

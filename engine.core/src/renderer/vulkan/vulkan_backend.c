@@ -7,9 +7,9 @@
 #include "renderer/vulkan/vulkan_swapchain.h"
 #include "renderer/vulkan/vulkan_renderpass.h"
 #include "renderer/vulkan/vulkan_command_buffer.h"
-#include "renderer/vulkan/vulkan_shader.h"
 #include "renderer/vulkan/vulkan_buffer.h"
 #include "renderer/vulkan/vulkan_image.h"
+#include "renderer/vulkan/vulkan_pipeline.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -18,20 +18,19 @@
 #include "containers/darray.h"
 #include "kstring.h"
 #include "math/math_types.h"
-#include "systems/material_system.h"
+#include "systems/resource_system.h"
+#include "systems/texture_system.h"
+#include "systems/shader_system.h"
 
 static vulkan_context* context = null;
-
 static u32 cached_framebuffer_width  = 0;
 static u32 cached_framebuffer_height = 0;
-
-static const char* message_context_not_initialized = "Vulkan renderer was not initialized. Please first call 'vulkan_renderer_backend_initialize'.";
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data
 );
-i32 find_memory_index(u32 type_filter, u32 property_flags); // TODO: Сформировать таблицу памяти, и выдавать результаты оттуда!
+i32 find_memory_index(u32 type_filter, u32 property_flags);
 void command_buffers_create(renderer_backend* backend);
 void command_buffers_destroy(renderer_backend* backend);
 void framebuffers_regenerate(bool first_destroy_buffers);
@@ -45,7 +44,6 @@ bool upload_data_range(
     VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64* out_offset, u64 size, const void* data
 );
 void free_data_range(vulkan_buffer* buffer, u64 offset, u64 size);
-bool vulkan_renderer_shader_id_valid(u32 shader_id, const char* func);
 
 bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 {
@@ -273,15 +271,6 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     sync_objects_create();
     ktrace("Vulkan sync objects created.");
 
-    // Создание шейдеров.
-    // TODO: Сделать настраиваемым.
-    context->max_shader_count = 32;
-    context->shaders = kallocate_tc(vulkan_shader, context->max_shader_count, MEMORY_TAG_RENDERER);
-    for(u32 i = 0; i < context->max_shader_count; ++i)
-    {
-        context->shaders[i].id = INVALID_ID;
-    }
-
     // Создание буферов данных в локальной памяти устройства (видеокарте).
     if(!buffers_create(context))
     {
@@ -290,27 +279,18 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     }
     ktrace("Vulkan buffers created.");
 
-    // Отметить все геометрии как недействительные.
-    for(u32 i = 0; i < VULKAN_SHADER_MAX_GEOMETRY_COUNT; ++i)
-    {
-        context->geometries[i].id = INVALID_ID;
-    }
-
     return true;
 }
 
 void vulkan_renderer_backend_shutdown(renderer_backend* backend)
 {
-    kassert_debug(context != null, message_context_not_initialized);
+    kassert_debug(context != null, "");
 
     vkDeviceWaitIdle(context->device.logical);
 
     // Уничтожение буферов данных.
     buffers_destroy(context);
     ktrace("Vulkan buffers destroyed.");
-
-    // Уничтожение шейдеров.
-    kfree_tc(context->shaders, vulkan_shader, context->max_shader_count, MEMORY_TAG_RENDERER);
 
     // Уничтожение объектов сингхронизации.
     sync_objects_destroy();
@@ -758,66 +738,6 @@ void vulkan_renderer_destroy_texture(texture* texture)
     kzero_tc(texture, struct texture, 1);
 }
 
-bool vulkan_renderer_create_material(material* material)
-{
-    if(!material)
-    {
-        kerror("Function '%s' required a valid pointer to material.", __FUNCTION__);
-        return false;
-    }
-
-    switch(material->type)
-    {
-        case MATERIAL_TYPE_WORLD:
-            // if(!vulkan_shader_acquire_instance_resources(&context->material_shader, &material->internal_id))
-            // {
-            //     kerror("Function '%s': Failed to acquire world shader resources.", __FUNCTION__);
-            //     return false;
-            // }
-            // break;
-        case MATERIAL_TYPE_UI:
-            // if(!vulkan_shader_acquire_instance_resources(&context->ui_shader, &material->internal_id))
-            // {
-            //     kerror("Function '%s': Failed to acquire UI shader resources.", __FUNCTION__);
-            //     return false;
-            // }
-            // break;
-        default:
-            kerror("Function '%s': Unknown material type.", __FUNCTION__);
-            return false;
-    }
-
-    return true;
-}
-
-void vulkan_renderer_destroy_material(material* material)
-{
-    if(!material)
-    {
-        kerror("Function '%s' required a valid pointer to material.", __FUNCTION__);
-        return;
-    }
-
-    if(material->internal_id == INVALID_ID)
-    {
-        kerror("Function '%s' called with material internal_id = INVALID_ID. Nothing was done.", __FUNCTION__);
-        return;
-    }
-
-    switch(material->type)
-    {
-        case MATERIAL_TYPE_WORLD:
-            // vulkan_shader_release_instance_resources(&context->material_shader, material->internal_id);
-            // break;
-        case MATERIAL_TYPE_UI:
-            // vulkan_shader_release_instance_resources(&context->ui_shader, material->internal_id);
-            // break;
-        default:
-            kerror("Function '%s': Unknown material type.", __FUNCTION__);
-            break;
-    }
-}
-
 bool vulkan_renderer_create_geometry(
     geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
     const void* indices
@@ -953,326 +873,772 @@ void vulkan_renderer_destroy_geometry(geometry* geometry)
     internal_data->generation = INVALID_ID;
 }
 
-bool vulkan_renderer_shader_id_valid(u32 shader_id, const char* func)
+const u32 DESC_SET_INDEX_GLOBAL   = 0;
+const u32 DESC_SET_INDEX_INSTANCE = 1;
+
+const u32 BINDING_INDEX_UBO       = 0;
+const u32 BINDING_INDEX_SAMPLER   = 1;
+
+bool vulkan_renderer_shader_create(shader* shader, u8 renderpass_id, u8 stage_count, const char** stage_filenames, shader_stage* stages)
 {
-    if(shader_id == INVALID_ID || context->shaders[shader_id].id == INVALID_ID)
+    if(!shader || !stage_filenames || !stages)
     {
-        kerror("Function '%s': Shader id(%u) is invalid.", func, shader_id);
+        kerror("Function '%s' requires a valid pointer to shader, stage_filenames and stages. Creation failed.", __FUNCTION__);
+        return false;
+    }
+
+    shader->internal_data = kallocate_tc(vulkan_shader, 1, MEMORY_TAG_RENDERER);
+    kzero_tc(shader->internal_data, vulkan_shader, 1);
+    vulkan_shader* vk_shader = shader->internal_data;
+
+    // TODO: Динамический проход рендера.
+    vulkan_renderpass* renderpass = null;
+    switch(renderpass_id)
+    {
+        case BUILTIN_RENDERPASS_WORLD:
+            renderpass = &context->main_renderpass;
+            break;
+        case BUILTIN_RENDERPASS_UI:
+            renderpass = &context->ui_renderpass;
+            break;
+        default:
+            kerror("");
+            return false;
+    }
+
+    // Трансляция стадий шейдера -> Vulkan.
+    VkShaderStageFlags vk_stages[VULKAN_SHADER_MAX_STAGES];
+    for(u8 i = 0; i < stage_count; ++i)
+    {
+        switch (stages[i])
+        {
+            case SHADER_STAGE_FRAGMENT:
+                vk_stages[i] = VK_SHADER_STAGE_FRAGMENT_BIT;
+                break;
+            case SHADER_STAGE_VERTEX:
+                vk_stages[i] = VK_SHADER_STAGE_VERTEX_BIT;
+                break;
+            case SHADER_STAGE_GEOMETRY:
+                kwarng("Function '%s': VK_SHADER_STAGE_GEOMETRY_BIT is set but not yet supported.", __FUNCTION__);
+                vk_stages[i] = VK_SHADER_STAGE_GEOMETRY_BIT;
+                break;
+            case SHADER_STAGE_COMPUTE:
+                kwarng("Function '%s': SHADER_STAGE_COMPUTE is set but not yet supported.", __FUNCTION__);
+                vk_stages[i] = VK_SHADER_STAGE_COMPUTE_BIT;
+                break;
+            default:
+                kerror("Function '%s': Unsupported stage type: %d.", __FUNCTION__, stages[i]);
+                break;
+        }
+    }
+
+    // TODO: настраиваемое максимальное количество выделенных дескрипторов.
+    u32 max_descriptor_allocate_count = 1024;
+
+    vk_shader->renderpass = renderpass;
+    vk_shader->config.max_descriptor_set_count = max_descriptor_allocate_count;
+    vk_shader->config.stage_count = 0;
+
+    // Iterate provided stages.
+    for(u32 i = 0; i < stage_count; i++)
+    {
+        // Проверка доступных слотов стадий шейдера.
+        if(vk_shader->config.stage_count + 1 > VULKAN_SHADER_MAX_STAGES)
+        {
+            kerror("Function '%s': Shaders may have a maximum of %d stages", __FUNCTION__, VULKAN_SHADER_MAX_STAGES);
+            return false;
+        }
+
+        // Проверка поддерживаемых шейдеров.
+        VkShaderStageFlagBits stage_flag;
+        switch(stages[i])
+        {
+            case SHADER_STAGE_VERTEX:
+                stage_flag = VK_SHADER_STAGE_VERTEX_BIT;
+                break;
+            case SHADER_STAGE_FRAGMENT:
+                stage_flag = VK_SHADER_STAGE_FRAGMENT_BIT;
+                break;
+            default:
+                kerror("Function '%s': Unsupported shader stage flagged: %d. Stage ignored.", __FUNCTION__, stages[i]);
+                continue;
+        }
+
+        vk_shader->config.stages[vk_shader->config.stage_count].stage = stage_flag;
+        string_ncopy(vk_shader->config.stages[vk_shader->config.stage_count].file_name, stage_filenames[i], 255);
+        vk_shader->config.stage_count++;
+    }
+
+    // HACK: Максимальное число ubo дескрипторных наборов.
+    vk_shader->config.pool_sizes[0] = (VkDescriptorPoolSize){VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024};
+    // HACK: Максимальное число image sampler дескрипторных наборов.
+    vk_shader->config.pool_sizes[1] = (VkDescriptorPoolSize){VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4096};
+
+    // Глобальный набор дескрипторов (UBO).
+    vulkan_descriptor_set_config* global_descriptor_set_config = &vk_shader->config.descriptor_sets[DESC_SET_INDEX_GLOBAL];
+    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].binding = BINDING_INDEX_UBO;
+    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorCount = 1;
+    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    global_descriptor_set_config->binding_count++;
+    vk_shader->config.descriptor_set_count++;
+
+    // При изпользовании экземпляров, добавляется второй набор дескрипторов (UBO).
+    if(shader->use_instances)
+    {
+        vulkan_descriptor_set_config* instance_descriptor_set_config = &vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE];
+        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].binding = BINDING_INDEX_UBO;
+        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorCount = 1;
+        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        instance_descriptor_set_config->binding_count++;
+        vk_shader->config.descriptor_set_count++;
+    }
+
+    // Делает недействительными экземпляры.
+    // TODO: Динамически.
+    for(u32 i = 0; i < 1024; ++i)
+    {
+        vk_shader->instance_states[i].id = INVALID_ID;
+    }
+
+    return true;
+}
+
+bool vulkan_renderer_shader_status_valid(shader* shader, const char* func_name)
+{
+    if(!shader || !shader->internal_data)
+    {
+        if(func_name)
+        {
+            kerror("Function '%s' requires a valid pointer to shader.", __FUNCTION__);
+        }
+        return false;
+    }
+    return true;
+}
+
+void vulkan_renderer_shader_destroy(shader* shader)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
+    {
+        return;
+    }
+
+    VkDevice logical = context->device.logical;
+    VkAllocationCallbacks* vk_allocator = context->allocator;
+    vulkan_shader* vk_shader = shader->internal_data;
+
+    for(u32 i = 0; i < vk_shader->config.descriptor_set_count; ++i)
+    {
+        if(vk_shader->descriptor_set_layouts[i])
+        {
+            vkDestroyDescriptorSetLayout(logical, vk_shader->descriptor_set_layouts[i], vk_allocator);
+            vk_shader->descriptor_set_layouts[i] = null;
+        }
+    }
+
+    if(vk_shader->descriptor_pool)
+    {
+        vkDestroyDescriptorPool(logical, vk_shader->descriptor_pool, vk_allocator);
+    }
+
+    vulkan_buffer_unlock_memory(context, &vk_shader->uniform_buffer);
+    vk_shader->uniform_buffer_mapped_block = null;
+    vulkan_buffer_destroy(context, &vk_shader->uniform_buffer);
+
+    vulkan_pipeline_destroy(context, &vk_shader->pipeline);
+
+    for(u32 i = 0; i < vk_shader->config.stage_count; ++i)
+    {
+        // TODO: Их можно уничтожить после создания pipeline!
+        vkDestroyShaderModule(logical, vk_shader->stages[i].handle, vk_allocator);
+    }
+
+    kfree_tc(vk_shader, vulkan_shader, 1, MEMORY_TAG_RENDERER);
+    shader->internal_data = null;
+}
+
+bool vulkan_renderer_shader_create_module(vulkan_shader* shader, vulkan_shader_stage_config config, vulkan_shader_stage* shader_stage)
+{
+    resource binary_resource;
+    if (!resource_system_load(config.file_name, RESOURCE_TYPE_BINARY, &binary_resource))
+    {
+        kerror("Function '%s': Unable to read shader module '%s'.", __FUNCTION__, config.file_name);
+        return false;
+    }
+
+    kzero_tc(&shader_stage->create_info, VkShaderModuleCreateInfo, 1);
+    shader_stage->create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_stage->create_info.codeSize = binary_resource.data_size;
+    shader_stage->create_info.pCode = (u32*)binary_resource.data;
+
+    VK_CHECK(vkCreateShaderModule(
+        context->device.logical, &shader_stage->create_info, context->allocator, &shader_stage->handle
+    ));
+
+    resource_system_unload(&binary_resource);
+
+    kzero_tc(&shader_stage->shader_stage_create_info, VkPipelineShaderStageCreateInfo, 1);
+    shader_stage->shader_stage_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stage->shader_stage_create_info.stage  = config.stage;
+    shader_stage->shader_stage_create_info.module = shader_stage->handle;
+    shader_stage->shader_stage_create_info.pName  = "main";
+
+    return true;
+}
+
+bool vulkan_renderer_shader_initialize(shader* shader)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
+    {
+        return false;
+    }
+
+    VkDevice logical = context->device.logical;
+    VkAllocationCallbacks* vk_allocator = context->allocator;
+    vulkan_shader* vk_shader = shader->internal_data;
+
+    // Создание модулей шейдеров.
+    for(u32 i = 0; i < vk_shader->config.stage_count; ++i)
+    {
+        if(!vulkan_renderer_shader_create_module(vk_shader, vk_shader->config.stages[i], &vk_shader->stages[i]))
+        {
+            kerror(
+                "Function '%s': Unable to create %s shader module for '%s'. Shader will be destroyed.",
+                __FUNCTION__, vk_shader->config.stages[i].file_name, shader->name
+            );
+            return false;
+        }
+    }
+
+    // Статическая таблица для трансляции определений движка -> Vulkan.
+    static const VkFormat attribute_types[11] = {
+        [SHADER_ATTRIB_TYPE_FLOAT32]   = VK_FORMAT_R32_SFLOAT,
+        [SHADER_ATTRIB_TYPE_FLOAT32_2] = VK_FORMAT_R32G32_SFLOAT,
+        [SHADER_ATTRIB_TYPE_FLOAT32_3] = VK_FORMAT_R32G32B32_SFLOAT,
+        [SHADER_ATTRIB_TYPE_FLOAT32_4] = VK_FORMAT_R32G32B32A32_SFLOAT,
+        [SHADER_ATTRIB_TYPE_INT8]      = VK_FORMAT_R8_SINT,
+        [SHADER_ATTRIB_TYPE_UINT8]     = VK_FORMAT_R8_UINT,
+        [SHADER_ATTRIB_TYPE_INT16]     = VK_FORMAT_R16_SINT,
+        [SHADER_ATTRIB_TYPE_UINT16]    = VK_FORMAT_R16_UINT,
+        [SHADER_ATTRIB_TYPE_INT32]     = VK_FORMAT_R32_SINT,
+        [SHADER_ATTRIB_TYPE_UINT32]    = VK_FORMAT_R32_UINT
+    };
+
+    // Получение атрибутов.
+    u32 attribute_count = darray_length(shader->attributes);
+    u32 attribute_offset = 0;
+    VkVertexInputAttributeDescription* attrs = vk_shader->config.attributes;
+    for(u32 i = 0; i < attribute_count; ++i)
+    {
+        attrs[i].location = i;
+        attrs[i].binding = 0;
+        attrs[i].offset = attribute_offset;
+        attrs[i].format = attribute_types[shader->attributes[i].type];
+        attribute_offset += shader->attributes[i].size;
+    }
+
+    // Получение uniform переменных.
+    u32 uniform_count = darray_length(shader->uniforms);
+    for(u32 i = 0; i < uniform_count; ++i)
+    {
+        // Обновление привязки дескрипторов для сэмлеров!
+        if(shader->uniforms[i].type == SHADER_UNIFORM_TYPE_SAMPLER)
+        {
+            const u32 set_index = shader->uniforms[i].scope == SHADER_SCOPE_GLOBAL ? DESC_SET_INDEX_GLOBAL : DESC_SET_INDEX_INSTANCE;
+            vulkan_descriptor_set_config* set_config = &vk_shader->config.descriptor_sets[set_index];
+
+            if(set_config->binding_count < 2)
+            {
+                // Привязка для первого сэмплера.
+                set_config->bindings[BINDING_INDEX_SAMPLER].binding = BINDING_INDEX_SAMPLER;
+                set_config->bindings[BINDING_INDEX_SAMPLER].descriptorCount = 1;
+                set_config->bindings[BINDING_INDEX_SAMPLER].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                set_config->bindings[BINDING_INDEX_SAMPLER].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+                set_config->binding_count++;
+            }
+            else
+            {
+                // Для остальных сэмплеров просто увеличиваем индекс.
+                set_config->bindings[BINDING_INDEX_SAMPLER].descriptorCount++;
+            }
+        }
+    }
+
+    // Пул дескрипторов.
+    VkDescriptorPoolCreateInfo pool_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    pool_info.poolSizeCount = 2;
+    pool_info.pPoolSizes = vk_shader->config.pool_sizes;
+    pool_info.maxSets = vk_shader->config.max_descriptor_set_count;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+    // Создание пула дескрипторов.
+    VkResult result = vkCreateDescriptorPool(logical, &pool_info, vk_allocator, &vk_shader->descriptor_pool);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Function '%s': Failed creating descriptor pool: %s", __FUNCTION__, vulkan_result_get_string(result, true));
+        return false;
+    }
+
+    // Создание вкладок дескрипторов.
+    for(u32 i = 0; i < vk_shader->config.descriptor_set_count; ++i)
+    {
+        VkDescriptorSetLayoutCreateInfo layout_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+        layout_info.bindingCount = vk_shader->config.descriptor_sets[i].binding_count;
+        layout_info.pBindings = vk_shader->config.descriptor_sets[i].bindings;
+        result = vkCreateDescriptorSetLayout(logical, &layout_info, vk_allocator, &vk_shader->descriptor_set_layouts[i]);
+        if(!vulkan_result_is_success(result))
+        {
+            kerror("Function '%s': Failed creating descriptor pool: '%s'", __FUNCTION__, vulkan_result_get_string(result, true));
+            return false;
+        }
+    }
+
+    // Область просмотра: как будет растянуто изображение во фрэймбуфере.
+    VkViewport viewport;
+    viewport.x = 0.0f;
+    viewport.y = (f32)context->framebuffer_height;
+    viewport.width = (f32)context->framebuffer_width;
+    viewport.height = -(f32)context->framebuffer_height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    // Область отсечения: какие пиксели будут сохранены, во время растеризации.
+    VkRect2D scissor;
+    scissor.offset.x = scissor.offset.y = 0;
+    scissor.extent.width = context->framebuffer_width;
+    scissor.extent.height = context->framebuffer_height;
+
+    VkPipelineShaderStageCreateInfo stage_create_infos[VULKAN_SHADER_MAX_STAGES];
+    kzero_tc(stage_create_infos, VkPipelineShaderStageCreateInfo, VULKAN_SHADER_MAX_STAGES);
+    for(u32 i = 0; i < vk_shader->config.stage_count; ++i)
+    {
+        stage_create_infos[i] = vk_shader->stages[i].shader_stage_create_info;
+    }
+
+    bool pipeline_result = vulkan_graphics_pipeline_create(
+        context, vk_shader->renderpass, shader->attribute_stride, attribute_count, vk_shader->config.attributes,
+        vk_shader->config.descriptor_set_count, vk_shader->descriptor_set_layouts, vk_shader->config.stage_count,
+        stage_create_infos, viewport, scissor, false, true, shader->push_constant_range_count,
+        shader->push_constant_ranges, &vk_shader->pipeline
+    );
+
+    if(!pipeline_result)
+    {
+        kerror("Function '%s': Failed to load graphics pipeline for object shader.", __FUNCTION__);
+        return false;
+    }
+
+    // Требования для выравнивания UBO для физического устройства.
+    shader->required_ubo_alignment = context->device.properties.limits.minUniformBufferOffsetAlignment;
+
+    // Получение требуемых величин выравнивания.
+    shader->global_ubo_stride = get_aligned(shader->global_ubo_size, shader->required_ubo_alignment);
+    shader->ubo_stride = get_aligned(shader->ubo_size, shader->required_ubo_alignment);
+
+    // Создание uniform буфера.
+    u32 device_local_bit = context->device.memory_local_host_visible_support ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : 0;
+    // TODO: Максимальное количество должно быть настраиваемым или должна быть долгосрочная поддержка изменения размера буфера.
+    u64 total_buffer_size = shader->global_ubo_stride + (shader->ubo_stride * VULKAN_SHADER_MAX_MATERIAL_COUNT);
+    if(!vulkan_buffer_create(
+        context, total_buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | device_local_bit, 
+        true, &vk_shader->uniform_buffer
+    ))
+    {
+        kerror("Function '%s': Failed to create vulkan buffer for object shader.", __FUNCTION__);
+        return false;
+    }
+
+    // Выделение пространства для глобального UBO, которое должно занимать пространство шага, а не фактически используемый размер.
+    if(!vulkan_buffer_allocate(&vk_shader->uniform_buffer, shader->global_ubo_stride, &shader->global_ubo_offset))
+    {
+        kerror("Function '%s': Failed to allocate space for the uniform buffer!", __FUNCTION__);
+        return false;
+    }
+    
+    // Отображение всей памяти буфера.
+    vk_shader->uniform_buffer_mapped_block = vulkan_buffer_lock_memory(context, &vk_shader->uniform_buffer, 0, VK_WHOLE_SIZE /*total_buffer_size*/, 0);
+
+    // Выделение глобальных наборов дескрипторов.
+    VkDescriptorSetLayout global_layouts[5] = { // TODO: image_count == 5!
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_GLOBAL],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_GLOBAL],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_GLOBAL],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_GLOBAL],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_GLOBAL]
+    };
+
+    VkDescriptorSetAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+    allocate_info.descriptorPool = vk_shader->descriptor_pool;
+    allocate_info.descriptorSetCount = 5;       // TODO: image_count == 5!
+    allocate_info.pSetLayouts = global_layouts;
+    VK_CHECK(vkAllocateDescriptorSets(logical, &allocate_info, vk_shader->global_descriptor_sets));
+
+    return true;
+}
+
+bool vulkan_renderer_shader_use(shader* shader)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
+    {
+        return false;
+    }
+
+    vulkan_shader* vk_shader = shader->internal_data;
+    vulkan_pipeline_bind(
+        &context->graphics_command_buffers[context->image_index], VK_PIPELINE_BIND_POINT_GRAPHICS, &vk_shader->pipeline
+    );
+    return true;
+}
+
+bool vulkan_renderer_shader_bind_globals(shader* shader)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
+    {
+        return false;
+    }
+
+    shader->bound_ubo_offset = shader->global_ubo_offset;
+    return true;
+}
+
+bool vulkan_renderer_shader_bind_instance(shader* shader, u32 instance_id)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
+    {
+        return false;
+    }
+
+    vulkan_shader* vk_shader = shader->internal_data;
+    shader->bound_instance_id = instance_id;
+    vulkan_shader_instance_state* object_state = &vk_shader->instance_states[instance_id];
+    shader->bound_ubo_offset = object_state->offset;
+    return true;
+}
+
+bool vulkan_renderer_shader_apply_globals(shader* shader)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
+    {
+        return false;
+    }
+
+    u32 image_index = context->image_index;
+    vulkan_shader* vk_shader = shader->internal_data;
+    VkCommandBuffer command_buffer = context->graphics_command_buffers[image_index].handle;
+    VkDescriptorSet global_descriptor = vk_shader->global_descriptor_sets[image_index];
+
+    // Применние UBO первым.
+    VkDescriptorBufferInfo buffer_info;
+    buffer_info.buffer = vk_shader->uniform_buffer.handle;
+    buffer_info.offset = shader->global_ubo_offset;
+    buffer_info.range  = shader->global_ubo_stride;
+
+    // Для обновления наборов дескрипторов.
+    VkWriteDescriptorSet ubo_write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+    ubo_write.dstSet = vk_shader->global_descriptor_sets[image_index];
+    ubo_write.dstBinding = 0;
+    ubo_write.dstArrayElement = 0;
+    ubo_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubo_write.descriptorCount = 1;
+    ubo_write.pBufferInfo = &buffer_info;
+
+    VkWriteDescriptorSet descriptor_writes[2];
+    descriptor_writes[0] = ubo_write;
+
+    u32 global_set_binding_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_GLOBAL].binding_count;
+    if(global_set_binding_count > 1)
+    {
+        // TODO: Написать поддержку сэмплеров.
+        global_set_binding_count = 1;
+        kerror("Function '%s': Global image samplers are not yet supported.", __FUNCTION__);
+
+        // VkWriteDescriptorSet sampler_write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        // descriptor_writes[1] = ...
+    }
+
+    vkUpdateDescriptorSets(context->device.logical, global_set_binding_count, descriptor_writes, 0, null);
+
+    // Привязывание глобального набор дескрипторов для обновления.
+    vkCmdBindDescriptorSets(
+        command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_shader->pipeline.layout, 0, 1, &global_descriptor, 0, null
+    );
+
+    return true;
+}
+
+bool vulkan_renderer_shader_apply_instance(shader* shader)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
+    {
+        return false;
+    }
+
+    if(!shader->use_instances)
+    {
+        kerror("Function '%s': This shader does not use instances.", __FUNCTION__);
+        return false;
+    }
+
+    u32 image_index = context->image_index;
+    vulkan_shader* vk_shader = shader->internal_data;
+    VkCommandBuffer command_buffer = context->graphics_command_buffers[image_index].handle;
+
+    // Получение данных экземпляра.
+    vulkan_shader_instance_state* object_state = &vk_shader->instance_states[shader->bound_instance_id];
+    VkDescriptorSet object_descriptor_set = object_state->descriptor_set_state.descriptor_sets[image_index];
+
+    // TODO: Если необходимо обновить?
+    VkWriteDescriptorSet descriptor_writes[2]; // Всегда максимум 2 набора дескрипторов.
+    kzero_tc(descriptor_writes, VkWriteDescriptorSet, 2);
+    u32 descriptor_count = 0;
+    u32 descriptor_index = 0;
+
+    // Дескриптор 0 - Uniform буфер.
+    // Выполнять только если это дескриптор еще не был обновлен.
+    u8* instance_ubo_generation = &object_state->descriptor_set_state.descriptor_states[descriptor_index].generations[image_index];
+    if(*instance_ubo_generation == INVALID_ID_U8 /* || *global_ubo_generation != material->generation */)
+    {
+        VkDescriptorBufferInfo buffer_info;
+        buffer_info.buffer = vk_shader->uniform_buffer.handle;
+        buffer_info.offset = object_state->offset;
+        buffer_info.range = shader->ubo_stride;
+
+        VkWriteDescriptorSet ubo_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        ubo_descriptor.dstSet = object_descriptor_set;
+        ubo_descriptor.dstBinding = descriptor_index;
+        ubo_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        ubo_descriptor.descriptorCount = 1;
+        ubo_descriptor.pBufferInfo = &buffer_info;
+
+        descriptor_writes[descriptor_count] = ubo_descriptor;
+        descriptor_count++;
+
+        // Обновление генерации.
+        *instance_ubo_generation = 1;
+    }
+    descriptor_index++;
+
+    // Сэмплеры всегда будут в привязке. Если количество привязок меньше 2, то сэмплеров нет.
+    if(vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].binding_count > 1)
+    {
+        u32 total_sampler_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
+        u32 update_sampler_count = 0;
+        VkDescriptorImageInfo image_infos[VULKAN_SHADER_MAX_GLOBAL_TEXTURES];
+
+        for(u32 i = 0; i < total_sampler_count; ++i)
+        {
+            texture* t = vk_shader->instance_states[shader->bound_instance_id].instance_textures[i];
+            vulkan_texture_data* internal_data = t->internal_data;
+
+            image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            image_infos[i].imageView = internal_data->image.view;
+            image_infos[i].sampler = internal_data->sampler;
+
+            // TODO: Изменить состояние дескриптора.
+            // Синхронизируем генерацию кадров, если не используется текстура по умолчанию.
+            // if(t->generation != INVALID_ID)
+            // {
+            //     *descriptor_generation = t->generation;
+            //     *descriptor_id = t->id;
+            // }
+
+            update_sampler_count++;
+        }
+
+        VkWriteDescriptorSet sampler_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        sampler_descriptor.dstSet = object_descriptor_set;
+        sampler_descriptor.dstBinding = descriptor_index;
+        sampler_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        sampler_descriptor.descriptorCount = update_sampler_count;
+        sampler_descriptor.pImageInfo = image_infos;
+
+        descriptor_writes[descriptor_count] = sampler_descriptor;
+        descriptor_count++;
+    }
+
+    if(descriptor_count > 0)
+    {
+        vkUpdateDescriptorSets(context->device.logical, descriptor_count, descriptor_writes, 0, null);
+    }
+
+    // Привязывание наборов дескрипторов для обновления или в случае изменения шейдера.
+    vkCmdBindDescriptorSets(
+        command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_shader->pipeline.layout, 1, 1, &object_descriptor_set, 0, null
+    );
+
+    return true;
+}
+
+bool vulkan_renderer_shader_acquire_instance_resources(shader* shader, u32* out_instance_id)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__) || !out_instance_id)
+    {
+        return false;
+    }
+
+    vulkan_shader* vk_shader = shader->internal_data;
+
+    *out_instance_id = INVALID_ID;
+    for(u32 i = 0; i < 1024; ++i)
+    {
+        if(vk_shader->instance_states[i].id == INVALID_ID)
+        {
+            vk_shader->instance_states[i].id = i;
+            *out_instance_id = i;
+            break;
+        }
+    }
+
+    if(*out_instance_id == INVALID_ID)
+    {
+        kerror("Function '%s': Failed to acquire new id.", __FUNCTION__);
+        return false;
+    }
+
+    vulkan_shader_instance_state* instance_state = &vk_shader->instance_states[*out_instance_id];
+    u32 instance_texture_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
+    instance_state->instance_textures = kallocate_tc(texture*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
+
+    // Устанавка всех указателей текстур на значения по умолчанию, пока они не назначены.
+    texture* default_texture = texture_system_get_default_texture();
+    for(u32 i = 0; i < instance_texture_count; ++i)
+    {
+        instance_state->instance_textures[i] = default_texture;
+    }
+
+    // Выделение места в UBO по шагу, а не по размеру.
+    u64 size = shader->ubo_stride;
+    if(!vulkan_buffer_allocate(&vk_shader->uniform_buffer, size, &instance_state->offset))
+    {
+        kerror("Function '%': Failed t oacuire ubo space.", __FUNCTION__);
+        return false;
+    }
+
+    vulkan_shader_descriptor_set_state* set_state = &instance_state->descriptor_set_state;
+
+    // Привязка набора дескрипторов.
+    u32 binding_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].binding_count;
+    kzero_tc(set_state->descriptor_states, vulkan_descriptor_state, VULKAN_SHADER_MAX_BINDINGS);
+
+    for(u32 i = 0; i < binding_count; ++i)
+    {
+        for(u32 j = 0; j < 5; ++j)
+        {
+            set_state->descriptor_states[i].generations[j] = INVALID_ID_U8;
+            set_state->descriptor_states[i].ids[j] = INVALID_ID;
+        }
+    }
+
+    // Выделение набора дескрипторов на кадр.
+    VkDescriptorSetLayout layouts[5] = {
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_INSTANCE],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_INSTANCE],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_INSTANCE],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_INSTANCE],
+        vk_shader->descriptor_set_layouts[DESC_SET_INDEX_INSTANCE]
+    };
+
+    VkDescriptorSetAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+    allocate_info.descriptorPool = vk_shader->descriptor_pool;
+    allocate_info.descriptorSetCount = 5; // TODO: image_count = 5!
+    allocate_info.pSetLayouts = layouts;
+
+    VkResult result = vkAllocateDescriptorSets(
+        context->device.logical, &allocate_info, instance_state->descriptor_set_state.descriptor_sets
+    );
+
+    if(result != VK_SUCCESS)
+    {
+        kerror(
+            "Function '%s': Failed to allocate instance descriptor sets in shader: '%s'",
+            __FUNCTION__, vulkan_result_get_string(result, true)
+        );
         return false;
     }
 
     return true;
 }
 
-bool vulkan_renderer_shader_create(
-    const char* name, builtin_renderpass renderpass_id, shader_stage stages, bool use_instances, bool use_local,
-    u32* out_shader_id
-)
+bool vulkan_renderer_shader_release_instance_resources(shader* shader, u32 instance_id)
 {
-    *out_shader_id = INVALID_ID;
-
-    for(u32 i = 0; i < context->max_shader_count; ++i)
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
     {
-        if(context->shaders[i].id == INVALID_ID)
-        {
-            *out_shader_id = i;
-            break;
-        }
-    }
-
-    if(*out_shader_id == INVALID_ID)
-    {
-        kerror("Function '%s': Failed to find free shader id slot.", __FUNCTION__);
         return false;
     }
 
-    // TODO: Динамический проходчик визуализатора.
-    vulkan_renderpass* renderpass = renderpass_id == 1 ? &context->main_renderpass : &context->ui_renderpass;
+    vulkan_shader* vk_shader = shader->internal_data;
+    vulkan_shader_instance_state* instance_state = &vk_shader->instance_states[instance_id];
 
-    // TODO: Сделать нормальную трансляцию.
-    VkShaderStageFlags vk_stages = 0;
-    if((stages & SHADER_STAGE_VERTEX) != 0)
-    {
-        vk_stages |= VK_SHADER_STAGE_VERTEX_BIT;
-    }
-    if((stages & SHADER_STAGE_FRAGMENT) != 0)
-    {
-        vk_stages |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    }
-    if((stages & SHADER_STAGE_COMPUTE) != 0)
-    {
-        kwarng("Function '%s': SHADER_STAGE_COMPUTE is set but not yet supported.", __FUNCTION__);
-        // vk_stages |= VK_SHADER_STAGE_COMPUTE_BIT;
-    }
-    if((stages & SHADER_STAGE_GEOMETRY) != 0)
-    {
-        kwarng("Function '%s': SHADER_STAGE_GEOMETRY is set but not yet supported.", __FUNCTION__);
-        // vk_stages |= VK_SHADER_STAGE_GEOMETRY_BIT;
-    }
+    // Ожидание завершения всех операций, использующих набор дескрипторов.
+    vkDeviceWaitIdle(context->device.logical);
 
-    // TODO: Настраиваемый.
-    u16 max_descriptor_allocate_count = 1024;
-
-    bool result = vulkan_shader_create(
-        context, name, renderpass, vk_stages, max_descriptor_allocate_count, use_instances, use_local,
-        &context->shaders[*out_shader_id]
+    // Освобождение 5 набора дескрипторов (по одному на кадр).
+    VkResult result = vkFreeDescriptorSets(
+        context->device.logical, vk_shader->descriptor_pool, 5, instance_state->descriptor_set_state.descriptor_sets
     );
 
-    if(result)
+    if(result != VK_SUCCESS)
     {
-        context->shaders[*out_shader_id].id = *out_shader_id;
+        kerror("Function '%s': Failed to free object shader descriptor sets!", __FUNCTION__);
+    }
+
+    kzero_tc(instance_state->descriptor_set_state.descriptor_sets, vulkan_descriptor_state, VULKAN_SHADER_MAX_BINDINGS);
+
+    if(instance_state->instance_textures)
+    {
+        kfree_tc(instance_state->instance_textures, texture*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
+        instance_state->instance_textures = null;
+    }
+
+    vulkan_buffer_free(&vk_shader->uniform_buffer, shader->ubo_stride, instance_state->offset);
+    instance_state->offset = INVALID_ID;
+    instance_state->id = INVALID_ID;
+
+    return true;
+}
+
+bool vulkan_renderer_shader_set_uniform(shader* shader, struct shader_uniform* uniform, const void* value)
+{
+    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__) || !uniform || !value)
+    {
+        return false;
+    }
+
+    vulkan_shader* vk_shader = shader->internal_data;
+
+    if(uniform->type == SHADER_UNIFORM_TYPE_SAMPLER)
+    {
+        if(uniform->scope == SHADER_SCOPE_GLOBAL)
+        {
+            shader->global_textures[uniform->location] = (texture*)value;
+        }
+        else
+        {
+            vk_shader->instance_states[shader->bound_instance_id].instance_textures[uniform->location] = (texture*)value;
+        }
     }
     else
     {
-        vulkan_shader_destroy(&context->shaders[*out_shader_id]);
-        kzero_tc(&context->shaders[*out_shader_id], vulkan_shader, 1);
-        context->shaders[*out_shader_id].id = INVALID_ID;
-        *out_shader_id = INVALID_ID;
+        if(uniform->scope == SHADER_SCOPE_LOCAL)
+        {
+            VkCommandBuffer command_buffer = context->graphics_command_buffers[context->image_index].handle;
+            vkCmdPushConstants(
+                command_buffer, vk_shader->pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                uniform->offset, uniform->size, value
+            );
+        }
+        else
+        {
+            // Отображение соответствующей области памяти и скопирование данных.
+            u64 uniform_offset = shader->bound_ubo_offset + uniform->offset;
+            void* addr = POINTER_GET_OFFSET(vk_shader->uniform_buffer_mapped_block, uniform_offset);
+            kcopy(addr, value, uniform->size);
+        }
     }
-
-    return result;
-}
-
-void vulkan_renderer_shader_destroy(u32 shader_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return;
-    vulkan_shader_destroy(&context->shaders[shader_id]);
-    kzero_tc(&context->shaders[shader_id], vulkan_shader, 1);
-    context->shaders[shader_id].id = INVALID_ID;
-}
-
-bool vulkan_renderer_shader_add_attribute(u32 shader_id, const char* name, shader_attribute_type type)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_attribute(&context->shaders[shader_id], name, type);
-}
-
-bool vulkan_renderer_shader_add_sampler(u32 shader_id, const char* sampler_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_sampler(&context->shaders[shader_id], sampler_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_i8(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_i8(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_i16(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_i16(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_i32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_i32(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_u8(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_u8(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_u16(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_u16(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_u32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_u32(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_f32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_f32(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_vec2(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_vec2(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_vec3(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_vec3(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_vec4(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_vec4(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_mat4(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_mat4(&context->shaders[shader_id], uniform_name, scope, out_location);
-}
-
-bool vulkan_renderer_shader_add_uniform_custom(u32 shader_id, const char* uniform_name, u32 size, shader_scope scope, u32* out_location)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_add_uniform_custom(&context->shaders[shader_id], uniform_name, size, scope, out_location);
-}
-
-bool vulkan_renderer_shader_initialize(u32 shader_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_initialize(&context->shaders[shader_id]);
-}
-
-bool vulkan_renderer_shader_use(u32 shader_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_use(&context->shaders[shader_id]);
-}
-
-bool vulkan_renderer_shader_bind_globals(u32 shader_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_bind_globals(&context->shaders[shader_id]);
-}
-
-bool vulkan_renderer_shader_bind_instance(u32 shader_id, u32 instance_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_bind_instance(&context->shaders[shader_id], instance_id);
-}
-
-bool vulkan_renderer_shader_apply_globals(u32 shader_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_apply_globals(&context->shaders[shader_id]);
-}
-
-bool vulkan_renderer_shader_apply_instance(u32 shader_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_apply_instance(&context->shaders[shader_id]);
-}
-
-bool vulkan_renderer_shader_acquire_instance_resource(u32 shader_id, u32* out_instance_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_acquire_instance_resources(&context->shaders[shader_id], out_instance_id);
-}
-
-bool vulkan_renderer_shader_release_instance_resource(u32 shader_id, u32 instance_id)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_release_instance_resources(&context->shaders[shader_id], instance_id);
-}
-
-u32 vulkan_renderer_shader_uniform_location(u32 shader_id, const char* uniform_name)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return INVALID_ID;
-    return vulkan_shader_uniform_location(&context->shaders[shader_id], uniform_name);
-}
-
-bool vulkan_renderer_shader_set_sampler(u32 shader_id, u32 location, texture* t)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_sampler(&context->shaders[shader_id], location, t);
-}
-
-bool vulkan_renderer_shader_set_uniform_i8(u32 shader_id, u32 location, i8 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_i8(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_i16(u32 shader_id, u32 location, i16 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_i16(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_i32(u32 shader_id, u32 location, i32 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_i32(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_u8(u32 shader_id, u32 location, u8 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_u8(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_u16(u32 shader_id, u32 location, u16 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_u16(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_u32(u32 shader_id, u32 location, u32 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_u32(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_f32(u32 shader_id, u32 location, f32 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_f32(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_vec2(u32 shader_id, u32 location, vec2 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_vec2(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_vec2f(u32 shader_id, u32 location, f32 value_0, f32 value_1)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_vec2f(&context->shaders[shader_id], location, value_0, value_1);
-}
-
-bool vulkan_renderer_shader_set_uniform_vec3(u32 shader_id, u32 location, vec3 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_vec3(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_vec3f(u32 shader_id, u32 location, f32 value_0, f32 value_1, f32 value_2)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_vec3f(&context->shaders[shader_id], location, value_0, value_1, value_2);
-}
-
-bool vulkan_renderer_shader_set_uniform_vec4(u32 shader_id, u32 location, vec4 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_vec4(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_vec4f(u32 shader_id, u32 location, f32 value_0, f32 value_1, f32 value_2, f32 value_3)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_vec4f(&context->shaders[shader_id], location, value_0, value_1, value_2, value_3);
-}
-
-bool vulkan_renderer_shader_set_uniform_mat4(u32 shader_id, u32 location, mat4 value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_mat4(&context->shaders[shader_id], location, value);
-}
-
-bool vulkan_renderer_shader_set_uniform_custom(u32 shader_id, u32 location, void* value)
-{
-    if(!vulkan_renderer_shader_id_valid(shader_id, __FUNCTION__)) return false;
-    return vulkan_shader_set_uniform_custom(&context->shaders[shader_id], location, value);
+    return true;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
@@ -1553,6 +1919,12 @@ bool buffers_create(vulkan_context* context)
     {
         kerror("Function '%s': Failed to create index buffer.", __FUNCTION__);
         return false;
+    }
+
+    // Отметить все геометрии как недействительные.
+    for(u32 i = 0; i < VULKAN_SHADER_MAX_GEOMETRY_COUNT; ++i)
+    {
+        context->geometries[i].id = INVALID_ID;
     }
 
     return true;

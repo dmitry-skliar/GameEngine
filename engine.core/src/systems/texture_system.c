@@ -10,28 +10,43 @@
 #include "renderer/renderer_frontend.h"
 
 typedef struct texture_system_state {
-    // @breif Конфигурация системы.
+    // Конфигурация системы.
     texture_system_config config;
-    // @brief Текстура по умолчанию.
+    // Текстура по умолчанию.
     texture default_texture;
-    // @brief Массив текстур.
+    // Массив текстур.
     texture* textures;
-    // @brief Таблица ссылок на текстуры.
+    // Таблица ссылок на текстуры.
     hashtable* texture_references_table;
 } texture_system_state;
 
 typedef struct texture_reference {
-    // @brief Количество ссылок на текстуру.
+    // Количество ссылок на текстуру.
     u64 reference_count;
-    // @brief Индекс текстуры в массиве текстур.
+    // Индекс текстуры в массиве текстур.
     u32 index;
-    // @brief Авто уничтожение текстуры.
+    // Авто уничтожение текстуры.
     bool auto_release;
 } texture_reference;
 
 static texture_system_state* state_ptr = null;
-static const char* message_not_initialized =
-    "Function '%s' requires the texture system to be initialized. Call 'texture_system_initialize' first.";
+
+bool texture_system_status_valid(const char* func_name)
+{
+    if(!state_ptr)
+    {
+        if(func_name)
+        {
+            kerror(
+                "Function '%s' requires the texture system to be initialized. Call 'texture_system_initialize' first.",
+                func_name
+            );
+            
+        }
+        return false;
+    }
+    return true;
+}
 
 bool default_textures_create();
 void default_textures_destroy();
@@ -58,13 +73,10 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
         return false;
     }
 
-    hashtable_config hconf;
-    hconf.data_size = sizeof(texture_reference);
-    hconf.entry_count = config->max_texture_count;
-
     u64 state_requirement = sizeof(texture_system_state);
     u64 textures_requirement = sizeof(texture) * config->max_texture_count;
     u64 hashtable_requirement = 0;
+    hashtable_config hconf = { sizeof(texture_reference), config->max_texture_count };
     hashtable_create(&hashtable_requirement, null, &hconf, null);
     *memory_requirement = state_requirement + textures_requirement + hashtable_requirement;
 
@@ -81,11 +93,11 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
     state_ptr->config.max_texture_count = config->max_texture_count;
 
     // Получение и запись указателя на блок текстур.
-    void* textures_block = (void*)((u8*)state_ptr + state_requirement);
+    void* textures_block =  POINTER_GET_OFFSET(state_ptr, state_requirement);
     state_ptr->textures = textures_block;
 
     // Получение и запись указателя на хэш-таблицу.
-    void* hashtable_block = (void*)((u8*)textures_block + textures_requirement);
+    void* hashtable_block = POINTER_GET_OFFSET(textures_block, textures_requirement);
     if(!hashtable_create(&hashtable_requirement, hashtable_block, &hconf, &state_ptr->texture_references_table))
     {
         kerror("Function '%s': Failed to create hashtable of references to textures.", __FUNCTION__);
@@ -111,9 +123,8 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
 
 void texture_system_shutdown()
 {
-    if(!state_ptr)
+    if(!texture_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return;
     }
 
@@ -138,9 +149,8 @@ void texture_system_shutdown()
 
 texture* texture_system_acquire(const char* name, bool auto_release)
 {
-    if(!state_ptr)
+    if(!texture_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return null;
     }
 
@@ -153,7 +163,7 @@ texture* texture_system_acquire(const char* name, bool auto_release)
     texture_reference ref;
     // NOTE: После появления записи в hashtable заново она не создается, reference_count = 0 всегда, если текстура не используется!
     //       Если авто освобождение отключено, то ref.index будет иметь индекс созданой текстуры!
-    //       Но если авто освобождение включено, то текстура будет удаляться из памяти, и ref.index будет равен INVAID_ID32
+    //       Но если авто освобождение включено, то текстура будет удаляться из памяти, и ref.index будет равен INVAID_ID
     //       а следовательно, что по этому же имени нужно заново использовать эту ссылку!
     if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.index == INVALID_ID)
     {
@@ -222,9 +232,8 @@ texture* texture_system_acquire(const char* name, bool auto_release)
 
 void texture_system_release(const char* name)
 {
-    if(!state_ptr)
+    if(!texture_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return;
     }
 
@@ -281,9 +290,8 @@ void texture_system_release(const char* name)
 
 texture* texture_system_get_default_texture()
 {
-    if(!state_ptr)
+    if(!texture_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return null;
     }
 

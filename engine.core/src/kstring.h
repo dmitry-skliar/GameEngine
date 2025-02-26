@@ -223,3 +223,21 @@ KAPI bool string_to_u64(char* str, u64* value);
     @return True если преобразование прошло успешно, false если не удалось.
 */
 KAPI bool string_to_bool(char* str, bool* value);
+
+/*
+    @brief Разбивает строку по предоставленому разделителю и сохраняет в динамический массив (darray).
+    NOTE: Перед уничтожение массива необходимо освободить память вызовом функции 'string_cleanup_split_array'.
+    @param str Указатель на строку над которой нужно провести разделение.
+    @param delim Символ разделителя.
+    @param trime_entries Обрезать каждую получившуюся строку перед добавлением в массив.
+    @param include_empty Включать пустые строки в массив.
+    @param str_darray Указатель на массив строк для получения результата (используется darray).
+    @return Число получившихся строк в результате разделения, 0 если не удалось выполнить разделение.
+*/
+KAPI u32 string_split(const char* str, char delim, bool trime_entries, bool include_empty, char*** str_darray);
+
+/*
+    @brief Освобождает строки динамического массива в результате выполнения функции 'string_split'.
+    @param str_darray Указатель на массив строк для освобождения выделенной памяти (используется darray).
+*/
+KAPI void string_cleanup_split_array(char** str_darray);

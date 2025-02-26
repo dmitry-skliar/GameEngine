@@ -220,6 +220,7 @@ const char* memory_system_usage_str()
         "STRING         ",
         "APPLICATION    ",
         "JOB            ",
+        "RESOURCE       ",
         "TEXTURE        ",
         "MATERIAL       ",
         "RENDERER       ",

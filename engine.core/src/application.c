@@ -16,6 +16,7 @@
 #include "systems/material_system.h"
 #include "systems/geometry_system.h"
 #include "systems/resource_system.h"
+#include "systems/shader_system.h"
 
 // TODO: Временный тестовый код: начало.
 #include "math/kmath.h"
@@ -42,6 +43,9 @@ typedef struct application_state {
 
     u64 resource_system_memory_requirement;
     void* resource_system_state;
+
+    u64 shader_system_memory_requirement;
+    void* shader_system_state;
 
     u64 renderer_system_memory_requirement;
     void* renderer_system_state;
@@ -183,6 +187,20 @@ bool application_create(game* game_inst)
         return false;
     }
     kinfor("Resource system started.");
+
+    shader_system_config shader_sys_config;
+    shader_sys_config.max_shader_count = 1024;
+    shader_sys_config.max_uniform_count = 128;
+    shader_sys_config.max_global_textures = 31;
+    shader_sys_config.max_instance_textures = 31;
+    shader_system_initialize(&app_state->shader_system_memory_requirement, null, &shader_sys_config);
+    app_state->shader_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->shader_system_memory_requirement);
+    if(!shader_system_initialize(&app_state->shader_system_memory_requirement, app_state->shader_system_state, &shader_sys_config))
+    {
+        kerror("Failed to initialize shader system. Aborted!");
+        return false;
+    }
+    kinfor("Shader system started.");
 
     // Система визуализатора графики.
     renderer_system_initialize(&app_state->renderer_system_memory_requirement, null, null);
@@ -418,6 +436,9 @@ bool application_run()
 
     texture_system_shutdown();
     kinfor("Texture system stopped.");
+
+    shader_system_shutdown(); // Остановка раньше, потому как использует функции рендерера!
+    kinfor("Shader system stopped.");
 
     renderer_system_shutdown();
     kinfor("Renderer system stopped.");

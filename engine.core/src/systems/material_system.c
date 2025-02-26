@@ -11,29 +11,73 @@
 #include "math/kmath.h"
 #include "renderer/renderer_frontend.h"
 
+typedef struct material_shader_uniform_locations {
+    u16 projection;
+    u16 view;
+    u16 ambient_color;
+    u16 diffuse_color;
+    u16 diffuse_texture;
+    u16 model;
+} material_shader_uniform_locations;
+
+typedef struct ui_shader_uniform_locations {
+    u16 projection;
+    u16 view;
+    u16 diffuse_color;
+    u16 diffuse_texture;
+    u16 model;
+} ui_shader_uniform_locations;
+
 typedef struct material_system_state {
-    // @brief Конфигурация системы.
+    // Конфигурация системы.
     material_system_config config;
-    // @brief Материал по умолчанию.
+    // Материал по умолчанию.
     material default_material;
-    // @brief Массив материалов.
+    // Массив материалов.
     material* materials;
-    // @brief Таблица ссылок на материалы.
+    // Таблица ссылок на материалы.
     hashtable* material_references_table;
+    // Местоположение для материала шейдера и идентификатор шейдера.
+    material_shader_uniform_locations material_locations;
+    u32 material_shader_id;
+    // Местоположение для ui шейдера и идентификатор шейдера.
+    ui_shader_uniform_locations ui_locations;
+    u32 ui_shader_id;
 } material_system_state;
 
 typedef struct material_reference {
-    // @brief Количество ссылок на материал.
+    // Количество ссылок на материал.
     u64 reference_count;
-    // @brief Индекс материала в массиве материалов.
+    // Индекс материала в массиве материалов.
     u32 index;
-    // @brief Авто уничтожение материала.
+    // Авто уничтожение материала.
     bool auto_release;
 } material_reference;
 
 static material_system_state* state_ptr = null;
-static const char* message_not_initialized =
-    "Function '%s' requires the material system to be initialized. Call 'material_system_initialize' first.";
+
+#define MATERIAL_APPLY_OR_FAIL(expr)                  \
+    if (!expr) {                                      \
+        kerror("Failed to apply material: %s", expr); \
+        return false;                                 \
+    }
+
+bool material_system_status_valid(const char* func_name)
+{
+    if(!state_ptr)
+    {
+        if(func_name)
+        {
+            kerror(
+                "Function '%s' requires the material system to be initialized. Call 'material_system_initialize' first.",
+                func_name
+            );
+            
+        }
+        return false;
+    }
+    return true;
+}
 
 bool default_materials_create();
 void default_materials_destroy();
@@ -44,29 +88,27 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
 {
     if(state_ptr)
     {
-        kwarng("Function '%s' was called more than once! Return false!", __FUNCTION__);
+        kwarng("Function '%s' was called more than once!", __FUNCTION__);
         return false;
     }
 
     if(!memory_requirement || !config)
     {
-        kerror("Function '%s' requires a valid pointers to memory_requirement and config. Return false!", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointers to memory_requirement and config.", __FUNCTION__);
         return false;
     }
 
     if(!config->max_material_count)
     {
-        kerror("Function '%s': config.max_material_count must be greater then zero. Return false!", __FUNCTION__);
+        kerror("Function '%s': config.max_material_count must be greater then zero.", __FUNCTION__);
         return false;
     }
 
-    hashtable_config hconf;
-    hconf.data_size = sizeof(material_reference);
-    hconf.entry_count = config->max_material_count;
-
+    // TODO: Исключить повторную обработку, поместив в if(!memory)...
     u64 state_requirement = sizeof(material_system_state);
     u64 materials_requirement = sizeof(material) * config->max_material_count;
     u64 hashtable_requirement = 0;
+    hashtable_config hconf = { sizeof(material_reference), config->max_material_count };
     hashtable_create(&hashtable_requirement, null, &hconf, null);
     *memory_requirement = state_requirement + materials_requirement + hashtable_requirement;
 
@@ -80,14 +122,22 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
     state_ptr = memory;
 
     // Запись данных конфигурации системы.
-    state_ptr->config.max_material_count = config->max_material_count;
+    state_ptr->config = *config;
+
+    state_ptr->material_shader_id = INVALID_ID;
+    state_ptr->material_locations.diffuse_color = INVALID_ID_U16;
+    state_ptr->material_locations.diffuse_texture = INVALID_ID_U16;
+
+    state_ptr->ui_shader_id = INVALID_ID;
+    state_ptr->ui_locations.diffuse_color = INVALID_ID_U16;
+    state_ptr->ui_locations.diffuse_texture = INVALID_ID_U16;
 
     // Получение и запись указателя на блок материалов.
-    void* materials_block = (void*)((u8*)state_ptr + state_requirement);
+    void* materials_block = POINTER_GET_OFFSET(state_ptr, state_requirement);
     state_ptr->materials = materials_block;
 
     // Получение и запись указателя на хэш-таблицу.
-    void* hashtable_block = (void*)((u8*)materials_block + materials_requirement);
+    void* hashtable_block = POINTER_GET_OFFSET(materials_block, materials_requirement);
     if(!hashtable_create(&hashtable_requirement, hashtable_block, &hconf, &state_ptr->material_references_table))
     {
         kerror("Function '%s': Failed to create hashtable of references to materials.", __FUNCTION__);
@@ -114,9 +164,8 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
 
 void material_system_shutdown()
 {
-    if(!state_ptr)
+    if(!material_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return;
     }
 
@@ -141,9 +190,8 @@ void material_system_shutdown()
 
 material* material_system_acquire(const char* name)
 {
-    if(!state_ptr)
+    if(!material_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return null;
     }
 
@@ -151,7 +199,7 @@ material* material_system_acquire(const char* name)
     resource material_resource;
     if(!resource_system_load(name, RESOURCE_TYPE_MATERIAL, &material_resource))
     {
-        kerror("Function '%s': Failed to load material resource '%s'. Return null!", __FUNCTION__, name);
+        kerror("Function '%s': Failed to load material resource '%s'.", __FUNCTION__, name);
         return null;
     }
 
@@ -165,7 +213,7 @@ material* material_system_acquire(const char* name)
 
     if(!m)
     {
-        kerror("Function '%s': Failed to load material resource '%s'. Return null!", __FUNCTION__, name);
+        kerror("Function '%s': Failed to load material resource '%s'.", __FUNCTION__, name);
     }
 
     return m;
@@ -173,9 +221,8 @@ material* material_system_acquire(const char* name)
 
 material* material_system_acquire_from_config(material_config* config)
 {
-    if(!state_ptr)
+    if(!material_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return null;
     }
 
@@ -184,6 +231,7 @@ material* material_system_acquire_from_config(material_config* config)
         return &state_ptr->default_material;
     }
 
+    // TODO: Может возникнуть когда количество записей в таблице закончится!
     material_reference ref;
     if(!hashtable_get(state_ptr->material_references_table, config->name, &ref) || ref.index == INVALID_ID)
     {
@@ -226,15 +274,35 @@ material* material_system_acquire_from_config(material_config* config)
             return null;
         }
 
-        // TODO: Сомнительно!!
+        shader* s = shader_system_get_by_id(m->shader_id);
+
+        // Сохранение местоположения известных типов для быстрого поиска.
+        if(state_ptr->material_shader_id == INVALID_ID && string_equal(config->shader_name, BUILTIN_SHADER_NAME_MATERIAL))
+        {
+            state_ptr->material_shader_id = s->id;
+            state_ptr->material_locations.projection = shader_system_uniform_index(s, "projection");
+            state_ptr->material_locations.view = shader_system_uniform_index(s, "view");
+            state_ptr->material_locations.ambient_color = shader_system_uniform_index(s, "ambient_color");
+            state_ptr->material_locations.diffuse_color = shader_system_uniform_index(s, "diffuse_color");
+            state_ptr->material_locations.diffuse_texture = shader_system_uniform_index(s, "diffuse_texture");
+            state_ptr->material_locations.model = shader_system_uniform_index(s, "model");
+        }
+        else if(state_ptr->ui_shader_id == INVALID_ID && string_equal(config->shader_name, BUILTIN_SHADER_NAME_UI))
+        {
+            state_ptr->ui_shader_id = s->id;
+            state_ptr->ui_locations.projection = shader_system_uniform_index(s, "projection");
+            state_ptr->ui_locations.view = shader_system_uniform_index(s, "view");
+            state_ptr->ui_locations.diffuse_color = shader_system_uniform_index(s, "diffuse_color");
+            state_ptr->ui_locations.diffuse_texture = shader_system_uniform_index(s, "diffuse_texture");
+            state_ptr->ui_locations.model = shader_system_uniform_index(s, "model");
+        }
+
         if(m->generation == INVALID_ID)
         {
-            kdebug("MARETIAL generation INVALID_ID!");
             m->generation = 0;
         }
         else
         {
-            kdebug("MARETIAL generation %u!", m->generation);
             m->generation++;
         }
 
@@ -251,6 +319,7 @@ material* material_system_acquire_from_config(material_config* config)
         );
     }
 
+    // TODO: Для hastable сделать hashtable_update которая обновляет!
     // Обновление ссылки на материал.
     if(!hashtable_set(state_ptr->material_references_table, config->name, &ref, true))
     {
@@ -263,9 +332,8 @@ material* material_system_acquire_from_config(material_config* config)
 
 void material_system_release(const char* name)
 {
-    if(!state_ptr)
+    if(!material_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return;
     }
 
@@ -317,13 +385,89 @@ void material_system_release(const char* name)
 
 material* material_system_get_default()
 {
-    if(!state_ptr)
+    if(!material_system_status_valid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return null;
     }
 
     return &state_ptr->default_material;
+}
+
+bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec4* ambient_color)
+{
+    if(!material_system_status_valid(__FUNCTION__))
+    {
+        return null;
+    }
+
+    if(shader_id == state_ptr->material_shader_id)
+    {
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.projection, projection));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.view, view));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.ambient_color, ambient_color));
+    }
+    else if(shader_id == state_ptr->ui_shader_id)
+    {
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.projection, projection));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.view, view));
+    }
+    else
+    {
+        kerror("Function '%s': Unrecognized shader id '%d'.", __FUNCTION__, shader_id);
+        return false;
+    }
+
+    MATERIAL_APPLY_OR_FAIL(shader_system_apply_global());
+    return true;
+}
+
+bool material_system_apply_instance(material* m)
+{
+    if(!material_system_status_valid(__FUNCTION__))
+    {
+        return null;
+    }
+
+    MATERIAL_APPLY_OR_FAIL(shader_system_bind_instance(m->internal_id));
+
+    if(m->shader_id == state_ptr->material_shader_id)
+    {
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_color, &m->diffuse_color));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_texture, m->diffuse_map.texture));
+    }
+    else if(m->shader_id == state_ptr->ui_shader_id)
+    {
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_color, &m->diffuse_color));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_texture, m->diffuse_map.texture));
+    }
+    else
+    {
+        kerror("Function '%s': Unrecognized shader id '%d' on shader '%s'.", __FUNCTION__, m->shader_id, m->name);
+        return false;
+    }
+
+    MATERIAL_APPLY_OR_FAIL(shader_system_apply_instance());
+    return true;
+}
+
+bool material_system_apply_local(material* m, const mat4* model)
+{
+    if(!material_system_status_valid(__FUNCTION__))
+    {
+        return null;
+    }
+
+    if(m->shader_id == state_ptr->material_shader_id)
+    {
+        return shader_system_uniform_set_by_index(state_ptr->material_locations.model, model);
+    }
+    else if(m->shader_id == state_ptr->ui_shader_id)
+    {
+        return shader_system_uniform_set_by_index(state_ptr->ui_locations.model, model);
+    }
+
+    kerror("Function '%s': Unrecognized shader id '%d'", __FUNCTION__, m->shader_id);
+    return false;
 }
 
 bool default_materials_create()
@@ -337,7 +481,8 @@ bool default_materials_create()
     state_ptr->default_material.diffuse_map.use = TEXTURE_USE_MAP_DIFFUSE;
     state_ptr->default_material.diffuse_map.texture = texture_system_get_default_texture();
 
-    if(!renderer_create_material(&state_ptr->default_material))
+    shader* s = shader_system_get(BUILTIN_SHADER_NAME_MATERIAL);
+    if(!renderer_shader_acquire_instance_resources(s, &state_ptr->default_material.internal_id))
     {
         kerror("Function '%s': Failed to acquire renderer resource for default material.", __FUNCTION__);
         return false;
@@ -348,7 +493,8 @@ bool default_materials_create()
 
 void default_materials_destroy()
 {
-    renderer_destroy_material(&state_ptr->default_material);
+    shader* s = shader_system_get(BUILTIN_SHADER_NAME_MATERIAL);
+    renderer_shader_release_instance_resources(s, state_ptr->default_material.internal_id);
 }
 
 bool material_load(material_config* config, material* m)
@@ -358,10 +504,7 @@ bool material_load(material_config* config, material* m)
     // Копирование имени материала.
     string_ncopy(m->name, config->name, MATERIAL_NAME_MAX_LENGTH);
 
-    // Тип.
-    m->type = config->type;
-
-    // Цвет.
+    m->shader_id = shader_system_get_id(config->shader_name);
     m->diffuse_color = config->diffuse_color;
 
     if(string_length(config->diffuse_map_name) > 0)
@@ -387,7 +530,17 @@ bool material_load(material_config* config, material* m)
     // TODO: другие разметки.
 
     // Загрузка в графический процессор.
-    if(!renderer_create_material(m))
+    shader* s = shader_system_get(config->shader_name);
+    if(!s)
+    {
+        kerror(
+            "Function '%s': Unable to load material because its shader was not found: '%s'. This is likely a problem with the material asset.",
+            __FUNCTION__, config->shader_name
+        );
+        return false;
+    }
+
+    if(!renderer_shader_acquire_instance_resources(s, &m->internal_id))
     {
         kerror("Function '%s': Failed to acquire renderer resource for material '%s'.", __FUNCTION__, m->name);
         return false;
@@ -405,7 +558,11 @@ void material_destroy(material* m)
     }
 
     // Удаление из памяти графического процессора.
-    renderer_destroy_material(m);
+    if(m->shader_id != INVALID_ID && m->internal_id != INVALID_ID)
+    {
+        renderer_shader_release_instance_resources(shader_system_get_by_id(m->shader_id), m->internal_id);
+        m->shader_id = INVALID_ID;
+    }
 
     // Освобождение памяти для нового материала.
     kzero_tc(m, material, 1);

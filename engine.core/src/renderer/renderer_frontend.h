@@ -1,122 +1,166 @@
 #pragma once
 
 #include <renderer/renderer_types.h>
+#include <systems/shader_system.h>
 #include <platform/window.h>
 
 /*
-    @brief Запускает систему визуализации.
-    @param memory_requirement Указатель на переменную для получения требований к памяти.
-    @param memory Указатель на выделенную память, для получения требований к памяти передать null.
+    @brief Инициализирует интерфейс и систему рендеринга.
+    NOTE: Вызывать дважды, первый раз для получения требований к памяти, второй для инициализации.
+    @param memory_requirement Указатель на переменную для сохранения требований системы к памяти в байтах.
+    @param memory Указатель на выделенный блок памяти, или null для получения требований.
     @param window_state Указатель на выделенную память экземпляра оконной системы.
     @return True операция завершена успешно, false в случае ошибок.
 */
 bool renderer_system_initialize(u64* memory_requirement, void* memory, window* window_state);
 
 /*
-    @brief Завершает работу системы визуализации.
+    @brief Завершает работу системы рендеринга и освобождает выделеные ей ресурсы.
 */
 void renderer_system_shutdown();
 
+/*
+    @brief Изменяет размер области рендеринга, обычно вызывается на событие изменение размера окна.
+    @param width Новая ширина области рендеринга.
+    @param height Новая высота области рендеринга.
+*/
 void renderer_on_resize(i32 width, i32 height);
 
+/*
+    @brief Рисует следующий кард используя предоставленный пакет рендеринга.
+    @param packet Указатель на пакет рендеринга.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
 bool renderer_draw_frame(render_packet* packet);
 
 // HACK: Временно!
 KAPI void renderer_set_view(mat4 view);
 
+/*
+    @brief Создает новую текстуру по предоставленным данным изображения и загружает в память графического процессора.
+    @param texture Указатель на текстуру которую необходимо создать.
+    @param pixels Указатель на необработанные данные изображения для загрузки.
+*/
 void renderer_create_texture(texture* texture, const void* pixels);
 
+/*
+    @brief Уничтожает предоставленную текстуру, освобождая память графического процессора.
+    @param Указатель на текстуру, которую необходимо уничтожить.
+*/
 void renderer_destroy_texture(texture* texture);
 
-bool renderer_create_material(material* material);
-
-void renderer_destroy_material(material* material);
-
+/*
+    @brief Получает ресурсы графического процессора и загружает данные геометрии.
+    @param geometry Указатель на геометрию для которой необходимо получить ресурсы.
+    @param vertex_size Размер вершин в геометрии.
+    @param vertex_count Количество вершин в геометрии.
+    @param vertices Массив вершин геометрии.
+    @param index_size Размер индекса в геометрии.
+    @param index_count Количество индексов в геометрии.
+    @param indices Массив индексов геометрии.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
 bool renderer_create_geometry(
     geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
     const void* indices
 );
 
+/*
+    @brief Уничтожает предоставленную геометрию, освобождая ресурсы графического процессора.
+    @param geometry Указатель на геометрию, которую необходимо уничтожить.
+*/
 void renderer_destroy_geometry(geometry* geometry);
 
-bool renderer_shader_create(const char* name, builtin_renderpass renderpass_id, shader_stage stages, bool use_instances, bool use_local, u32* out_shader_id);
+/*
+    @brief Получает идентификатор прохода рендеринга с указанным именем.
+    @param name Имя прохода ренедринга, для получения идентификатора прохода рендеринга.
+    @param out_renderpass_id Указатель на переменую для сохранения идетификатора прохода рендеринга.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_renderpass_id(const char* name, u8* out_renderpass_id);
 
-void renderer_shader_destroy(u32 shader_id);
+/*
+    @brief Создает внутренние ресурсы шейдера, используя предоставленные параметры.
+    @param s Указатель на шейдер для создания внутренних ресурсов.
+    @param renderpass_id Указатель прохода рендеринга, который будет связан с шейдером.
+    @param stage_count Количество стадий шейдера.
+    @param stage_filenames Массив имен файлов стадий шейдера, которые будут загружены. Должен соотвествовать массиву стадий шейдера.
+    @param stages Массив стадий шейдера (вершина, фрагмент и т.д), указывающий какие стадии будут использоваться в этом шейдере.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_create(shader* s, u8 renderpass_id, u8 stage_count, const char** stage_filenames, shader_stage* stages);
 
-bool renderer_shader_add_attribute(u32 shader_id, const char* name, shader_attribute_type type);
+/*
+    @brief Уничтожает предоставленный шейдер и освобождает ресурсы им удерживаемые.
+    @param s Указатель на шейдер, который необходимо уничтожить.
+*/
+void renderer_shader_destroy(shader* s);
 
-bool renderer_shader_add_sampler(u32 shader_id, const char* sampler_name, shader_scope scope, u32* out_location);
+/*
+    @brief Инициализирует настроенный шейдер, должно быть выполено после 'renderer_shader_create',
+           а так же последующей настройки шейдер.
+    @param s Указатель на шейдер, который необходимо инициализировать.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_initialize(shader* s);
 
-bool renderer_shader_add_uniform_i8(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
+/*
+    @brief Использует заданный шейдер, активируя его для обновления атрибутов, uniform перменных и т.д.
+    @param s Указатель на шейдер, над которым будут проводиться операции.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_use(shader* s);
 
-bool renderer_shader_add_uniform_i16(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
+/*
+    @brief Связывает глобальные ресурсы для использования и обновления.
+    @param s Указатель на шейдер, глобальные ресурсы которого должны быть связаны.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_bind_globals(shader* s);
 
-bool renderer_shader_add_uniform_i32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
+/*
+    @brief Связывает ресурсы экземпляра для использования и обновления.
+    @param s Указатель на шейдер, ресурсы экземпляра которого должны быть связаны.
+    @param instance_id Идентификатор экземпляра, который должен быть связан.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_bind_instance(shader* s, u32 instance_id);
 
-bool renderer_shader_add_uniform_u8(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
+/*
+    @brief Применяет данные к текущим привязанному глобальному ресурсу.
+    @param s Указатель на шейдер к которому должны быть применены глобальные данные.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_apply_globals(shader* s);
 
-bool renderer_shader_add_uniform_u16(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
+/*
+    @brief Применяет данные к текущим привязанному ресурсу экземпляра.
+    @param s Указатель на шейдер к которому должны быть применены данные экземпляра.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_apply_instance(shader* s);
 
-bool renderer_shader_add_uniform_u32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
+/*
+    @brief Получает внутренние ресурсы уровня экземпляра и предоставляет идентификатор экземпляра.
+    @param s Указатель на шейдер из которого нужно получить ресурсы экземпляра.
+    @param out_instance_id Указатель на переменную для сохранения идентификатора экземпляра.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_acquire_instance_resources(shader* s, u32* out_instance_id);
 
-bool renderer_shader_add_uniform_f32(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
+/*
+    @brief Освобождает внутренние ресурсы уровня экземпляра по предоставленному идентификатору экземпляра.
+    @param s Указатель на шейдер для которого нужно освободить ресурсы экземпляра.
+    @param instance_id Идентификатор экземпляра, ресурсы которого необходимо освободить.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_release_instance_resources(shader* s, u32 instance_id);
 
-bool renderer_shader_add_uniform_vec2(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
-
-bool renderer_shader_add_uniform_vec3(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
-
-bool renderer_shader_add_uniform_vec4(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
-
-bool renderer_shader_add_uniform_mat4(u32 shader_id, const char* uniform_name, shader_scope scope, u32* out_location);
-
-bool renderer_shader_add_uniform_custom(u32 shader_id, const char* uniform_name, u32 size, shader_scope scope, u32* out_location);
-
-bool renderer_shader_initialize(u32 shader_id);
-
-bool renderer_shader_use(u32 shader_id);
-
-bool renderer_shader_bind_globals(u32 shader_id);
-
-bool renderer_shader_bind_instance(u32 shader_id, u32 instance_id);
-
-bool renderer_shader_apply_globals(u32 shader_id);
-
-bool renderer_shader_apply_instance(u32 shader_id);
-
-bool renderer_shader_acquire_instance_resource(u32 shader_id, u32* out_instance_id);
-
-bool renderer_shader_release_instance_resource(u32 shader_id, u32 instance_id);
-
-u32 renderer_shader_uniform_location(u32 shader_id, const char* uniform_name);
-
-bool renderer_shader_set_sampler(u32 shader_id, u32 location, texture* t);
-
-bool renderer_shader_set_uniform_i8(u32 shader_id, u32 location, i8 value);
-
-bool renderer_shader_set_uniform_i16(u32 shader_id, u32 location, i16 value);
-
-bool renderer_shader_set_uniform_i32(u32 shader_id, u32 location, i32 value);
-
-bool renderer_shader_set_uniform_u8(u32 shader_id, u32 location, u8 value);
-
-bool renderer_shader_set_uniform_u16(u32 shader_id, u32 location, u16 value);
-
-bool renderer_shader_set_uniform_u32(u32 shader_id, u32 location, u32 value);
-
-bool renderer_shader_set_uniform_f32(u32 shader_id, u32 location, f32 value);
-
-bool renderer_shader_set_uniform_vec2(u32 shader_id, u32 location, vec2 value);
-
-bool renderer_shader_set_uniform_vec2f(u32 shader_id, u32 location, f32 value_0, f32 value_1);
-
-bool renderer_shader_set_uniform_vec3(u32 shader_id, u32 location, vec3 value);
-
-bool renderer_shader_set_uniform_vec3f(u32 shader_id, u32 location, f32 value_0, f32 value_1, f32 value_2);
-
-bool renderer_shader_set_uniform_vec4(u32 shader_id, u32 location, vec4 value);
-
-bool renderer_shader_set_uniform_vec4f(u32 shader_id, u32 location, f32 value_0, f32 value_1, f32 value_2, f32 value_3);
-
-bool renderer_shader_set_uniform_mat4(u32 shader_id, u32 location, mat4 value);
-
-bool renderer_shader_set_uniform_custom(u32 shader_id, u32 location, void* value);
+/*
+    @brief Задает значение uniform переменой указанного шейдера.
+    @param s Указатель на шейдер для которого нужно задать uniform переменую.
+    @parma uniform Указатель на uniform переменную значение которой необходимо задать.
+    @param value Указатель на значение которое необходимо задать uniform переменной.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_shader_set_uniform(shader* s, shader_uniform* uniform, const void* value);

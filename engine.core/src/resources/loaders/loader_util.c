@@ -27,3 +27,16 @@ void resource_unload(resource_loader* self, resource* resource, memory_tag tag, 
         resource->loader_id = INVALID_ID;
     }
 }
+
+bool resource_loader_load_valid(resource_loader* self, const char* name, resource* resource, const char* func_name)
+{
+    if(!self || !name || !resource)
+    {
+        if(func_name)
+        {
+            kerror("Function '%s' requires a valid pointer to self, name and resource.", func_name);
+        }
+        return false;
+    }
+    return true;
+}

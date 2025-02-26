@@ -36,9 +36,9 @@ typedef _Bool bool;
 // @brief Диапазон памяти.
 typedef struct range {
     // @brief Смещение в байтах.
-    i32 offset;
+    u64 offset;
     // @brief Размер в байтах.
-    i32 size;
+    u64 size;
 } range;
 
 #if __cplusplus
@@ -91,8 +91,9 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define I32_MIN (-I32_MAX - 1)
 #define I64_MIN (-I64_MAX - 1)
 
-#define INVALID_ID -1
-#define INVALID_ID_U8 U8_MAX
+#define INVALID_ID     U32_MAX
+#define INVALID_ID_U16 U16_MAX
+#define INVALID_ID_U8  U8_MAX
 
 // Определение нулевого указателя.
 #define null  ((void*)0)
