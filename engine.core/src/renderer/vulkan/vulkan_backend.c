@@ -1230,6 +1230,11 @@ bool vulkan_renderer_shader_initialize(shader* shader)
         return false;
     }
 
+    // TODO: Компиляция и линковка байт-кода SPIR-V в машинный код не произойдет до тех пор, пока не будет создан
+    //       графический конвейер. Это значит, что мы можем уничтожить шейдерные модули сразу после создания
+    //       конвейера.
+    //                                                             Источник: https://habr.com/ru/articles/547576/
+
     // Требования для выравнивания UBO для физического устройства.
     shader->required_ubo_alignment = context->device.properties.limits.minUniformBufferOffsetAlignment;
 

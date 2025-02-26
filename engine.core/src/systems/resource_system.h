@@ -19,11 +19,11 @@ typedef struct resource_loader {
 
 /*
 */
-KAPI bool resource_system_initialize(u64* memory_requirement, void* memory, resource_system_config* config);
+bool resource_system_initialize(u64* memory_requirement, void* memory, resource_system_config* config);
 
 /*
 */
-KAPI void resource_system_shutdown();
+void resource_system_shutdown();
 
 /*
 */

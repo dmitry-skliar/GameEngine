@@ -264,8 +264,8 @@ u32 string_split(const char* str, char delim, bool trime_entries, bool include_e
         // Поиск разделителя.
         while(*ptr && *ptr != delim)
         {
-            length++;
             ptr++;
+            length++;
         }
 
         // Проверка на конец строки для обработки.
@@ -278,7 +278,7 @@ u32 string_split(const char* str, char delim, bool trime_entries, bool include_e
         if(length > 0 || include_empty)
         {
             count++;
-            length++;
+            // length++;
             *ptr = '\0';
 
             if(trime_entries)
@@ -286,7 +286,8 @@ u32 string_split(const char* str, char delim, bool trime_entries, bool include_e
                 head = string_trim(head);
             }
 
-            char* new = kallocate(length, MEMORY_TAG_STRING);
+            length = platform_string_length(head) + 1;
+            char* new = kallocate_tc(char, length, MEMORY_TAG_STRING);
             kcopy(new, head, length);
             darray_push(*str_darray, new);
         }
@@ -316,6 +317,7 @@ void string_cleanup_split_array(char** str_darray)
 
     for(u32 i = 0; i < count; ++i)
     {
-        string_free(str_darray[i]);
+        u64 length = platform_string_length(str_darray[i]) + 1;
+        kfree_tc(str_darray[i], char, length, MEMORY_TAG_STRING);
     }
 }

@@ -11,7 +11,6 @@
 #include "systems/resource_system.h"
 #include "platform/file.h"
 
-// TODO: Где-то утечка строк 12 байт на вызов!
 bool shader_loader_load(resource_loader* self, const char* name, resource* out_resource)
 {
     if(!resource_loader_load_valid(self, name, out_resource, __FUNCTION__))
