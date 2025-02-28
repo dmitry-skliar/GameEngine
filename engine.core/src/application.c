@@ -19,8 +19,9 @@
 #include "systems/shader_system.h"
 
 // TODO: Временный тестовый код: начало.
-#include "math/kmath.h"
 #include "kstring.h"
+#include "math/kmath.h"
+#include "math/geometry_utils.h"
 // TODO: Временный тестовый код: конец.
 
 typedef struct application_state {
@@ -79,36 +80,46 @@ void application_on_close();
 // TODO: Временный тестовый код: начало.
 bool event_on_debug_event(event_code code, void* sender, void* listener_inst, event_context* context)
 {
-    const char* diff_names[3] = { "cobblestone", "paving", "paving2" };
+    const char* diff_names[3] = { "cobblestone",      "paving",      "paving2"      };
     const char* spec_names[3] = { "cobblestone_SPEC", "paving_SPEC", "paving2_SPEC" };
-    static i8 choice = 1;
+    const char* norm_names[3] = { "cobblestone_NRM",  "paving_NRM",  "paving2_NRM"  };
 
+    static i8 choice = 1;
     const char* old_diff_name = diff_names[choice];
     const char* old_spec_name = spec_names[choice];
+    const char* old_norm_name = norm_names[choice];
 
     choice++;
     choice %= 3;
 
     if(app_state->test_geometry)
     {
+        // Diffuse.
         app_state->test_geometry->material->diffuse_map.texture = texture_system_acquire(diff_names[choice], true);
         if(!app_state->test_geometry->material->diffuse_map.texture)
         {
             kwarng("Function '%s': Failed to load diffuse texture. Using default! ", __FUNCTION__);
             app_state->test_geometry->material->diffuse_map.texture = texture_system_get_default_diffuse_texture();
         }
-
         texture_system_release(old_diff_name);
 
+        // Specular.
         app_state->test_geometry->material->specular_map.texture = texture_system_acquire(spec_names[choice], true);
         if(!app_state->test_geometry->material->specular_map.texture)
         {
             kwarng("Function '%s': Failed to load specular texture. Using default! ", __FUNCTION__);
             app_state->test_geometry->material->specular_map.texture = texture_system_get_default_specular_texture();
         }
-
         texture_system_release(old_spec_name);
-        
+
+        // Normal.
+        app_state->test_geometry->material->normal_map.texture = texture_system_acquire(norm_names[choice], true);
+        if(!app_state->test_geometry->material->normal_map.texture)
+        {
+            kwarng("Function '%s': Failed to load normal texture. Using default! ", __FUNCTION__);
+            app_state->test_geometry->material->normal_map.texture = texture_system_get_default_normal_texture();
+        }
+        texture_system_release(old_norm_name);
     }
 
     return true;
@@ -260,10 +271,11 @@ bool application_create(game* game_inst)
     kinfor("Geometry system started.");
 
     // TODO: Временный тестовый код: начало.
-    // geometry_config g_config = geometry_system_generate_plane_config(100.0f, 100.0f, 10, 10, 5.0f, 5.0f, "test geometry", "test_material");
     geometry_config g_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "test_cube", "test_material");
+    geometry_generate_tangent(g_config.vertex_count, g_config.vertices, g_config.index_count, g_config.indices);
     app_state->test_geometry = geometry_system_acquire_from_config(&g_config, true);
 
+    // TODO: Вынести в отдельную функцию очистки конфига.
     kfree_tc(g_config.vertices, vertex_3d, g_config.vertex_count, MEMORY_TAG_ARRAY);
     kfree_tc(g_config.indices, u32, g_config.index_count, MEMORY_TAG_ARRAY);
 

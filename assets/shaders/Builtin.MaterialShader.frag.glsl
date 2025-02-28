@@ -9,10 +9,10 @@ layout(set = 1, binding = 0) uniform local_uniform_object {
     float shininess;
 } object_ubo;
 
-// Текстуры.
-const int SAMP_DIFFUSE  = 0; // Обычная текстура.
-const int SAMP_SPECULAR = 1; // Спека.
-layout(set = 1, binding = 1) uniform sampler2D samplers[2];
+const int SAMP_DIFFUSE  = 0;
+const int SAMP_SPECULAR = 1;
+const int SAMP_NORMAL   = 2;
+layout(set = 1, binding = 1) uniform sampler2D samplers[3];
 
 // Принимаемые данные переданные по конвейеру от другого шейдера (data transfer object).
 layout(location = 1) in struct dto {
@@ -21,6 +21,8 @@ layout(location = 1) in struct dto {
     vec3 normal;        // Вектор нормали (трансформированые).
     vec3 view_position;
     vec3 frag_position;
+    vec4 color;
+    vec4 tangent;
 } in_dto;
 
 struct directional_light {
@@ -34,15 +36,27 @@ directional_light source_light = {
     vec4(0.8, 0.8, 0.8, 1.0)
 };
 
+// Tangent, bitangent and normal.
+mat3 TBN;
+
 // Функиця расчета освещения для пикселя по заданой нормали.
 vec4 calculate_directional_light(directional_light light, vec3 normal, vec3 view_direction);
 
 // В фрагментном шейдере main применяется к каждому пикселю.
 void main()
 {
-    vec3 view_direction = normalize(in_dto.view_position - in_dto.frag_position);
+    vec3 normal = in_dto.normal;
+    vec3 tangent = in_dto.tangent.xyz;
+    tangent = (tangent - dot(tangent, normal) * normal);
+    vec3 bitangent = cross(in_dto.normal, in_dto.tangent.xyz) * in_dto.tangent.w;
+    TBN = mat3(tangent, bitangent, normal);
 
-    out_color = calculate_directional_light(source_light, in_dto.normal, view_direction);
+    // Обновление нормали для использования сэмплера для normal map.
+    vec3 local_normal = 2.0 * texture(samplers[SAMP_NORMAL], in_dto.tex_coord).rgb - 1.0;
+    normal = normalize(TBN * local_normal);
+
+    vec3 view_direction = normalize(in_dto.view_position - in_dto.frag_position);
+    out_color = calculate_directional_light(source_light, normal, view_direction);
 }
 
 vec4 calculate_directional_light(directional_light light, vec3 normal, vec3 view_direction)

@@ -137,9 +137,9 @@ typedef struct vertex_3d {
     // @brief Текстурная координата вершины.
     vec2 texcoord;
     // @brief Цвет вершины.
-    // vec4 color;
+    vec4 color;
     // @brief Касательная вершины.
-    // vec3 tangent;
+    vec4 tangent;
 } vertex_3d;
 
 // @brief Представляет отдельную вершину в трехмерном пространстве только с данными о положении и цвете.

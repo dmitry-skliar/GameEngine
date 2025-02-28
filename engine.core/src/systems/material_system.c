@@ -20,6 +20,7 @@ typedef struct material_shader_uniform_locations {
     u16 diffuse_color;
     u16 diffuse_texture;
     u16 specular_texture;
+    u16 normal_texture;
     u16 model;
 } material_shader_uniform_locations;
 
@@ -136,6 +137,7 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
     state_ptr->material_locations.diffuse_color = INVALID_ID_U16;
     state_ptr->material_locations.diffuse_texture = INVALID_ID_U16;
     state_ptr->material_locations.specular_texture = INVALID_ID_U16;
+    state_ptr->material_locations.normal_texture = INVALID_ID_U16;
     state_ptr->material_locations.model = INVALID_ID_U16;
 
     state_ptr->ui_shader_id = INVALID_ID;
@@ -301,6 +303,7 @@ material* material_system_acquire_from_config(material_config* config)
             state_ptr->material_locations.diffuse_color = shader_system_uniform_index(s, "diffuse_color");
             state_ptr->material_locations.diffuse_texture = shader_system_uniform_index(s, "diffuse_texture");
             state_ptr->material_locations.specular_texture = shader_system_uniform_index(s, "specular_texture");
+            state_ptr->material_locations.normal_texture = shader_system_uniform_index(s, "normal_texture");
             state_ptr->material_locations.model = shader_system_uniform_index(s, "model");
         }
         else if(state_ptr->ui_shader_id == INVALID_ID && string_equal(config->shader_name, BUILTIN_SHADER_NAME_UI))
@@ -453,6 +456,7 @@ bool material_system_apply_instance(material* m)
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_color, &m->diffuse_color));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_texture, m->diffuse_map.texture));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.specular_texture, m->specular_map.texture));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.normal_texture, m->normal_map.texture));
     }
     else if(m->shader_id == state_ptr->ui_shader_id)
     {
@@ -580,7 +584,7 @@ bool material_load(material_config* config, material* m)
         spec_map->texture = null;
     }
 
-    // Norm.
+    // Normal.
     texture_map* norm_map = &m->normal_map;
     if(string_length(config->normal_map_name) > 0)
     {

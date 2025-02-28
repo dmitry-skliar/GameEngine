@@ -383,9 +383,9 @@ bool default_textures_create()
     kzero_tc(norm_pixels, u8, 1024);
     for(u64 i = 0; i < 1024; i += 4)
     {
-        norm_pixels[i + 0] = 128;
-        norm_pixels[i + 1] = 128;
-        norm_pixels[i + 2] = 255;
+        norm_pixels[i + 0] = 180;
+        norm_pixels[i + 1] = 180;
+        norm_pixels[i + 2] = 180;
         norm_pixels[i + 3] = 255;
     }
     string_ncopy(state_ptr->default_normal_texture.name, DEFAULT_NORMAL_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
