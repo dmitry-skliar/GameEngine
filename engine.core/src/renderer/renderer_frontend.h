@@ -34,7 +34,7 @@ void renderer_on_resize(i32 width, i32 height);
 bool renderer_draw_frame(render_packet* packet);
 
 // HACK: Временно!
-KAPI void renderer_set_view(mat4 view);
+KAPI void renderer_set_view(mat4 view, vec3 view_position);
 
 /*
     @brief Создает новую текстуру по предоставленным данным изображения и загружает в память графического процессора.

@@ -46,7 +46,9 @@ typedef struct texture {
 
 typedef enum texture_use {
     TEXTURE_USE_UNKNOWN,
-    TEXTURE_USE_MAP_DIFFUSE
+    TEXTURE_USE_MAP_DIFFUSE,
+    TEXTURE_USE_MAP_SPECULAR,
+    TEXTURE_USE_MAP_NORMAL,
 } texture_use;
 
 typedef struct texture_map {
@@ -58,8 +60,11 @@ typedef struct material_config {
     char name[MATERIAL_NAME_MAX_LENGTH];
     char* shader_name;
     bool auto_release;
+    f32 shininess;
     vec4 diffuse_color;
     char diffuse_map_name[TEXTURE_NAME_MAX_LENGTH];
+    char specular_map_name[TEXTURE_NAME_MAX_LENGTH];
+    char normal_map_name[TEXTURE_NAME_MAX_LENGTH];
 } material_config;
 
 typedef struct material {
@@ -68,7 +73,10 @@ typedef struct material {
     u32 internal_id;
     char name[MATERIAL_NAME_MAX_LENGTH];
     vec4 diffuse_color;
+    f32 shininess;
     texture_map diffuse_map;
+    texture_map specular_map;
+    texture_map normal_map;
     u32 shader_id;
 } material;
 

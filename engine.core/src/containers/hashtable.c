@@ -162,7 +162,7 @@ bool hashtable_get(hashtable* table, const char* name, void* out_value)
     // Ничего не найдено или найдена пустая строка.
     if(!table->entry_count_current || !hashtable_found_entry(table, name, &entry) || !entry->key)
     {
-        kwarng("Function '%s': Entry not found.", __FUNCTION__);
+        // kwarng("Function '%s': Entry not found.", __FUNCTION__);
         return false;
     }
 

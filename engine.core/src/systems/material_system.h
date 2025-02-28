@@ -63,10 +63,11 @@ material* material_system_get_default();
     @param shader_id Идентификатор шейдера, для которого необходимо применить глобальные данные.
     @param projection Указатель на матрицу проекции.
     @param view Указатель на матрицу вида.
+    @param view_position Указатель на позицию камеры.
     @param ambient_color Указатель на окружающий цвет сцены.
     @return True в случае успеха, false если есть ошибки.
 */
-bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec4* ambient_color);
+bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec3* view_position, const vec4* ambient_color);
 
 /*
     @brief Применяет данные материала на уровне экземпляра для предоставленного материала.

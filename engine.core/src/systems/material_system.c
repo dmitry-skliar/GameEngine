@@ -14,9 +14,12 @@
 typedef struct material_shader_uniform_locations {
     u16 projection;
     u16 view;
+    u16 view_position;
+    u16 shininess;
     u16 ambient_color;
     u16 diffuse_color;
     u16 diffuse_texture;
+    u16 specular_texture;
     u16 model;
 } material_shader_uniform_locations;
 
@@ -127,9 +130,12 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
     state_ptr->material_shader_id = INVALID_ID;
     state_ptr->material_locations.projection = INVALID_ID_U16;
     state_ptr->material_locations.view = INVALID_ID_U16;
+    state_ptr->material_locations.view_position = INVALID_ID_U16;
+    state_ptr->material_locations.shininess = INVALID_ID_U16;
     state_ptr->material_locations.ambient_color = INVALID_ID_U16;
     state_ptr->material_locations.diffuse_color = INVALID_ID_U16;
     state_ptr->material_locations.diffuse_texture = INVALID_ID_U16;
+    state_ptr->material_locations.specular_texture = INVALID_ID_U16;
     state_ptr->material_locations.model = INVALID_ID_U16;
 
     state_ptr->ui_shader_id = INVALID_ID;
@@ -138,10 +144,6 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
     state_ptr->ui_locations.diffuse_color = INVALID_ID_U16;
     state_ptr->ui_locations.diffuse_texture = INVALID_ID_U16;
     state_ptr->ui_locations.model = INVALID_ID_U16;
-
-    state_ptr->ui_shader_id = INVALID_ID;
-    state_ptr->ui_locations.diffuse_color = INVALID_ID_U16;
-    state_ptr->ui_locations.diffuse_texture = INVALID_ID_U16;
 
     // Получение и запись указателя на блок материалов.
     void* materials_block = POINTER_GET_OFFSET(state_ptr, state_requirement);
@@ -293,9 +295,12 @@ material* material_system_acquire_from_config(material_config* config)
             state_ptr->material_shader_id = s->id;
             state_ptr->material_locations.projection = shader_system_uniform_index(s, "projection");
             state_ptr->material_locations.view = shader_system_uniform_index(s, "view");
+            state_ptr->material_locations.view_position = shader_system_uniform_index(s, "view_position");
+            state_ptr->material_locations.shininess = shader_system_uniform_index(s, "shininess");
             state_ptr->material_locations.ambient_color = shader_system_uniform_index(s, "ambient_color");
             state_ptr->material_locations.diffuse_color = shader_system_uniform_index(s, "diffuse_color");
             state_ptr->material_locations.diffuse_texture = shader_system_uniform_index(s, "diffuse_texture");
+            state_ptr->material_locations.specular_texture = shader_system_uniform_index(s, "specular_texture");
             state_ptr->material_locations.model = shader_system_uniform_index(s, "model");
         }
         else if(state_ptr->ui_shader_id == INVALID_ID && string_equal(config->shader_name, BUILTIN_SHADER_NAME_UI))
@@ -404,7 +409,7 @@ material* material_system_get_default()
     return &state_ptr->default_material;
 }
 
-bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec4* ambient_color)
+bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec3* view_position, const vec4* ambient_color)
 {
     if(!material_system_status_valid(__FUNCTION__))
     {
@@ -415,6 +420,7 @@ bool material_system_apply_global(u32 shader_id, const mat4* projection, const m
     {
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.projection, projection));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.view, view));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.view_position, view_position));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.ambient_color, ambient_color));
     }
     else if(shader_id == state_ptr->ui_shader_id)
@@ -443,8 +449,10 @@ bool material_system_apply_instance(material* m)
 
     if(m->shader_id == state_ptr->material_shader_id)
     {
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.shininess, &m->shininess));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_color, &m->diffuse_color));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_texture, m->diffuse_map.texture));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.specular_texture, m->specular_map.texture));
     }
     else if(m->shader_id == state_ptr->ui_shader_id)
     {
@@ -492,6 +500,12 @@ bool default_materials_create()
     state_ptr->default_material.diffuse_map.use = TEXTURE_USE_MAP_DIFFUSE;
     state_ptr->default_material.diffuse_map.texture = texture_system_get_default_diffuse_texture();
 
+    state_ptr->default_material.specular_map.use = TEXTURE_USE_MAP_SPECULAR;
+    state_ptr->default_material.specular_map.texture = texture_system_get_default_specular_texture();
+
+    state_ptr->default_material.normal_map.use = TEXTURE_USE_MAP_NORMAL;
+    state_ptr->default_material.normal_map.texture = texture_system_get_default_normal_texture();
+
     shader* s = shader_system_get(BUILTIN_SHADER_NAME_MATERIAL);
     if(!renderer_shader_acquire_instance_resources(s, &state_ptr->default_material.internal_id))
     {
@@ -502,6 +516,7 @@ bool default_materials_create()
     state_ptr->default_material.shader_id = s->id;
 
     return true;
+    
 }
 
 void default_materials_destroy()
@@ -519,6 +534,7 @@ bool material_load(material_config* config, material* m)
 
     m->shader_id = shader_system_get_id(config->shader_name);
     m->diffuse_color = config->diffuse_color;
+    m->shininess = config->shininess;
 
     // Diffuse.
     texture_map* diff_map = &m->diffuse_map;
@@ -540,6 +556,50 @@ bool material_load(material_config* config, material* m)
     {
         diff_map->use = TEXTURE_USE_UNKNOWN;
         diff_map->texture = null;
+    }
+
+    // Specular.
+    texture_map* spec_map = &m->specular_map;
+    if(string_length(config->specular_map_name) > 0)
+    {
+        spec_map->use = TEXTURE_USE_MAP_SPECULAR;
+        spec_map->texture = texture_system_acquire(config->specular_map_name, config->auto_release);
+
+        if(!spec_map->texture)
+        {
+            kwarng(
+                "Function '%s': Unable to load specular texture '%s' for material '%s', using default.",
+                __FUNCTION__, config->specular_map_name, m->name
+            );
+            spec_map->texture = texture_system_get_default_specular_texture();
+        }
+    }
+    else
+    {
+        spec_map->use = TEXTURE_USE_UNKNOWN;
+        spec_map->texture = null;
+    }
+
+    // Norm.
+    texture_map* norm_map = &m->normal_map;
+    if(string_length(config->normal_map_name) > 0)
+    {
+        norm_map->use = TEXTURE_USE_MAP_NORMAL;
+        norm_map->texture = texture_system_acquire(config->normal_map_name, config->auto_release);
+
+        if(!norm_map->texture)
+        {
+            kwarng(
+                "Function '%s': Unable to load normal texture '%s' for material '%s', using default.",
+                __FUNCTION__, config->normal_map_name, m->name
+            );
+            norm_map->texture = texture_system_get_default_normal_texture();
+        }
+    }
+    else
+    {
+        norm_map->use = TEXTURE_USE_UNKNOWN;
+        norm_map->texture = null;
     }
 
     // TODO: другие разметки.
@@ -566,10 +626,20 @@ bool material_load(material_config* config, material* m)
 
 void material_destroy(material* m)
 {
-    // Удаление загруженой текстуры.
+    // Удаление загруженый текстур.
     if(m->diffuse_map.texture)
     {
         texture_system_release(m->diffuse_map.texture->name);
+    }
+
+    if(m->specular_map.texture)
+    {
+        texture_system_release(m->specular_map.texture->name);
+    }
+
+    if(m->normal_map.texture)
+    {
+        texture_system_release(m->normal_map.texture->name);
     }
 
     // Удаление из памяти графического процессора.

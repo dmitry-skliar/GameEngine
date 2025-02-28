@@ -16,6 +16,7 @@ typedef struct renderer_system_state {
     renderer_backend backend;
     mat4 projection;
     mat4 view;
+    vec3 view_position;
     vec4 ambient_color;
     mat4 ui_projection;
     mat4 ui_view;
@@ -192,7 +193,7 @@ bool renderer_draw_frame(render_packet* packet)
             return false;
         }
 
-        if(!material_system_apply_global(state_ptr->material_shader_id, &state_ptr->projection, &state_ptr->view, &state_ptr->ambient_color))
+        if(!material_system_apply_global(state_ptr->material_shader_id, &state_ptr->projection, &state_ptr->view, &state_ptr->view_position, &state_ptr->ambient_color))
         {
             kerror("Failed to use apply globals for material shader. Render frame failed.");
             return false;
@@ -245,7 +246,7 @@ bool renderer_draw_frame(render_packet* packet)
             return false;
         }
 
-        if(!material_system_apply_global(state_ptr->ui_shader_id, &state_ptr->ui_projection, &state_ptr->ui_view, null))
+        if(!material_system_apply_global(state_ptr->ui_shader_id, &state_ptr->ui_projection, &state_ptr->ui_view, null, null))
         {
             kerror("Failed to use apply globals for material shader. Render frame failed.");
             return false;
@@ -296,9 +297,10 @@ bool renderer_draw_frame(render_packet* packet)
     return true;
 }
 
-void renderer_set_view(mat4 view)
+void renderer_set_view(mat4 view, vec3 view_position)
 {
     state_ptr->view = view;
+    state_ptr->view_position = view_position;
 }
 
 void renderer_create_texture(texture* texture, const void* pixels)

@@ -3,5 +3,7 @@
 version=0.1
 name=test_material
 shader=Builtin.MaterialShader
+shininess=64.0
 diffuse_color=1.0 1.0 1.0 1.0
 diffuse_map_name=orange_lines_512
+specular_map_name=orange_lines_512_SPEC

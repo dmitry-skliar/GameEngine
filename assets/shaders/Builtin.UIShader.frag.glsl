@@ -6,15 +6,14 @@ layout(set = 1, binding = 0) uniform local_uniform_object {
     vec4 diffuse_color;
 } object_ubo;
 
-// Samplers.
-layout(set = 1, binding = 1) uniform sampler2D diffuse_sampler;
+const int SAMP_DIFFUSE = 0;
+layout(set = 1, binding = 1) uniform sampler2D samplers[1];
 
-// Data transfer object.
 layout(location = 1) in struct dto {
     vec2 tex_coord;
 } in_dto;
 
 void main()
 {
-    out_color = object_ubo.diffuse_color * texture(diffuse_sampler, in_dto.tex_coord);
+    out_color = object_ubo.diffuse_color * texture(samplers[SAMP_DIFFUSE], in_dto.tex_coord);
 }

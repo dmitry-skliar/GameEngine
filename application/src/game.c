@@ -44,7 +44,7 @@ void recalculate_view_matrix(game_state* state)
     state->camera_view_dirty = false;
 
     // HACK: Удалить!
-    renderer_set_view(state->view);
+    renderer_set_view(state->view, state->camera_position);
 }
 
 void camera_yaw(game_state* state, f32 amount)
@@ -166,6 +166,11 @@ bool game_update(game* inst, f32 delta_time)
     }
 
     recalculate_view_matrix(inst->state);
+
+    if(input_keyboard_key_press_detect('P'))
+    {
+        kdebug("Camera pos:[%.2f, %.2f, %.2f]", state->camera_position.x, state->camera_position.y, state->camera_position.z);
+    }
 
     return true;
 }

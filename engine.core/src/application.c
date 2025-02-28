@@ -79,24 +79,36 @@ void application_on_close();
 // TODO: Временный тестовый код: начало.
 bool event_on_debug_event(event_code code, void* sender, void* listener_inst, event_context* context)
 {
-    const char* names[3] = { "cobblestone", "paving", "paving2" };
+    const char* diff_names[3] = { "cobblestone", "paving", "paving2" };
+    const char* spec_names[3] = { "cobblestone_SPEC", "paving_SPEC", "paving2_SPEC" };
     static i8 choice = 1;
 
-    const char* old_name = names[choice];
+    const char* old_diff_name = diff_names[choice];
+    const char* old_spec_name = spec_names[choice];
 
     choice++;
     choice %= 3;
 
     if(app_state->test_geometry)
     {
-        app_state->test_geometry->material->diffuse_map.texture = texture_system_acquire(names[choice], true);
+        app_state->test_geometry->material->diffuse_map.texture = texture_system_acquire(diff_names[choice], true);
         if(!app_state->test_geometry->material->diffuse_map.texture)
         {
-            kwarng("Function '%s': Failed to load texture. Using default! ", __FUNCTION__);
+            kwarng("Function '%s': Failed to load diffuse texture. Using default! ", __FUNCTION__);
             app_state->test_geometry->material->diffuse_map.texture = texture_system_get_default_diffuse_texture();
         }
 
-        texture_system_release(old_name);
+        texture_system_release(old_diff_name);
+
+        app_state->test_geometry->material->specular_map.texture = texture_system_acquire(spec_names[choice], true);
+        if(!app_state->test_geometry->material->specular_map.texture)
+        {
+            kwarng("Function '%s': Failed to load specular texture. Using default! ", __FUNCTION__);
+            app_state->test_geometry->material->specular_map.texture = texture_system_get_default_specular_texture();
+        }
+
+        texture_system_release(old_spec_name);
+        
     }
 
     return true;
@@ -229,9 +241,6 @@ bool application_create(game* game_inst)
     material_sys_config.max_material_count = 4096;
     material_system_initialize(&app_state->material_system_memory_requirement, null, &material_sys_config);
     app_state->material_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->material_system_memory_requirement);
-    // NOTE: Как я ******** искать повреждение памяти, проблема была в том, неправильно передал: &app_state->material_system_state!!!!!
-    //       Случайно поставил символ '&'.
-    // TODO: Переделать без использования void*!
     if(!material_system_initialize(&app_state->material_system_memory_requirement, app_state->material_system_state, &material_sys_config))
     {
         kerror("Failed to initialize material system. Aborted!");
@@ -376,8 +385,8 @@ bool application_run()
             test_render.geometry = app_state->test_geometry;
             // test_render.model = mat4_identity();
             static f32 angle = 0;
-            angle += (1.0f * delta);
-            quat rotation = quat_from_axis_angle((vec3){{0, 1, 0}}, angle, true);
+            angle += (0.5f * delta);
+            quat rotation = quat_from_axis_angle(vec3_up(), angle, true);
             test_render.model = quat_to_mat4(rotation);
 
             packet.geometry_count = 1;
@@ -385,7 +394,7 @@ bool application_run()
 
             geometry_render_data test_ui_render;
             test_ui_render.geometry = app_state->test_ui_geometry;
-            test_ui_render.model = mat4_translation((vec3){{0, 0, 0}});
+            test_ui_render.model = mat4_translation(vec3_zero());
 
             packet.ui_geometry_count = 1;
             packet.ui_geometries = &test_ui_render;

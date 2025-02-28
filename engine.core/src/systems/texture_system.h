@@ -5,6 +5,8 @@
 
 // @brief Имя текстуры по умолчанию.
 #define DEFAULT_DIFFUSE_TEXTURE_NAME "default_diffuse"
+#define DEFAULT_SPECULAR_TEXTURE_NAME "default_specular"
+#define DEFAULT_NORMAL_TEXTURE_NAME "default_normal"
 
 // @brief Конфигурация системы текстур.
 typedef struct texture_system_config {
@@ -47,3 +49,13 @@ void texture_system_release(const char* name);
     @brief Возвращает указатель на текстуру по умолчанию.
 */
 texture* texture_system_get_default_diffuse_texture();
+
+/*
+    @brief Возвращает указатель на текстуру по умолчанию.
+*/
+texture* texture_system_get_default_specular_texture();
+
+/*
+    @brief Возвращает указатель на текстуру по умолчанию.
+*/
+texture* texture_system_get_default_normal_texture();

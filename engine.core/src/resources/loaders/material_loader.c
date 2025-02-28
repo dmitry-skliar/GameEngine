@@ -91,12 +91,28 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
         {
             string_ncopy(resource_data->diffuse_map_name, trimmed_value, TEXTURE_NAME_MAX_LENGTH);
         }
+        else if(string_equali(trimmed_var_name, "specular_map_name"))
+        {
+            string_ncopy(resource_data->specular_map_name, trimmed_value, TEXTURE_NAME_MAX_LENGTH);
+        }
+        else if(string_equali(trimmed_var_name, "normal_map_name"))
+        {
+            string_ncopy(resource_data->normal_map_name, trimmed_value, TEXTURE_NAME_MAX_LENGTH);
+        }
         else if(string_equali(trimmed_var_name, "diffuse_color"))
         {
             if(!string_to_vec4(trimmed_value, &resource_data->diffuse_color))
             {
                 kwarng("Error parsing diffuse_color in file '%s'. Using default of white instead.", full_file_path);
                 // NOTE: Уже задано выше.
+            }
+        }
+        else if(string_equali(trimmed_var_name, "shininess"))
+        {
+            if(!string_to_f32(trimmed_value, &resource_data->shininess))
+            {
+                kwarng("Error parsing shininess in file '%s'. Using default of 32.0 instead.", full_file_path);
+                resource_data->shininess = 32.0f;
             }
         }
         else if(string_equali(trimmed_var_name, "shader"))

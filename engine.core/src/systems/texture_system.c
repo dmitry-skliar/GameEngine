@@ -14,6 +14,8 @@ typedef struct texture_system_state {
     texture_system_config config;
     // Текстура по умолчанию.
     texture default_diffuse_texture;
+    texture default_specular_texture;
+    texture default_normal_texture;
     // Массив текстур.
     texture* textures;
     // Таблица ссылок на текстуры.
@@ -298,6 +300,26 @@ texture* texture_system_get_default_diffuse_texture()
     return &state_ptr->default_diffuse_texture;
 }
 
+texture* texture_system_get_default_specular_texture()
+{
+    if(!texture_system_status_valid(__FUNCTION__))
+    {
+        return null;
+    }
+
+    return &state_ptr->default_specular_texture;
+}
+
+texture* texture_system_get_default_normal_texture()
+{
+    if(!texture_system_status_valid(__FUNCTION__))
+    {
+        return null;
+    }
+
+    return &state_ptr->default_normal_texture;
+}
+
 bool default_textures_create()
 {
     // NOTE: Создание текстуры по умолчанию, черно-белый шахматный узор 256x256.
@@ -336,14 +358,43 @@ bool default_textures_create()
         }
     }
 
+    // Diffuse.
     string_ncopy(state_ptr->default_diffuse_texture.name, DEFAULT_DIFFUSE_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
     state_ptr->default_diffuse_texture.width = tex_dimension;
     state_ptr->default_diffuse_texture.height = tex_dimension;
     state_ptr->default_diffuse_texture.channel_count = bpp;
     state_ptr->default_diffuse_texture.has_transparency = false;
     state_ptr->default_diffuse_texture.generation = INVALID_ID;
-
     renderer_create_texture(&state_ptr->default_diffuse_texture, pixels);
+
+    // Specular.
+    u8 spec_pixels[1024]; // w * h * channels
+    kzero_tc(spec_pixels, u8, 1024);
+    string_ncopy(state_ptr->default_specular_texture.name, DEFAULT_SPECULAR_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
+    state_ptr->default_specular_texture.width = 16;
+    state_ptr->default_specular_texture.height = 16;
+    state_ptr->default_specular_texture.channel_count = 4;
+    state_ptr->default_specular_texture.generation = INVALID_ID;
+    state_ptr->default_specular_texture.has_transparency = false;
+    renderer_create_texture(&state_ptr->default_specular_texture, spec_pixels);
+
+    // Normal.
+    u8 norm_pixels[1024];
+    kzero_tc(norm_pixels, u8, 1024);
+    for(u64 i = 0; i < 1024; i += 4)
+    {
+        norm_pixels[i + 0] = 128;
+        norm_pixels[i + 1] = 128;
+        norm_pixels[i + 2] = 255;
+        norm_pixels[i + 3] = 255;
+    }
+    string_ncopy(state_ptr->default_normal_texture.name, DEFAULT_NORMAL_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
+    state_ptr->default_normal_texture.width = 16;
+    state_ptr->default_normal_texture.height = 16;
+    state_ptr->default_normal_texture.channel_count = 4;
+    state_ptr->default_normal_texture.generation = INVALID_ID;
+    state_ptr->default_normal_texture.has_transparency = false;
+    renderer_create_texture(&state_ptr->default_normal_texture, norm_pixels);
 
     kfree(pixels, pixels_size, MEMORY_TAG_TEXTURE);
     return true;
@@ -352,6 +403,8 @@ bool default_textures_create()
 void default_textures_destroy()
 {
     texture_destroy(&state_ptr->default_diffuse_texture);
+    texture_destroy(&state_ptr->default_specular_texture);
+    texture_destroy(&state_ptr->default_normal_texture);
 }
 
 bool texture_load(const char* texture_name, texture* t)
