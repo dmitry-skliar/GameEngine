@@ -445,6 +445,7 @@ bool vulkan_renderer_backend_begin_frame(renderer_backend* backend, f32 delta_ti
     scissor.extent.width = context->framebuffer_width;
     scissor.extent.height = context->framebuffer_height;
 
+    // NOTE: Т.к. на pipeline включено динамическое состояние, т.е. нужно указывать при каждом проходе.
     vkCmdSetViewport(command_buffer->handle, 0, 1, &viewport);
     vkCmdSetScissor(command_buffer->handle, 0, 1, &scissor);
 
@@ -793,7 +794,7 @@ bool vulkan_renderer_create_geometry(
 
     // Данные вершин.
     internal_data->vertex_count = vertex_count;
-    internal_data->vertex_element_size = vertex_size; // sizeof(vertex_3d)
+    internal_data->vertex_element_size = vertex_size;
     total_size = vertex_count * vertex_size;
 
     if(!upload_data_range(
@@ -808,7 +809,7 @@ bool vulkan_renderer_create_geometry(
     if(index_count && indices)
     {
         internal_data->index_count = index_count;
-        internal_data->index_element_size = index_size; // sizeof(u32)
+        internal_data->index_element_size = index_size;
         total_size = index_count * index_size;
 
         if(!upload_data_range(
@@ -1133,7 +1134,7 @@ bool vulkan_renderer_shader_initialize(shader* shader)
     for(u32 i = 0; i < attribute_count; ++i)
     {
         attrs[i].location = i;
-        attrs[i].binding = 0;
+        attrs[i].binding = 0; // NOTE: binding 0 описывает пачуку атрибутов как единый пакет данных (т.е. единый элемент данных).
         attrs[i].offset = attribute_offset;
         attrs[i].format = attribute_types[shader->attributes[i].type];
         attribute_offset += shader->attributes[i].size;
@@ -1508,7 +1509,7 @@ bool vulkan_renderer_shader_acquire_instance_resources(shader* shader, u32* out_
     instance_state->instance_textures = kallocate_tc(texture*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
 
     // Устанавка всех указателей текстур на значения по умолчанию, пока они не назначены.
-    texture* default_texture = texture_system_get_default_texture();
+    texture* default_texture = texture_system_get_default_diffuse_texture();
     for(u32 i = 0; i < instance_texture_count; ++i)
     {
         instance_state->instance_textures[i] = default_texture;

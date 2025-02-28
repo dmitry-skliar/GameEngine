@@ -307,7 +307,7 @@ bool geometry_create(geometry_config* config, geometry* g)
 {
     // Загрузка геометрии в память графического процессора.
     if(!renderer_create_geometry(
-        g, config->vetrex_size, config->vertex_count, config->vertices, config->index_size, config->index_count,
+        g, config->vertex_size, config->vertex_count, config->vertices, config->index_size, config->index_count,
         config->indices
     ))
     {
@@ -395,16 +395,14 @@ geometry_config geometry_system_generate_plane_config(
         tile_y = 1.0f;
     }
 
-    // NOTE: В поисках искажения координат по оси z! Не забывай ОБНУЛЯТЬ выделенную ПАМЯТЬ,
-    //       хоть через СТЕК, хоть через ХИП!!!!!!!!!!!!!
     geometry_config config;
 
     kzero_tc(&config, geometry_config, 1);
-    config.vetrex_size = sizeof(vertex_3d);
+    config.vertex_size = sizeof(vertex_3d);
     config.vertex_count = x_segment_count * y_segment_count * 4;
     config.vertices = kallocate_tc(vertex_3d, config.vertex_count, MEMORY_TAG_ARRAY);
-
     kzero_tc(config.vertices, vertex_3d, config.vertex_count);
+
     config.index_size = sizeof(u32);
     config.index_count = x_segment_count * y_segment_count * 6;
     config.indices = kallocate_tc(u32, config.index_count, MEMORY_TAG_ARRAY);
@@ -436,25 +434,21 @@ geometry_config geometry_system_generate_plane_config(
             vertex_3d* v2 = &((vertex_3d*)config.vertices)[v_offset + 2];
             vertex_3d* v3 = &((vertex_3d*)config.vertices)[v_offset + 3];
 
-            v0->position.x = min_x;
-            v0->position.y = min_y;
-            v0->texcoord.x = min_uvx;
-            v0->texcoord.y = min_uvy;
+            v0->position = (vec3){{ min_x, min_y, 0 }};
+            v0->texcoord = (vec2){{ min_uvx, min_uvy }};
+            v0->normal   = (vec3){{ 0, 0, 1}};
 
-            v1->position.x = max_x;
-            v1->position.y = max_y;
-            v1->texcoord.x = max_uvx;
-            v1->texcoord.y = max_uvy;
+            v1->position = (vec3){{ max_x, max_y, 0 }};
+            v1->texcoord = (vec2){{ max_uvx, max_uvy }};
+            v1->normal   = (vec3){{ 0, 0, 1}};
 
-            v2->position.x = min_x;
-            v2->position.y = max_y;
-            v2->texcoord.x = min_uvx;
-            v2->texcoord.y = max_uvy;
+            v2->position = (vec3){{ min_x, max_y, 0 }};
+            v2->texcoord = (vec2){{ min_uvx, max_uvy }};
+            v2->normal   = (vec3){{ 0, 0, 1}};
 
-            v3->position.x = max_x;
-            v3->position.y = min_y;
-            v3->texcoord.x = max_uvx;
-            v3->texcoord.y = min_uvy;
+            v3->position = (vec3){{ max_x, min_y, 0 }};
+            v3->texcoord = (vec2){{ max_uvx, min_uvy }};
+            v3->normal   = (vec3){{ 0, 0, 1}};
 
             // Генерация индексов.
             u32 i_offset = ((y * x_segment_count) + x) * 6;
@@ -465,6 +459,182 @@ geometry_config geometry_system_generate_plane_config(
             ((u32*)config.indices)[i_offset + 4] = v_offset + 3;
             ((u32*)config.indices)[i_offset + 5] = v_offset + 1;
         }
+    }
+
+    if(name && string_length(name) > 0)
+    {
+        string_ncopy(config.name, name, GEOMETRY_NAME_MAX_LENGTH);
+    }
+    else
+    {
+        string_ncopy(config.name, DEFAULT_GEOMETRY_NAME, GEOMETRY_NAME_MAX_LENGTH);
+    }
+
+    if(material_name && string_length(material_name) > 0)
+    {
+        string_ncopy(config.material_name, material_name, MATERIAL_NAME_MAX_LENGTH);
+    }
+    else
+    {
+        string_ncopy(config.material_name, DEFAULT_MATERIAL_NAME, MATERIAL_NAME_MAX_LENGTH);
+    }
+
+    return config;
+}
+
+geometry_config geometry_system_generate_cube_config(
+    f32 width, f32 height, f32 depth, f32 tile_x, f32 tile_y, const char* name, const char* material_name
+)
+{
+    if(width == 0)
+    {
+        kwarng("Function '%s': Width must be nonzero. Defaulting to one.", __FUNCTION__);
+        width = 1.0f;
+    }
+
+    if(height == 0)
+    {
+        kwarng("Function '%s': Height must be nonzero. Defaulting to one.", __FUNCTION__);
+        height = 1.0f;
+    }
+
+    if(depth == 0)
+    {
+        kwarng("Function '%s': Depth must be nonzero. Defaulting to one.", __FUNCTION__);
+        depth = 1;
+    }
+
+    if(tile_x == 0)
+    {
+        kwarng("Function '%s': tile_x must be nonzero. Defaulting to one.", __FUNCTION__);
+        tile_x = 1.0f;
+    }
+
+    if(tile_y == 0)
+    {
+        kwarng("Function '%s': tile_y must be nonzero. Defaulting to one.", __FUNCTION__);
+        tile_y = 1.0f;
+    }
+
+    geometry_config config;
+    config.vertex_size = sizeof(vertex_3d);
+    config.vertex_count = 4 * 6;
+    config.vertices = kallocate_tc(vertex_3d, config.vertex_count, MEMORY_TAG_ARRAY);
+    config.index_size = sizeof(u32);
+    config.index_count = 6 * 6;
+    config.indices = kallocate_tc(u32, config.index_count, MEMORY_TAG_ARRAY);
+
+    f32 half_width  =  width  * 0.5f;
+    f32 half_height =  height * 0.5f;
+    f32 half_depth  =  depth  * 0.5f;
+    f32 min_x       = -half_width;
+    f32 min_y       = -half_height;
+    f32 min_z       = -half_depth;
+    f32 max_x       =  half_width;
+    f32 max_y       =  half_height;
+    f32 max_z       =  half_depth;
+    f32 min_uvx     =  0.0f;
+    f32 min_uvy     =  0.0f;
+    f32 max_uvx     =  tile_x;
+    f32 max_uvy     =  tile_y;
+
+    vertex_3d verts[24];
+    // Вид спереди.
+    verts[(0 * 4) + 0].position = (vec3){{min_x, min_y, max_z}};
+    verts[(0 * 4) + 1].position = (vec3){{max_x, max_y, max_z}};
+    verts[(0 * 4) + 2].position = (vec3){{min_x, max_y, max_z}};
+    verts[(0 * 4) + 3].position = (vec3){{max_x, min_y, max_z}};
+    verts[(0 * 4) + 0].texcoord = (vec2){{min_uvx, min_uvy}};
+    verts[(0 * 4) + 1].texcoord = (vec2){{max_uvx, max_uvy}};
+    verts[(0 * 4) + 2].texcoord = (vec2){{min_uvx, max_uvy}};
+    verts[(0 * 4) + 3].texcoord = (vec2){{max_uvx, min_uvy}};
+    verts[(0 * 4) + 0].normal   = (vec3){{0.0f, 0.0f, 1.0f}};
+    verts[(0 * 4) + 1].normal   = (vec3){{0.0f, 0.0f, 1.0f}};
+    verts[(0 * 4) + 2].normal   = (vec3){{0.0f, 0.0f, 1.0f}};
+    verts[(0 * 4) + 3].normal   = (vec3){{0.0f, 0.0f, 1.0f}};
+
+    // Вид сзади.
+    verts[(1 * 4) + 0].position = (vec3){{max_x, min_y, min_z}};
+    verts[(1 * 4) + 1].position = (vec3){{min_x, max_y, min_z}};
+    verts[(1 * 4) + 2].position = (vec3){{max_x, max_y, min_z}};
+    verts[(1 * 4) + 3].position = (vec3){{min_x, min_y, min_z}};
+    verts[(1 * 4) + 0].texcoord = (vec2){{min_uvx, min_uvy}};
+    verts[(1 * 4) + 1].texcoord = (vec2){{max_uvx, max_uvy}};
+    verts[(1 * 4) + 2].texcoord = (vec2){{min_uvx, max_uvy}};
+    verts[(1 * 4) + 3].texcoord = (vec2){{max_uvx, min_uvy}};
+    verts[(1 * 4) + 0].normal   = (vec3){{0.0f, 0.0f, -1.0f}};
+    verts[(1 * 4) + 1].normal   = (vec3){{0.0f, 0.0f, -1.0f}};
+    verts[(1 * 4) + 2].normal   = (vec3){{0.0f, 0.0f, -1.0f}};
+    verts[(1 * 4) + 3].normal   = (vec3){{0.0f, 0.0f, -1.0f}};
+
+    // Вид слева.
+    verts[(2 * 4) + 0].position = (vec3){{min_x, min_y, min_z}};
+    verts[(2 * 4) + 1].position = (vec3){{min_x, max_y, max_z}};
+    verts[(2 * 4) + 2].position = (vec3){{min_x, max_y, min_z}};
+    verts[(2 * 4) + 3].position = (vec3){{min_x, min_y, max_z}};
+    verts[(2 * 4) + 0].texcoord = (vec2){{min_uvx, min_uvy}};
+    verts[(2 * 4) + 1].texcoord = (vec2){{max_uvx, max_uvy}};
+    verts[(2 * 4) + 2].texcoord = (vec2){{min_uvx, max_uvy}};
+    verts[(2 * 4) + 3].texcoord = (vec2){{max_uvx, min_uvy}};
+    verts[(2 * 4) + 1].normal   = (vec3){{-1.0f, 0.0f, 0.0f}};
+    verts[(2 * 4) + 0].normal   = (vec3){{-1.0f, 0.0f, 0.0f}};
+    verts[(2 * 4) + 2].normal   = (vec3){{-1.0f, 0.0f, 0.0f}};
+    verts[(2 * 4) + 3].normal   = (vec3){{-1.0f, 0.0f, 0.0f}};
+
+    // Вид справа.
+    verts[(3 * 4) + 0].position = (vec3){{max_x, min_y, max_z}};
+    verts[(3 * 4) + 1].position = (vec3){{max_x, max_y, min_z}};
+    verts[(3 * 4) + 2].position = (vec3){{max_x, max_y, max_z}};
+    verts[(3 * 4) + 3].position = (vec3){{max_x, min_y, min_z}};
+    verts[(3 * 4) + 0].texcoord = (vec2){{min_uvx, min_uvy}};
+    verts[(3 * 4) + 1].texcoord = (vec2){{max_uvx, max_uvy}};
+    verts[(3 * 4) + 2].texcoord = (vec2){{min_uvx, max_uvy}};
+    verts[(3 * 4) + 3].texcoord = (vec2){{max_uvx, min_uvy}};
+    verts[(3 * 4) + 0].normal   = (vec3){{1.0f, 0.0f, 0.0f}};
+    verts[(3 * 4) + 1].normal   = (vec3){{1.0f, 0.0f, 0.0f}};
+    verts[(3 * 4) + 2].normal   = (vec3){{1.0f, 0.0f, 0.0f}};
+    verts[(3 * 4) + 3].normal   = (vec3){{1.0f, 0.0f, 0.0f}};
+
+    // Вид снизу.
+    verts[(4 * 4) + 0].position = (vec3){{max_x, min_y, max_z}};
+    verts[(4 * 4) + 1].position = (vec3){{min_x, min_y, min_z}};
+    verts[(4 * 4) + 2].position = (vec3){{max_x, min_y, min_z}};
+    verts[(4 * 4) + 3].position = (vec3){{min_x, min_y, max_z}};
+    verts[(4 * 4) + 0].texcoord = (vec2){{min_uvx, min_uvy}};
+    verts[(4 * 4) + 1].texcoord = (vec2){{max_uvx, max_uvy}};
+    verts[(4 * 4) + 2].texcoord = (vec2){{min_uvx, max_uvy}};
+    verts[(4 * 4) + 3].texcoord = (vec2){{max_uvx, min_uvy}};
+    verts[(4 * 4) + 0].normal   = (vec3){{0.0f, -1.0f, 0.0f}};
+    verts[(4 * 4) + 1].normal   = (vec3){{0.0f, -1.0f, 0.0f}};
+    verts[(4 * 4) + 2].normal   = (vec3){{0.0f, -1.0f, 0.0f}};
+    verts[(4 * 4) + 3].normal   = (vec3){{0.0f, -1.0f, 0.0f}};
+
+    // Вид сверху.
+    verts[(5 * 4) + 0].position = (vec3){{min_x, max_y, max_z}};
+    verts[(5 * 4) + 1].position = (vec3){{max_x, max_y, min_z}};
+    verts[(5 * 4) + 2].position = (vec3){{min_x, max_y, min_z}};
+    verts[(5 * 4) + 3].position = (vec3){{max_x, max_y, max_z}};
+    verts[(5 * 4) + 0].texcoord = (vec2){{min_uvx, min_uvy}};
+    verts[(5 * 4) + 1].texcoord = (vec2){{max_uvx, max_uvy}};
+    verts[(5 * 4) + 2].texcoord = (vec2){{min_uvx, max_uvy}};
+    verts[(5 * 4) + 3].texcoord = (vec2){{max_uvx, min_uvy}};
+    verts[(5 * 4) + 0].normal   = (vec3){{0.0f, 1.0f, 0.0f}};
+    verts[(5 * 4) + 1].normal   = (vec3){{0.0f, 1.0f, 0.0f}};
+    verts[(5 * 4) + 2].normal   = (vec3){{0.0f, 1.0f, 0.0f}};
+    verts[(5 * 4) + 3].normal   = (vec3){{0.0f, 1.0f, 0.0f}};
+
+    kcopy(config.vertices, verts, config.vertex_size * config.vertex_count);
+
+    for(u32 i = 0; i < 6; ++i)
+    {
+        u32 v_offset = i * 4;
+        u32 i_offset = i * 6;
+        ((u32*)config.indices)[i_offset + 0] = v_offset + 0;
+        ((u32*)config.indices)[i_offset + 1] = v_offset + 1;
+        ((u32*)config.indices)[i_offset + 2] = v_offset + 2;
+        ((u32*)config.indices)[i_offset + 3] = v_offset + 0;
+        ((u32*)config.indices)[i_offset + 4] = v_offset + 3;
+        ((u32*)config.indices)[i_offset + 5] = v_offset + 1;
     }
 
     if(name && string_length(name) > 0)

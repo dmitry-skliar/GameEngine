@@ -130,7 +130,7 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     state_ptr->view = mat4_translation((vec3){{0, 0, 30.0f}});
     state_ptr->view = mat4_inverse(state_ptr->view);
     // TODO: Получение из сцены.
-    state_ptr->ambient_color = (vec4){{0.25f, 0.25f, 0.25f, 1.0f}};
+    state_ptr->ambient_color = (vec4){{0.07f, 0.07f, 0.07f, 1.0f}};
 
     // Создание матриц проекции и вида (ui).
     state_ptr->ui_near_clip = -100.0f;

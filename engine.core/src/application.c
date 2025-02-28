@@ -93,7 +93,7 @@ bool event_on_debug_event(event_code code, void* sender, void* listener_inst, ev
         if(!app_state->test_geometry->material->diffuse_map.texture)
         {
             kwarng("Function '%s': Failed to load texture. Using default! ", __FUNCTION__);
-            app_state->test_geometry->material->diffuse_map.texture = texture_system_get_default_texture();
+            app_state->test_geometry->material->diffuse_map.texture = texture_system_get_default_diffuse_texture();
         }
 
         texture_system_release(old_name);
@@ -251,7 +251,8 @@ bool application_create(game* game_inst)
     kinfor("Geometry system started.");
 
     // TODO: Временный тестовый код: начало.
-    geometry_config g_config = geometry_system_generate_plane_config(100.0f, 100.0f, 10, 10, 5.0f, 5.0f, "test geometry", "test_material");
+    // geometry_config g_config = geometry_system_generate_plane_config(100.0f, 100.0f, 10, 10, 5.0f, 5.0f, "test geometry", "test_material");
+    geometry_config g_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "test_cube", "test_material");
     app_state->test_geometry = geometry_system_acquire_from_config(&g_config, true);
 
     kfree_tc(g_config.vertices, vertex_3d, g_config.vertex_count, MEMORY_TAG_ARRAY);
@@ -260,14 +261,15 @@ bool application_create(game* game_inst)
     // UI геометрия.
 
     geometry_config ui_config;
-    ui_config.vetrex_size = sizeof(vertex_2d);
+    ui_config.vertex_size = sizeof(vertex_2d);
     ui_config.vertex_count = 4;
     ui_config.index_size = sizeof(u32);
     ui_config.index_count = 6;
     string_ncopy(ui_config.material_name, "test_ui_material", MATERIAL_NAME_MAX_LENGTH);
     string_ncopy(ui_config.name, "test_ui_geometry", GEOMETRY_NAME_MAX_LENGTH);
 
-    const f32 f = 512.0f;
+    const f32 w = 256.0f;
+    const f32 h = 64.0f;
     vertex_2d uiverts[4];
 
     uiverts[0].position.x =  0.0f;  // 0    3
@@ -275,17 +277,17 @@ bool application_create(game* game_inst)
     uiverts[0].texcoord.x =  0.0f;  //
     uiverts[0].texcoord.y =  0.0f;  // 2    1
 
-    uiverts[1].position.x =  f;
-    uiverts[1].position.y =  f;
+    uiverts[1].position.x =  w;
+    uiverts[1].position.y =  h;
     uiverts[1].texcoord.x =  1.0f;
     uiverts[1].texcoord.y =  1.0f;
 
     uiverts[2].position.x =  0.0f;
-    uiverts[2].position.y =  f;
+    uiverts[2].position.y =  h;
     uiverts[2].texcoord.x =  0.0f;
     uiverts[2].texcoord.y =  1.0f;
 
-    uiverts[3].position.x =  f;
+    uiverts[3].position.x =  w;
     uiverts[3].position.y =  0.0f;
     uiverts[3].texcoord.x =  1.0f;
     uiverts[3].texcoord.y =  0.0f;
@@ -333,7 +335,7 @@ bool application_run()
 
     f64 running_time     = 0;
     u16 frame_count      = 0;
-    f64 frame_limit_time = 1.0f / 60;
+    f64 frame_limit_time = 1.0f / 240; // TODO: сделать настраиваемым!
 
     while(app_state->is_running)
     {
@@ -372,7 +374,11 @@ bool application_run()
             // TODO: Временный тестовый код: начало.
             geometry_render_data test_render;
             test_render.geometry = app_state->test_geometry;
-            test_render.model = mat4_identity();
+            // test_render.model = mat4_identity();
+            static f32 angle = 0;
+            angle += (1.0f * delta);
+            quat rotation = quat_from_axis_angle((vec3){{0, 1, 0}}, angle, true);
+            test_render.model = quat_to_mat4(rotation);
 
             packet.geometry_count = 1;
             packet.geometries = &test_render;

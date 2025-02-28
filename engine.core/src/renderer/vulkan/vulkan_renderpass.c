@@ -53,7 +53,7 @@ void vulkan_renderpass_create(
 
     // NOTE: layout(location = 0) out vec4 out_color ссылается на порядковый номер буфера в массиве pColorAttachments.
     subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &attachment_references[ATTACHMENT_COLOR_INDEX];
+    subpass.pColorAttachments = &attachment_references[ATTACHMENT_COLOR_INDEX]; // TODO: Не совсем коректно!
 
     // Вложение 2: буфер глубины.
     if(out_renderpass->do_clear_depth)

@@ -1,5 +1,6 @@
 #version 450
 
+// Должно соответствовать vertex_2d. 
 layout(location = 0) in vec2 in_position;
 layout(location = 1) in vec2 in_texcoord;
 
@@ -9,13 +10,9 @@ layout(set = 0, binding = 0) uniform global_uniform_object {
 } global_ubo;
 
 layout(push_constant) uniform push_constants {
-    // Гарантируется всего 128 байт.
     mat4 model;
 } u_push_constants;
 
-// layout(location = 0) out int out_mode;
-
-// Data transfer object.
 layout(location = 1) out struct dto {
     vec2 tex_coord;
 } out_dto;

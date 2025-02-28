@@ -78,8 +78,8 @@ bool vulkan_graphics_pipeline_create(
     #define DYNAMIC_STATE_COUNT 3
     VkDynamicState dynamic_states[DYNAMIC_STATE_COUNT] = {
         VK_DYNAMIC_STATE_VIEWPORT,   // Изменение вьюпорта.
-        VK_DYNAMIC_STATE_SCISSOR,    // Изменение обрезки вьюпорта.
-        VK_DYNAMIC_STATE_LINE_WIDTH, // Изменение ширины отрезков.
+        VK_DYNAMIC_STATE_SCISSOR,    // Изменение отсечение вьюпорта.
+        VK_DYNAMIC_STATE_LINE_WIDTH, // Изменение ширины отрезков (см. растеризатор).
     };
 
     VkPipelineDynamicStateCreateInfo dynamic_state_info = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
@@ -89,8 +89,8 @@ bool vulkan_graphics_pipeline_create(
     // Первая стадия конвейера (вход вертексов).
     // В шейдере это строка layout(location = 0) in vec3 in_position; - атрибут!
     VkVertexInputBindingDescription binding_description = {0};
-    binding_description.binding = 0; // Индекс привязки.
-    binding_description.stride = stride; //sizeof(vertex_3d);
+    binding_description.binding = 0;      // Индекс привязки к буферу данных.
+    binding_description.stride = stride;  // Описывает расстояние между элементами данных буфера.
     binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Переход к следующей записи данных для каждой вершины.
 
     // Выршинный шейдер: передаваемые атрибуты и привязки.
@@ -101,8 +101,11 @@ bool vulkan_graphics_pipeline_create(
     vertex_input_info.pVertexAttributeDescriptions = attributes; // Данные передаваемые в вершинный шейдер.
 
     // Сборочный шейдер.
+    // NOTE: Если в поле primitiveRestartEnable задать значение VK_TRUE, можно прервать отрезки и треугольники с
+    // топологией VK_PRIMITIVE_TOPOLOGY_LINE_STRIP и VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP и начать рисовать новые
+    // примитивы, используя специальный индекс 0xFFFF или 0xFFFFFFFF.
     VkPipelineInputAssemblyStateCreateInfo input_assembly_info = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-    input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // Как отрисовывать вершины! Т.е. в данном случае как треугольники!
     input_assembly_info.primitiveRestartEnable = VK_FALSE;
 
     // Cоздание схемы конвейера (Layout конвейера): для использования uniform в шейдерах.

@@ -29,10 +29,11 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
 
     // TODO: Должен использоваться распределитель памяти.
     material_config* resource_data = kallocate_tc(material_config, 1, MEMORY_TAG_MATERIAL);
+    kzero_tc(resource_data, material_config, 1);
+
     resource_data->shader_name = "Builtin.Material";
     resource_data->auto_release = true;
     resource_data->diffuse_color = vec4_one(); // белый.
-    string_empty(resource_data->diffuse_map_name);
     string_ncopy(resource_data->name, name, MATERIAL_NAME_MAX_LENGTH);
 
     char bufferline[512] = "";

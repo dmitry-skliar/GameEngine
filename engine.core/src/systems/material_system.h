@@ -75,7 +75,6 @@ bool material_system_apply_global(u32 shader_id, const mat4* projection, const m
 */
 bool material_system_apply_instance(material* m);
 
-// TODO: Применение к геометрии?
 /*
     @brief Применяет данные материала на локальном уровне для предоставленного материала.
     @param m Указатель на материал для которого нужно применить данные.

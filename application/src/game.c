@@ -38,9 +38,13 @@ void recalculate_view_matrix(game_state* state)
     mat4 rotation = mat4_euler_xyz(state->camera_euler.x, state->camera_euler.y, state->camera_euler.z);
     mat4 translation = mat4_translation(state->camera_position);
 
+    // NOTE: Порядок трансформации: масштаб, поворот и перемещение!
     state->view = mat4_mul(rotation, translation);
     state->view = mat4_inverse(state->view);
     state->camera_view_dirty = false;
+
+    // HACK: Удалить!
+    renderer_set_view(state->view);
 }
 
 void camera_yaw(game_state* state, f32 amount)
@@ -64,6 +68,7 @@ bool game_initialize(game* inst)
 {
     game_state* state = inst->state;
 
+    // Стартовая позиция камеры.
     state->camera_position = vec3_create(0, 0, 30.0f);
     state->camera_euler = vec3_zero();
 
@@ -76,6 +81,8 @@ bool game_initialize(game* inst)
 
 bool game_update(game* inst, f32 delta_time)
 {
+    game_state* state = inst->state;
+
     if(input_keyboard_key_press_detect('M'))
     {
         static u64 alloc_count = 0;
@@ -109,9 +116,7 @@ bool game_update(game* inst, f32 delta_time)
         camera_pitch(inst->state, -1.0f * delta_time);
     }
 
-    f32 move_speed = 50.0f * delta_time;
     vec3 velocity = vec3_zero();
-    game_state* state = inst->state;
 
     if(input_is_keyboard_key_down('W'))
     {
@@ -150,6 +155,8 @@ bool game_update(game* inst, f32 delta_time)
     vec3 z = vec3_zero();
     if(!vec3_compare(z, velocity, 0.0002f))
     {
+        f32 move_speed = 50.0f * delta_time;
+
         // Должен быть нормализован перед применением скорости.
         vec3_normalize(&velocity);
         state->camera_position.x += velocity.x * move_speed;
@@ -160,9 +167,6 @@ bool game_update(game* inst, f32 delta_time)
 
     recalculate_view_matrix(inst->state);
 
-    // HACK: Удалить!
-    renderer_set_view(((game_state*)inst->state)->view);
-    
     return true;
 }
 

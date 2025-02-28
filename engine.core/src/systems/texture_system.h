@@ -4,7 +4,7 @@
 #include <resources/resource_types.h>
 
 // @brief Имя текстуры по умолчанию.
-#define DEFAULT_TEXTURE_NAME "default"
+#define DEFAULT_DIFFUSE_TEXTURE_NAME "default_diffuse"
 
 // @brief Конфигурация системы текстур.
 typedef struct texture_system_config {
@@ -44,6 +44,6 @@ texture* texture_system_acquire(const char* name, bool auto_release);
 void texture_system_release(const char* name);
 
 /*
-    @brief Возвращает указатель на материал по умолчанию.
+    @brief Возвращает указатель на текстуру по умолчанию.
 */
-texture* texture_system_get_default_texture();
+texture* texture_system_get_default_diffuse_texture();

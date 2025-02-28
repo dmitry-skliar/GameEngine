@@ -10,8 +10,6 @@
 #include "systems/texture_system.h"
 #include "renderer/renderer_frontend.h"
 
-#include "debug/assert.h"
-
 typedef struct shader_system_state {
     // @brief Конфигурация системы шейдеров.
     shader_system_config config;
@@ -569,7 +567,7 @@ bool add_sampler(shader* shader, shader_uniform_config* config)
         }
 
         location = global_texture_count;
-        darray_push(shader->global_textures, texture_system_get_default_texture());
+        darray_push(shader->global_textures, texture_system_get_default_diffuse_texture());
     }
     else
     {

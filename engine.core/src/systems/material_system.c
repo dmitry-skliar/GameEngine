@@ -125,8 +125,19 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
     state_ptr->config = *config;
 
     state_ptr->material_shader_id = INVALID_ID;
+    state_ptr->material_locations.projection = INVALID_ID_U16;
+    state_ptr->material_locations.view = INVALID_ID_U16;
+    state_ptr->material_locations.ambient_color = INVALID_ID_U16;
     state_ptr->material_locations.diffuse_color = INVALID_ID_U16;
     state_ptr->material_locations.diffuse_texture = INVALID_ID_U16;
+    state_ptr->material_locations.model = INVALID_ID_U16;
+
+    state_ptr->ui_shader_id = INVALID_ID;
+    state_ptr->ui_locations.projection = INVALID_ID_U16;
+    state_ptr->ui_locations.view = INVALID_ID_U16;
+    state_ptr->ui_locations.diffuse_color = INVALID_ID_U16;
+    state_ptr->ui_locations.diffuse_texture = INVALID_ID_U16;
+    state_ptr->ui_locations.model = INVALID_ID_U16;
 
     state_ptr->ui_shader_id = INVALID_ID;
     state_ptr->ui_locations.diffuse_color = INVALID_ID_U16;
@@ -479,7 +490,7 @@ bool default_materials_create()
     string_ncopy(state_ptr->default_material.name, DEFAULT_MATERIAL_NAME, MATERIAL_NAME_MAX_LENGTH);
     state_ptr->default_material.diffuse_color = vec4_one();    // Белый цвет.
     state_ptr->default_material.diffuse_map.use = TEXTURE_USE_MAP_DIFFUSE;
-    state_ptr->default_material.diffuse_map.texture = texture_system_get_default_texture();
+    state_ptr->default_material.diffuse_map.texture = texture_system_get_default_diffuse_texture();
 
     shader* s = shader_system_get(BUILTIN_SHADER_NAME_MATERIAL);
     if(!renderer_shader_acquire_instance_resources(s, &state_ptr->default_material.internal_id))
@@ -487,6 +498,8 @@ bool default_materials_create()
         kerror("Function '%s': Failed to acquire renderer resource for default material.", __FUNCTION__);
         return false;
     }
+
+    state_ptr->default_material.shader_id = s->id;
 
     return true;
 }
@@ -507,24 +520,26 @@ bool material_load(material_config* config, material* m)
     m->shader_id = shader_system_get_id(config->shader_name);
     m->diffuse_color = config->diffuse_color;
 
+    // Diffuse.
+    texture_map* diff_map = &m->diffuse_map;
     if(string_length(config->diffuse_map_name) > 0)
     {
-        m->diffuse_map.use = TEXTURE_USE_MAP_DIFFUSE;
-        m->diffuse_map.texture = texture_system_acquire(config->diffuse_map_name, config->auto_release);
+        diff_map->use = TEXTURE_USE_MAP_DIFFUSE;
+        diff_map->texture = texture_system_acquire(config->diffuse_map_name, config->auto_release);
 
-        if(!m->diffuse_map.texture)
+        if(!diff_map->texture)
         {
             kwarng(
-                "Function '%s': Unable to load texture '%s' for material '%s', using default.",
+                "Function '%s': Unable to load diffuse texture '%s' for material '%s', using default.",
                 __FUNCTION__, config->diffuse_map_name, m->name
             );
-            m->diffuse_map.texture = texture_system_get_default_texture();
+            diff_map->texture = texture_system_get_default_diffuse_texture();
         }
     }
     else
     {
-        m->diffuse_map.use = TEXTURE_USE_UNKNOWN;
-        m->diffuse_map.texture = null;
+        diff_map->use = TEXTURE_USE_UNKNOWN;
+        diff_map->texture = null;
     }
 
     // TODO: другие разметки.
