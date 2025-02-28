@@ -158,8 +158,20 @@ texture* texture_system_acquire(const char* name, bool auto_release)
 
     if(string_equali(name, DEFAULT_DIFFUSE_TEXTURE_NAME))
     {
-        kwarng("Function '%s' called for default texture. Call 'texture_system_get_default_texture'!", __FUNCTION__);
+        kwarng("Function '%s' called for default diffuse texture. Call 'texture_system_get_default_diffuse_texture'!", __FUNCTION__);
         return &state_ptr->default_diffuse_texture;
+    }
+
+    if(string_equali(name, DEFAULT_SPECULAR_TEXTURE_NAME))
+    {
+        kwarng("Function '%s' called for default specular texture. Call 'texture_system_get_default_speculat_texture'!", __FUNCTION__);
+        return &state_ptr->default_specular_texture;
+    }
+
+    if(string_equali(name, DEFAULT_NORMAL_TEXTURE_NAME))
+    {
+        kwarng("Function '%s' called for default diffuse texture. Call 'texture_system_get_default_normal_texture'!", __FUNCTION__);
+        return &state_ptr->default_normal_texture;
     }
 
     texture_reference ref;
@@ -385,7 +397,7 @@ bool default_textures_create()
     {
         norm_pixels[i + 0] = 180;
         norm_pixels[i + 1] = 180;
-        norm_pixels[i + 2] = 180;
+        norm_pixels[i + 2] = 255;
         norm_pixels[i + 3] = 255;
     }
     string_ncopy(state_ptr->default_normal_texture.name, DEFAULT_NORMAL_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
