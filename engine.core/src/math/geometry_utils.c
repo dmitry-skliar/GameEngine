@@ -24,17 +24,22 @@ void geometry_generate_normals(u32 vertex_count, vertex_3d* vertices, u32 index_
     }
 }
 
+// Смотри: https://terathon.com/blog/tangent-space.html
+//         https://triplepointfive.github.io/ogltutor/tutorials/tutorial26.html
 void geometry_generate_tangent(u32 vertex_count, vertex_3d* vertices, u32 index_count, u32* indices)
 {
     for(u32 i = 0; i < index_count; i += 3)
     {
+        // Получение индексов вершин треуголиников.
         u32 i0 = indices[i + 0];
         u32 i1 = indices[i + 1];
         u32 i2 = indices[i + 2];
 
+        // 
         vec3 edge1 = vec3_sub(vertices[i1].position, vertices[i0].position);
         vec3 edge2 = vec3_sub(vertices[i2].position, vertices[i0].position);
 
+        //
         f32 deltaU1 = vertices[i1].texcoord.x - vertices[i0].texcoord.x;
         f32 deltaV1 = vertices[i1].texcoord.y - vertices[i0].texcoord.y;
 

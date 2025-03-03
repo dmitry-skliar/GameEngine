@@ -22,6 +22,7 @@
 #include "kstring.h"
 #include "math/kmath.h"
 #include "math/geometry_utils.h"
+#include "containers/darray.h"
 // TODO: Временный тестовый код: конец.
 
 typedef struct application_state {
@@ -61,7 +62,7 @@ typedef struct application_state {
     void* geometry_system_state;
 
     // TODO: Временный тестовый код: начало.
-    geometry* test_geometry;
+    mesh* meshes; // исп. darray.
     geometry* test_ui_geometry;
     // TODO: Временный тестовый код: конец.
 
@@ -80,46 +81,27 @@ void application_on_close();
 // TODO: Временный тестовый код: начало.
 bool event_on_debug_event(event_code code, void* sender, void* listener_inst, event_context* context)
 {
-    const char* diff_names[3] = { "cobblestone",      "paving",      "paving2"      };
-    const char* spec_names[3] = { "cobblestone_SPEC", "paving_SPEC", "paving2_SPEC" };
-    const char* norm_names[3] = { "cobblestone_NRM",  "paving_NRM",  "paving2_NRM"  };
+    const char* names[3] = { "cobblestone", "paving", "paving2" };
 
     static i8 choice = 1;
-    const char* old_diff_name = diff_names[choice];
-    const char* old_spec_name = spec_names[choice];
-    const char* old_norm_name = norm_names[choice];
+    const char* old_name = names[choice];
 
     choice++;
     choice %= 3;
 
-    if(app_state->test_geometry)
+    geometry* g = app_state->meshes[0].geometries[0];
+
+    if(g)
     {
-        // Diffuse.
-        app_state->test_geometry->material->diffuse_map.texture = texture_system_acquire(diff_names[choice], true);
-        if(!app_state->test_geometry->material->diffuse_map.texture)
-        {
-            kwarng("Function '%s': Failed to load diffuse texture. Using default! ", __FUNCTION__);
-            app_state->test_geometry->material->diffuse_map.texture = texture_system_get_default_diffuse_texture();
-        }
-        texture_system_release(old_diff_name);
+        g->material = material_system_acquire(names[choice]);
 
-        // Specular.
-        app_state->test_geometry->material->specular_map.texture = texture_system_acquire(spec_names[choice], true);
-        if(!app_state->test_geometry->material->specular_map.texture)
+        if(!g->material)
         {
-            kwarng("Function '%s': Failed to load specular texture. Using default! ", __FUNCTION__);
-            app_state->test_geometry->material->specular_map.texture = texture_system_get_default_specular_texture();
+            kwarng("Function '%s': Failed to load material %s. Using default! ", __FUNCTION__, names[choice]);
+            g->material = material_system_get_default();
         }
-        texture_system_release(old_spec_name);
 
-        // Normal.
-        app_state->test_geometry->material->normal_map.texture = texture_system_acquire(norm_names[choice], true);
-        if(!app_state->test_geometry->material->normal_map.texture)
-        {
-            kwarng("Function '%s': Failed to load normal texture. Using default! ", __FUNCTION__);
-            app_state->test_geometry->material->normal_map.texture = texture_system_get_default_normal_texture();
-        }
-        texture_system_release(old_norm_name);
+        material_system_release(old_name);
     }
 
     return true;
@@ -271,16 +253,37 @@ bool application_create(game* game_inst)
     kinfor("Geometry system started.");
 
     // TODO: Временный тестовый код: начало.
+    app_state->meshes = darray_create(mesh);
+
+    // Первый куб.
+    mesh cube_mesh;
+    cube_mesh.geometry_count = 1;
+    cube_mesh.geometries = kallocate_tc(geometry*, cube_mesh.geometry_count, MEMORY_TAG_ARRAY);
     geometry_config g_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "test_cube", "test_material");
     geometry_generate_tangent(g_config.vertex_count, g_config.vertices, g_config.index_count, g_config.indices);
-    app_state->test_geometry = geometry_system_acquire_from_config(&g_config, true);
+    cube_mesh.geometries[0] = geometry_system_acquire_from_config(&g_config, true);
+    cube_mesh.model = mat4_identity();
+    darray_push(app_state->meshes, cube_mesh);
 
     // TODO: Вынести в отдельную функцию очистки конфига.
     kfree_tc(g_config.vertices, vertex_3d, g_config.vertex_count, MEMORY_TAG_ARRAY);
     kfree_tc(g_config.indices, u32, g_config.index_count, MEMORY_TAG_ARRAY);
 
-    // UI геометрия.
+    // Второй куб.
+    mesh cube_mesh_2;
+    cube_mesh_2.geometry_count = 1;
+    cube_mesh_2.geometries = kallocate_tc(geometry*, cube_mesh.geometry_count, MEMORY_TAG_ARRAY);
+    geometry_config g_config_2 = geometry_system_generate_cube_config(5.0f, 5.0f, 5.0f, 1.0f, 1.0f, "test_cube_2", "test_material");
+    geometry_generate_tangent(g_config_2.vertex_count, g_config_2.vertices, g_config_2.index_count, g_config_2.indices);
+    cube_mesh_2.geometries[0] = geometry_system_acquire_from_config(&g_config_2, true);
+    cube_mesh_2.model = mat4_translation(vec3_create(10.0f, 0.0f, 1.0f));
+    darray_push(app_state->meshes, cube_mesh_2);
 
+    // TODO: Вынести в отдельную функцию очистки конфига.
+    kfree_tc(g_config_2.vertices, vertex_3d, g_config_2.vertex_count, MEMORY_TAG_ARRAY);
+    kfree_tc(g_config_2.indices, u32, g_config_2.index_count, MEMORY_TAG_ARRAY);
+
+    // UI геометрия.
     geometry_config ui_config;
     ui_config.vertex_size = sizeof(vertex_2d);
     ui_config.vertex_count = 4;
@@ -319,7 +322,6 @@ bool application_create(game* game_inst)
 
     app_state->test_ui_geometry = geometry_system_acquire_from_config(&ui_config, true);
 
-    // app_state->test_geometry = geometry_system_get_default();
     event_register(EVENT_CODE_DEBUG_0, null, event_on_debug_event);
     // TODO: Временный тестовый код: конец.
 
@@ -393,16 +395,40 @@ bool application_run()
             packet.delta_time = (f32)delta;
 
             // TODO: Временный тестовый код: начало.
-            geometry_render_data test_render;
-            test_render.geometry = app_state->test_geometry;
-            // test_render.model = mat4_identity();
-            static f32 angle = 0;
-            angle += (0.5f * delta);
-            quat rotation = quat_from_axis_angle(vec3_up(), angle, true);
-            test_render.model = quat_to_mat4(rotation);
+            u32 mesh_count = darray_length(app_state->meshes);
+            if(mesh_count > 0)
+            {
+                // NOTE: Временное решение!
+                packet.geometries = darray_create(geometry_render_data);
 
-            packet.geometry_count = 1;
-            packet.geometries = &test_render;
+                quat rotation = quat_from_axis_angle(vec3_up(), 0.5f * delta, false);
+                mat4 rotation_matrix = quat_to_mat4(rotation);
+                app_state->meshes[0].model = mat4_mul(app_state->meshes[0].model, rotation_matrix);
+
+                if(mesh_count > 1)
+                {
+                    // Применение матрицы родителя, привяжет объект к родителю и сделает его таковым.
+                    app_state->meshes[1].model = mat4_mul(mat4_translation(vec3_create(10.0f, 0.0f, 1.0f)), app_state->meshes[0].model);
+                }
+
+                for(u32 i = 0; i < mesh_count; ++i)
+                {
+                    for(u32 j = 0; j < app_state->meshes[i].geometry_count; ++j)
+                    {
+                        geometry_render_data render_data;
+                        render_data.geometry = app_state->meshes[i].geometries[j];
+                        render_data.model = app_state->meshes[i].model;
+                        darray_push(packet.geometries, render_data);
+                    }
+                }
+
+                packet.geometry_count = darray_length(packet.geometries);
+            }
+            else
+            {
+                packet.geometry_count = 0;
+                packet.geometries = null;
+            }
 
             geometry_render_data test_ui_render;
             test_ui_render.geometry = app_state->test_ui_geometry;
@@ -417,6 +443,13 @@ bool application_run()
                 kerror("Renderer failed draw frame, shutting down!");
                 app_state->is_running = false;
                 break;
+            }
+
+            // TODO: Временный код: очистка геометрий.
+            if(packet.geometries)
+            {
+                darray_destroy(packet.geometries);
+                packet.geometries = null;
             }
 
             // Расчет времени кадра.
@@ -451,7 +484,18 @@ bool application_run()
     kfree(app_state->game_inst->state, app_state->game_inst->state_memory_requirement, MEMORY_TAG_GAME);
     kinfor("Game stopped.");
 
-    // NOTE: Что бы исключить нежелательные эффекты!
+    // TODO: Временный тестовый код: начало.
+    u32 mesh_count = darray_length(app_state->meshes);
+    kdebug("Meshes count: %u", mesh_count);
+    for(u32 i = 0; i < mesh_count; ++i)
+    {
+        kdebug("Mesh[%u]: get geometries is %u", i, app_state->meshes[i].geometry_count);
+        kfree_tc(app_state->meshes[i].geometries, geometry*, app_state->meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+    }
+    darray_destroy(app_state->meshes);
+    // TODO: Временный тестовый код: конецы.
+
+    // NOTE: Что бы исключить нежелательные эффекты управление остановить первым!
     input_system_shutdown();
     kinfor("Input system stopped.");
 

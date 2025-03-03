@@ -167,6 +167,7 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
         state_ptr->materials[i].id = INVALID_ID;
         state_ptr->materials[i].generation = INVALID_ID;
         state_ptr->materials[i].internal_id = INVALID_ID;
+        state_ptr->materials[i].render_frame_number = INVALID_ID;
     }
 
     // Создание материала по-умолчанию.
@@ -662,4 +663,5 @@ void material_destroy(material* m)
     m->id = INVALID_ID;
     m->generation = INVALID_ID;
     m->internal_id = INVALID_ID;
+    m->render_frame_number = INVALID_ID;
 }

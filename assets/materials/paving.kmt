@@ -1,0 +1,10 @@
+#material file
+
+version=0.1
+name=paving
+shader=Builtin.MaterialShader
+shininess=32.0
+diffuse_color=1.0 1.0 1.0 1.0
+diffuse_map_name=paving
+specular_map_name=paving_SPEC
+normal_map_name=paving_NRM

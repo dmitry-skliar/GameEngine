@@ -78,6 +78,8 @@ typedef struct material {
     texture_map specular_map;
     texture_map normal_map;
     u32 shader_id;
+    // @brief Указывает кадр с которым произошла синхронизация.
+    u32 render_frame_number;
 } material;
 
 typedef struct geometry {
@@ -87,6 +89,16 @@ typedef struct geometry {
     char name[GEOMETRY_NAME_MAX_LENGTH];
     material* material;
 } geometry;
+
+// @brief Объединяет в себе геометрии как единый объект.
+typedef struct mesh {
+    // @brief Количество внутренних геометрий.
+    u16 geometry_count;
+    // @brief Массив указателей на геометрии (используется darray).
+    geometry** geometries;
+    // @brief Массив преобразований над сеткой геометрий из локальных в мировые.
+    mat4 model;
+} mesh;
 
 // @brief Стадия шейдера на конвейере (можно комбинировать).
 typedef enum shader_stage {

@@ -209,6 +209,9 @@ bool renderer_draw_frame(render_packet* packet)
         return false;
     }
 
+    // Производить генерацию кадров даже, если исход плохой!
+    state_ptr->backend.frame_number++;
+
     if(state_ptr->backend.begin_frame(&state_ptr->backend, packet->delta_time))
     {
         // Проход (world).
@@ -247,11 +250,18 @@ bool renderer_draw_frame(render_packet* packet)
                 m = material_system_get_default();
             }
 
-            // Применение материала.
-            if(!material_system_apply_instance(m))
+            if(m->render_frame_number != state_ptr->backend.frame_number)
             {
-                kwarng("Failed to apply material '%s'. Skipping draw.", m->name);
-                continue;
+                // Применение материала.
+                if(!material_system_apply_instance(m))
+                {
+                    kwarng("Failed to apply material '%s'. Skipping draw.", m->name);
+                    continue;
+                }
+                else
+                {
+                    m->render_frame_number = state_ptr->backend.frame_number;
+                }
             }
 
             // Применение локальной позиции объекта.
@@ -320,9 +330,7 @@ bool renderer_draw_frame(render_packet* packet)
             return false;
         }
 
-        bool result = state_ptr->backend.end_frame(&state_ptr->backend, packet->delta_time);
-        state_ptr->backend.frame_number++;
-        if(!result)
+        if(!state_ptr->backend.end_frame(&state_ptr->backend, packet->delta_time))
         {
             kerror("Failed to complete function 'renderer_end_frame'. Shutting down.");
             return false;
