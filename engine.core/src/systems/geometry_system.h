@@ -42,6 +42,10 @@ geometry* geometry_system_acquire_from_config(geometry_config* config, bool auto
 
 /*
 */
+void geometry_system_config_dispose(geometry_config* config);
+
+/*
+*/
 void geometry_system_release(geometry* geometry);
 
 /*

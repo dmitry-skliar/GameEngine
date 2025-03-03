@@ -21,6 +21,7 @@
 // TODO: Временный тестовый код: начало.
 #include "kstring.h"
 #include "math/kmath.h"
+#include "math/transform.h"
 #include "math/geometry_utils.h"
 #include "containers/darray.h"
 // TODO: Временный тестовый код: конец.
@@ -62,7 +63,8 @@ typedef struct application_state {
     void* geometry_system_state;
 
     // TODO: Временный тестовый код: начало.
-    mesh* meshes; // исп. darray.
+    u32 mesh_count;
+    mesh meshes[10];
     geometry* test_ui_geometry;
     // TODO: Временный тестовый код: конец.
 
@@ -253,35 +255,42 @@ bool application_create(game* game_inst)
     kinfor("Geometry system started.");
 
     // TODO: Временный тестовый код: начало.
-    app_state->meshes = darray_create(mesh);
+    app_state->mesh_count = 0;
 
     // Первый куб.
-    mesh cube_mesh;
-    cube_mesh.geometry_count = 1;
-    cube_mesh.geometries = kallocate_tc(geometry*, cube_mesh.geometry_count, MEMORY_TAG_ARRAY);
+    mesh* cube_mesh = &app_state->meshes[app_state->mesh_count];
+    cube_mesh->geometry_count = 1;
+    cube_mesh->geometries = kallocate_tc(geometry*, cube_mesh->geometry_count, MEMORY_TAG_ARRAY);
     geometry_config g_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "test_cube", "test_material");
     geometry_generate_tangent(g_config.vertex_count, g_config.vertices, g_config.index_count, g_config.indices);
-    cube_mesh.geometries[0] = geometry_system_acquire_from_config(&g_config, true);
-    cube_mesh.model = mat4_identity();
-    darray_push(app_state->meshes, cube_mesh);
-
-    // TODO: Вынести в отдельную функцию очистки конфига.
-    kfree_tc(g_config.vertices, vertex_3d, g_config.vertex_count, MEMORY_TAG_ARRAY);
-    kfree_tc(g_config.indices, u32, g_config.index_count, MEMORY_TAG_ARRAY);
+    cube_mesh->geometries[0] = geometry_system_acquire_from_config(&g_config, true);
+    cube_mesh->transform = transform_create();
+    geometry_system_config_dispose(&g_config);
+    app_state->mesh_count++;
 
     // Второй куб.
-    mesh cube_mesh_2;
-    cube_mesh_2.geometry_count = 1;
-    cube_mesh_2.geometries = kallocate_tc(geometry*, cube_mesh.geometry_count, MEMORY_TAG_ARRAY);
+    mesh* cube_mesh_2 = &app_state->meshes[app_state->mesh_count];
+    cube_mesh_2->geometry_count = 1;
+    cube_mesh_2->geometries = kallocate_tc(geometry*, cube_mesh_2->geometry_count, MEMORY_TAG_ARRAY);
     geometry_config g_config_2 = geometry_system_generate_cube_config(5.0f, 5.0f, 5.0f, 1.0f, 1.0f, "test_cube_2", "test_material");
     geometry_generate_tangent(g_config_2.vertex_count, g_config_2.vertices, g_config_2.index_count, g_config_2.indices);
-    cube_mesh_2.geometries[0] = geometry_system_acquire_from_config(&g_config_2, true);
-    cube_mesh_2.model = mat4_translation(vec3_create(10.0f, 0.0f, 1.0f));
-    darray_push(app_state->meshes, cube_mesh_2);
+    cube_mesh_2->geometries[0] = geometry_system_acquire_from_config(&g_config_2, true);
+    cube_mesh_2->transform = transform_from_position(vec3_create(10.0f, 0.0f, 1.0f));
+    transform_set_parent(&cube_mesh_2->transform, &cube_mesh->transform);
+    geometry_system_config_dispose(&g_config_2);
+    app_state->mesh_count++;
 
-    // TODO: Вынести в отдельную функцию очистки конфига.
-    kfree_tc(g_config_2.vertices, vertex_3d, g_config_2.vertex_count, MEMORY_TAG_ARRAY);
-    kfree_tc(g_config_2.indices, u32, g_config_2.index_count, MEMORY_TAG_ARRAY);
+    // Третий куб.
+    mesh* cube_mesh_3 = &app_state->meshes[app_state->mesh_count];
+    cube_mesh_3->geometry_count = 1;
+    cube_mesh_3->geometries = kallocate_tc(geometry*, cube_mesh_3->geometry_count, MEMORY_TAG_ARRAY);
+    geometry_config g_config_3 = geometry_system_generate_cube_config(2.0f, 2.0f, 2.0f, 1.0f, 1.0f, "test_cube_3", "test_material");
+    geometry_generate_tangent(g_config_3.vertex_count, g_config_3.vertices, g_config_3.index_count, g_config_3.indices);
+    cube_mesh_3->geometries[0] = geometry_system_acquire_from_config(&g_config_3, true);
+    cube_mesh_3->transform = transform_from_position(vec3_create(5.0f, 0.0f, 1.0f));
+    transform_set_parent(&cube_mesh_3->transform, &cube_mesh_2->transform);
+    geometry_system_config_dispose(&g_config_3);
+    app_state->mesh_count++;
 
     // UI геометрия.
     geometry_config ui_config;
@@ -393,41 +402,38 @@ bool application_run()
             // TODO: Провести рефактор render_packet.
             render_packet packet;
             packet.delta_time = (f32)delta;
+            packet.geometry_count = 0;
 
             // TODO: Временный тестовый код: начало.
-            u32 mesh_count = darray_length(app_state->meshes);
-            if(mesh_count > 0)
+            packet.geometries = darray_create(geometry_render_data);
+
+            if(app_state->mesh_count > 0)
             {
-                // NOTE: Временное решение!
-                packet.geometries = darray_create(geometry_render_data);
-
                 quat rotation = quat_from_axis_angle(vec3_up(), 0.5f * delta, false);
-                mat4 rotation_matrix = quat_to_mat4(rotation);
-                app_state->meshes[0].model = mat4_mul(app_state->meshes[0].model, rotation_matrix);
+                transform_rotate(&app_state->meshes[0].transform, rotation);
 
-                if(mesh_count > 1)
+                if(app_state->mesh_count > 1)
                 {
-                    // Применение матрицы родителя, привяжет объект к родителю и сделает его таковым.
-                    app_state->meshes[1].model = mat4_mul(mat4_translation(vec3_create(10.0f, 0.0f, 1.0f)), app_state->meshes[0].model);
+                    transform_rotate(&app_state->meshes[1].transform, rotation);
                 }
 
-                for(u32 i = 0; i < mesh_count; ++i)
+                if(app_state->mesh_count > 2)
                 {
-                    for(u32 j = 0; j < app_state->meshes[i].geometry_count; ++j)
+                    transform_rotate(&app_state->meshes[2].transform, rotation);
+                }
+
+                for(u32 i = 0; i < app_state->mesh_count; ++i)
+                {
+                    mesh* m = &app_state->meshes[i];
+                    for(u32 j = 0; j < m->geometry_count; ++j)
                     {
                         geometry_render_data render_data;
-                        render_data.geometry = app_state->meshes[i].geometries[j];
-                        render_data.model = app_state->meshes[i].model;
+                        render_data.geometry = m->geometries[j];
+                        render_data.model = transform_get_world(&m->transform);
                         darray_push(packet.geometries, render_data);
+                        packet.geometry_count++;
                     }
                 }
-
-                packet.geometry_count = darray_length(packet.geometries);
-            }
-            else
-            {
-                packet.geometry_count = 0;
-                packet.geometries = null;
             }
 
             geometry_render_data test_ui_render;
@@ -485,14 +491,12 @@ bool application_run()
     kinfor("Game stopped.");
 
     // TODO: Временный тестовый код: начало.
-    u32 mesh_count = darray_length(app_state->meshes);
-    kdebug("Meshes count: %u", mesh_count);
-    for(u32 i = 0; i < mesh_count; ++i)
+    kdebug("Meshes count: %u", app_state->mesh_count);
+    for(u32 i = 0; i < app_state->mesh_count; ++i)
     {
         kdebug("Mesh[%u]: get geometries is %u", i, app_state->meshes[i].geometry_count);
         kfree_tc(app_state->meshes[i].geometries, geometry*, app_state->meshes[i].geometry_count, MEMORY_TAG_ARRAY);
     }
-    darray_destroy(app_state->meshes);
     // TODO: Временный тестовый код: конецы.
 
     // NOTE: Что бы исключить нежелательные эффекты управление остановить первым!

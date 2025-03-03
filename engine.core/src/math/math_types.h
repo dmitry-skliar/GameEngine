@@ -209,3 +209,12 @@ typedef union vec4i_u {
         };
     };
 } vec4i;
+
+typedef struct transform {
+    vec3 position;
+    quat rotation;
+    vec3 scale;
+    bool is_dirty;
+    mat4 local;
+    struct transform* parent;
+} transform;

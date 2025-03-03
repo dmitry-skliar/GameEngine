@@ -97,7 +97,7 @@ typedef struct mesh {
     // @brief Массив указателей на геометрии (используется darray).
     geometry** geometries;
     // @brief Массив преобразований над сеткой геометрий из локальных в мировые.
-    mat4 model;
+    transform transform;
 } mesh;
 
 // @brief Стадия шейдера на конвейере (можно комбинировать).

@@ -166,6 +166,33 @@ geometry* geometry_system_acquire_from_config(geometry_config* config, bool auto
     return g;
 }
 
+void geometry_system_config_dispose(geometry_config* config)
+{
+    if(!state_ptr)
+    {
+        kerror(message_not_initialized, __FUNCTION__);
+        return;
+    }
+
+    if(!config)
+    {
+        kerror("Function '%s' requires a valid pointer to config.", __FUNCTION__);
+        return;
+    }
+
+    if(config->vertices)
+    {
+        kfree(config->vertices, config->vertex_size * config->vertex_count, MEMORY_TAG_ARRAY);
+    }
+
+    if(config->indices)
+    {
+        kfree(config->indices, config->index_size * config->index_count, MEMORY_TAG_ARRAY);
+    }
+
+    kzero_tc(config, geometry_config, 1);
+}
+
 void geometry_system_release(geometry* geometry)
 {
     if(!state_ptr)
