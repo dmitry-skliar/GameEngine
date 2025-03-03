@@ -22,6 +22,7 @@ typedef struct material_shader_uniform_locations {
     u16 specular_texture;
     u16 normal_texture;
     u16 model;
+    u16 render_mode;
 } material_shader_uniform_locations;
 
 typedef struct ui_shader_uniform_locations {
@@ -139,6 +140,7 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
     state_ptr->material_locations.specular_texture = INVALID_ID_U16;
     state_ptr->material_locations.normal_texture = INVALID_ID_U16;
     state_ptr->material_locations.model = INVALID_ID_U16;
+    state_ptr->material_locations.render_mode = INVALID_ID_U16;
 
     state_ptr->ui_shader_id = INVALID_ID;
     state_ptr->ui_locations.projection = INVALID_ID_U16;
@@ -305,6 +307,7 @@ material* material_system_acquire_from_config(material_config* config)
             state_ptr->material_locations.specular_texture = shader_system_uniform_index(s, "specular_texture");
             state_ptr->material_locations.normal_texture = shader_system_uniform_index(s, "normal_texture");
             state_ptr->material_locations.model = shader_system_uniform_index(s, "model");
+            state_ptr->material_locations.render_mode = shader_system_uniform_index(s, "mode");
         }
         else if(state_ptr->ui_shader_id == INVALID_ID && string_equal(config->shader_name, BUILTIN_SHADER_NAME_UI))
         {
@@ -412,7 +415,7 @@ material* material_system_get_default()
     return &state_ptr->default_material;
 }
 
-bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec3* view_position, const vec4* ambient_color)
+bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec3* view_position, const vec4* ambient_color, u32 render_mode)
 {
     if(!material_system_status_valid(__FUNCTION__))
     {
@@ -425,6 +428,7 @@ bool material_system_apply_global(u32 shader_id, const mat4* projection, const m
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.view, view));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.view_position, view_position));
         MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.ambient_color, ambient_color));
+        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.render_mode, &render_mode));
     }
     else if(shader_id == state_ptr->ui_shader_id)
     {

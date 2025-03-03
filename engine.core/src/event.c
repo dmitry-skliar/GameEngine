@@ -210,6 +210,7 @@ const char* event_code_str(event_code code)
         [EVENT_CODE_MOUSE_BUTTON_RELEASED] = "EVENT_CODE_MOUSE_BUTTON_RELEASED",
         [EVENT_CODE_MOUSE_MOVED]           = "EVENT_CODE_MOUSE_MOVED",
         [EVENT_CODE_MOUSE_WHEEL]           = "EVENT_CODE_MOUSE_WHEEL",
+        [EVENT_CODE_SET_RENDER_MODE]       = "EVENT_CODE_SET_RENDER_MODE",
         [EVENT_CODE_DEBUG_0]               = "EVENT_CODE_DEBUG_0",
         [EVENT_CODE_DEBUG_1]               = "EVENT_CODE_DEBUG_1",
         [EVENT_CODE_DEBUG_2]               = "EVENT_CODE_DEBUG_2",

@@ -65,9 +65,10 @@ material* material_system_get_default();
     @param view Указатель на матрицу вида.
     @param view_position Указатель на позицию камеры.
     @param ambient_color Указатель на окружающий цвет сцены.
+    @param render_mode Режим отображения.
     @return True в случае успеха, false если есть ошибки.
 */
-bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec3* view_position, const vec4* ambient_color);
+bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec3* view_position, const vec4* ambient_color, u32 render_mode);
 
 /*
     @brief Применяет данные материала на уровне экземпляра для предоставленного материала.

@@ -72,10 +72,10 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
 
     // Заполнение информации приложения.
     VkApplicationInfo appinfo        = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
-    appinfo.apiVersion               = VK_API_VERSION_1_4;
     appinfo.pApplicationName         = backend->window_state->title;
-    appinfo.applicationVersion       = VK_MAKE_VERSION(1, 0, 0);
     appinfo.pEngineName              = "Game Engine";
+    appinfo.apiVersion               = VK_API_VERSION_1_4;
+    appinfo.applicationVersion       = VK_MAKE_VERSION(1, 0, 0);
     appinfo.engineVersion            = VK_MAKE_VERSION(0, 1, 0);
 
     u32 app_major = VK_VERSION_MAJOR(appinfo.apiVersion);
@@ -107,6 +107,12 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     vkEnumerateInstanceExtensionProperties(null, &available_extension_count, null);
     VkExtensionProperties* avaulable_extensions = darray_reserve(VkExtensionProperties, available_extension_count);
     vkEnumerateInstanceExtensionProperties(null, &available_extension_count, avaulable_extensions);
+
+    kdebug("Vulkan supported extensions:");
+    for(u32 i = 0; i < available_extension_count; ++i)
+    {
+        kdebug("[%2u] %s", i, avaulable_extensions[i].extensionName);
+    }
 
     // Сопоставление запрашиваемых и доступных расширений.
     u32 required_extension_count = darray_length(required_extentions);
@@ -149,6 +155,12 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend)
     vkEnumerateInstanceLayerProperties(&available_layer_count, null);
     VkLayerProperties* available_layers = darray_reserve(VkLayerProperties, available_layer_count);
     vkEnumerateInstanceLayerProperties(&available_layer_count, available_layers);
+
+    kdebug("Vulkan supported validation layers:");
+    for(u32 i = 0; i < available_layer_count; ++i)
+    {
+        kdebug("[%2u] %s", i, available_layers[i].layerName);
+    }
 
     // Сопоставление запрашиваемых и доступных слоев проверки.
     u32 required_layer_count = darray_length(required_layers);

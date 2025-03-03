@@ -172,6 +172,27 @@ bool game_update(game* inst, f32 delta_time)
         kdebug("Camera pos:[%.2f, %.2f, %.2f]", state->camera_position.x, state->camera_position.y, state->camera_position.z);
     }
 
+    if(input_keyboard_key_press_detect('1'))
+    {
+        event_context data = {};
+        data.i32[0] = RENDERER_VIEW_MODE_DEFAULT;
+        event_send(EVENT_CODE_SET_RENDER_MODE, inst, &data);
+    }
+
+    if(input_keyboard_key_press_detect('2'))
+    {
+        event_context data = {};
+        data.i32[0] = RENDERER_VIEW_MODE_LIGHTING;
+        event_send(EVENT_CODE_SET_RENDER_MODE, inst, &data);
+    }
+
+    if(input_keyboard_key_press_detect('3'))
+    {
+        event_context data = {};
+        data.i32[0] = RENDERER_VIEW_MODE_NORMALS;
+        event_send(EVENT_CODE_SET_RENDER_MODE, inst, &data);
+    }
+
     return true;
 }
 

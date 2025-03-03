@@ -1,9 +1,11 @@
 // Cобственные подключения.
 #include "renderer/renderer_frontend.h"
 #include "renderer/renderer_backend.h"
+#include "renderer/renderer_types.h"
 
 // Внутренние подключения.
 #include "logger.h"
+#include "event.h"
 #include "memory/memory.h"
 #include "math/kmath.h"
 #include "kstring.h"
@@ -27,6 +29,7 @@ typedef struct renderer_system_state {
     f32 ui_far_clip;
     u32 material_shader_id;
     u32 ui_shader_id;
+    u32 render_mode;
 } renderer_system_state;
 
 static renderer_system_state* state_ptr = null;
@@ -37,6 +40,31 @@ static renderer_system_state* state_ptr = null;
         kerror(msg);           \
         return false;          \
     }
+
+bool renderer_on_event(event_code code, void* sender, void* listener, event_context* context)
+{
+    if(code == EVENT_CODE_SET_RENDER_MODE)
+    {
+        switch(context->i32[0])
+        {
+            case RENDERER_VIEW_MODE_DEFAULT:
+                kdebug("Renderer mode set to default.");
+                state_ptr->render_mode = RENDERER_VIEW_MODE_DEFAULT;
+                break;
+            case RENDERER_VIEW_MODE_LIGHTING:
+                kdebug("Renderer mode set to lighting.");
+                state_ptr->render_mode = RENDERER_VIEW_MODE_LIGHTING;
+                break;
+            case RENDERER_VIEW_MODE_NORMALS:
+                kdebug("Renderer mode set to normals.");
+                state_ptr->render_mode = RENDERER_VIEW_MODE_NORMALS;
+                break;
+        }
+        return true;
+    }
+
+    return false;
+}
 
 // TODO: Создать отдельный макрос, который будет использовать функцию в отладночной редакции только!
 // TODO: Вынести во вспомогательную функцию! для всех систем!
@@ -81,6 +109,7 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, &state_ptr->backend);
     state_ptr->backend.window_state = window_state;
     state_ptr->backend.frame_number = 0;
+    state_ptr->render_mode = RENDERER_VIEW_MODE_DEFAULT;
 
     CRITICAL_INIT(
         state_ptr->backend.initialize(&state_ptr->backend),
@@ -139,6 +168,8 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     state_ptr->ui_projection = mat4_orthographic(0, window_state->width, window_state->height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
     state_ptr->ui_view = mat4_inverse(mat4_identity());
 
+    event_register(EVENT_CODE_SET_RENDER_MODE, state_ptr, renderer_on_event);
+
     return true;
 }
 
@@ -193,7 +224,10 @@ bool renderer_draw_frame(render_packet* packet)
             return false;
         }
 
-        if(!material_system_apply_global(state_ptr->material_shader_id, &state_ptr->projection, &state_ptr->view, &state_ptr->view_position, &state_ptr->ambient_color))
+        if(!material_system_apply_global(
+                state_ptr->material_shader_id, &state_ptr->projection, &state_ptr->view, &state_ptr->view_position,
+                &state_ptr->ambient_color, state_ptr->render_mode
+        ))
         {
             kerror("Failed to use apply globals for material shader. Render frame failed.");
             return false;
@@ -246,7 +280,7 @@ bool renderer_draw_frame(render_packet* packet)
             return false;
         }
 
-        if(!material_system_apply_global(state_ptr->ui_shader_id, &state_ptr->ui_projection, &state_ptr->ui_view, null, null))
+        if(!material_system_apply_global(state_ptr->ui_shader_id, &state_ptr->ui_projection, &state_ptr->ui_view, null, null, 0))
         {
             kerror("Failed to use apply globals for material shader. Render frame failed.");
             return false;

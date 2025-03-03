@@ -13,12 +13,15 @@ layout(set = 0, binding = 0) uniform global_uniform_object {
     mat4 view;          // Матрица вида (по сути матрица камера).
     vec4 ambient_color; // Цвет поверхности не поподающий под приямой источник света.
     vec3 view_position; // Положение камеры.
+    int mode;           // Режим отображения.
 } global_ubo;
 
 layout(push_constant) uniform push_constants {
     // Гарантируется всего 128 байт.
     mat4 model;         // Мировая матрица (масштаб, вращение и положение объекта в мире).
 } u_push_constants;
+
+layout(location = 0) out int out_mode;
 
 // Передаваемые данные в далее по конвейеру (data transfer object).
 layout(location = 1) out struct dto {
@@ -45,4 +48,6 @@ void main()
     out_dto.ambient = global_ubo.ambient_color;
     out_dto.view_position = global_ubo.view_position;
     gl_Position = global_ubo.projection * global_ubo.view * u_push_constants.model * vec4(in_position, 1.0);
+
+    out_mode = global_ubo.mode;
 }

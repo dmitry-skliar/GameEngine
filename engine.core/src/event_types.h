@@ -67,6 +67,13 @@ typedef enum event_code {
     EVENT_CODE_MOUSE_WHEEL,
 
     /*
+        @brief Установка режима отрисовки для отладки.
+        Получение контекста:
+            i32 mode = context.i32[0];
+    */
+    EVENT_CODE_SET_RENDER_MODE,
+
+    /*
         @brief Отладка.
     */
     EVENT_CODE_DEBUG_0,

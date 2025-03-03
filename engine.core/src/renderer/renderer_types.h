@@ -12,6 +12,13 @@
 struct shader;
 struct shader_uniform;
 
+// @brief Режимы отображения визуализации (для отладки).
+typedef enum renderer_view_mode {
+    RENDERER_VIEW_MODE_DEFAULT  = 0x00,
+    RENDERER_VIEW_MODE_LIGHTING = 0x01,
+    RENDERER_VIEW_MODE_NORMALS  = 0x02
+} renderer_view_mode;
+
 // @brief Тип рендера.
 typedef enum renderer_backend_type {
     RENDERER_BACKEND_TYPE_VULKAN,
