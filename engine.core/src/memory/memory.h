@@ -146,7 +146,7 @@ KAPI void memory_free(void* block, u64 size, memory_tag tag);
     @param count Количество элементов.
     @param value Значение, которым нужно наполнить память.
 */
-#define kset_tc(block, type, count, value) platform_memory_set((void*)block, sizeof(size) * count, value)
+#define kset_tc(block, type, count, value) platform_memory_set((void*)block, sizeof(type) * count, value)
 
 /*
     @brief Копирует заданное количество байт из одного участка памяти в другой.

@@ -20,12 +20,30 @@
 #define string_equal(lstr, rstr) platform_string_equal(lstr, rstr)
 
 /*
-    @brief Посимвольно сравнивает две строки без учетом регистра символов.
+    @brief Посимвольно сравнивает две строки без учета регистра символов.
     @param lstr Указатель на первую cтроку.
     @param rstr Указатель на вторую cтрока.
-    @return True - если строки одинаковые, false - разные.
+    @return True если строки одинаковые, false разные.
 */
 #define string_equali(lstr, rstr) platform_string_equali(lstr, rstr)
+
+/*
+    @brief Посимвольно сравнивает заданое количество символов двух строк с учетом регистра символов.
+    @param lstr Указатель на первую cтроку.
+    @param rstr Указатель на вторую cтрока.
+    @param length Количество символов которое нужно сравнить.
+    @return True если строки совпадают, false не совпадают.
+*/
+#define string_nequal(lstr, rstr, length) platform_string_nequal(lstr, rstr, length)
+
+/*
+    @brief Посимвольно сравнивает заданое количество символов двух строки без учета регистра символов.
+    @param lstr Указатель на первую cтроку.
+    @param rstr Указатель на вторую cтрока.
+    @param length Количество символов которое нужно сравнить.
+    @return True если строки совпадают, false не совпадают.
+*/
+#define string_nequali(lstr, rstr, length) platform_string_nequali(lstr, rstr, length)
 
 /*
     @brief Выполняет форматирование строки в соответствии с заданным форматом
@@ -241,3 +259,90 @@ KAPI u32 string_split(const char* str, char delim, bool trime_entries, bool incl
     @param str_darray Указатель на массив строк для освобождения выделенной памяти (используется darray).
 */
 KAPI void string_cleanup_split_array(char** str_darray);
+
+/*
+    @brief Соединяет строку с предоставленым символом и возвращает новую строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param symbol Символ которуый нужно добавить.
+*/
+KAPI void string_append_char(char* dest, const char* src, const char symbol);
+
+/*
+    @brief Соединяет две строки и возвращает новую строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param str Указатель на строку которую нужно добавить.
+*/
+KAPI void string_append_string(char* dest, const char* src, const char* str);
+
+// TODO: Написать для других чисел и типов данных!
+
+/*
+    @brief Соединяет строку с 32-bit целочисленным числом со знаком и возвращает новую строку.
+    NOTE: Другие типы данных будут преобразованы в строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param value Число которое нужно добавить.
+*/
+KAPI void string_append_i32(char* dest, const char* src, i32 value);
+
+/*
+    @brief Соединяет строку с 64-bit целочисленным числом со знаком и возвращает новую строку.
+    NOTE: Другие типы данных будут преобразованы в строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param value Число которое нужно добавить.
+*/
+KAPI void string_append_i64(char* dest, const char* src, i64 value);
+
+/*
+    @brief Соединяет строку с 32-bit целочисленным беззнаковым числом и возвращает новую строку.
+    NOTE: Другие типы данных будут преобразованы в строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param value Число которое нужно добавить.
+*/
+KAPI void string_append_u32(char* dest, const char* src, u32 value);
+
+/*
+    @brief Соединяет строку с 64-bit целочисленным беззнаковым числом и возвращает новую строку.
+    NOTE: Другие типы данных будут преобразованы в строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param value Число которое нужно добавить.
+*/
+KAPI void string_append_u64(char* dest, const char* src, u64 value);
+
+/*
+    @brief Соединяет строку с 32-bit числом с плавающей точкой и возвращает новую строку.
+    NOTE: Другие типы данных будут преобразованы в строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param value Число которое нужно добавить.
+*/
+KAPI void string_append_f32(char* dest, const char* src, f32 value);
+
+/*
+    @brief Соединяет строку с логическим значением и возвращает новую строку.
+    NOTE: Другие типы данных будут преобразованы в строку.
+    @param dest Указатель на память для записи новой строки.
+    @param src Указатель на строку к которой нужно добавить.
+    @param value Логическое значение которое нужно добавить.
+*/
+KAPI void string_append_bool(char* dest, const char* src, bool value);
+
+/*
+    @brief Извлекает путь к директории файла из полного пути.
+    @param directory Указатель на память куда записать имя директории.
+    @param path Указатель на строку полного пути откуда извлечь.
+*/
+KAPI void string_directory_from_path(char* directory, const char* path);
+
+/*
+    @brief Извлекает имя файла из полного пути.
+    @param directory Указатель на память куда записать имя файла.
+    @param path Указатель на строку полного пути откуда извлечь.
+    @param with_extention Указывает на получение имени файла с расширением.
+*/
+KAPI void string_filename_from_path(char* filename, const char* path, bool with_extension);

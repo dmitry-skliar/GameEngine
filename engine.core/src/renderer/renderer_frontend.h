@@ -136,9 +136,10 @@ bool renderer_shader_apply_globals(shader* s);
 /*
     @brief Применяет данные к текущим привязанному ресурсу экземпляра.
     @param s Указатель на шейдер к которому должны быть применены данные экземпляра.
+    @param needs_update Указывает, на необходимость обновить uniform переменные или связать их.
     @return True операция завершена успешно, false в случае ошибок.
 */
-bool renderer_shader_apply_instance(shader* s);
+bool renderer_shader_apply_instance(shader* s, bool needs_update);
 
 /*
     @brief Получает внутренние ресурсы уровня экземпляра и предоставляет идентификатор экземпляра.

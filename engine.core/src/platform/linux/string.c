@@ -29,6 +29,20 @@
         return strcasecmp(lstr, rstr) == 0;
     }
 
+    bool platform_string_nequal(const char* lstr, const char* rstr, u64 length)
+    {
+        if(lstr == rstr) return true;
+        if(!lstr || !rstr) return false;
+        return strncmp(lstr, rstr, length) == 0;
+    }
+
+    bool platform_string_nequali(const char* lstr, const char* rstr, u64 length)
+    {
+        if(lstr == rstr) return true;
+        if(!lstr || !rstr) return false;
+        return strncasecmp(lstr, rstr, length) == 0;
+    }
+
     i32 platform_string_format(char* dest, const char* format, ...)
     {
         va_list args;

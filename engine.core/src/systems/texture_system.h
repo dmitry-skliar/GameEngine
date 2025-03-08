@@ -4,6 +4,7 @@
 #include <resources/resource_types.h>
 
 // @brief Имя текстуры по умолчанию.
+#define DEFAULT_TEXTURE_NAME "default"
 #define DEFAULT_DIFFUSE_TEXTURE_NAME "default_diffuse"
 #define DEFAULT_SPECULAR_TEXTURE_NAME "default_specular"
 #define DEFAULT_NORMAL_TEXTURE_NAME "default_normal"
@@ -44,6 +45,11 @@ texture* texture_system_acquire(const char* name, bool auto_release);
     @param name Имя текстуры которую необходимо освободить.
 */
 void texture_system_release(const char* name);
+
+/*
+    @brief Возвращает указатель на текстуру по умолчанию.
+*/
+texture* texture_system_get_default_texture();
 
 /*
     @brief Возвращает указатель на текстуру по умолчанию.

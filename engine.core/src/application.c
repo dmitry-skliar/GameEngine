@@ -22,7 +22,6 @@
 #include "kstring.h"
 #include "math/kmath.h"
 #include "math/transform.h"
-#include "math/geometry_utils.h"
 #include "containers/darray.h"
 // TODO: Временный тестовый код: конец.
 
@@ -262,35 +261,58 @@ bool application_create(game* game_inst)
     cube_mesh->geometry_count = 1;
     cube_mesh->geometries = kallocate_tc(geometry*, cube_mesh->geometry_count, MEMORY_TAG_ARRAY);
     geometry_config g_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "test_cube", "test_material");
-    geometry_generate_tangent(g_config.vertex_count, g_config.vertices, g_config.index_count, g_config.indices);
     cube_mesh->geometries[0] = geometry_system_acquire_from_config(&g_config, true);
     cube_mesh->transform = transform_create();
     geometry_system_config_dispose(&g_config);
     app_state->mesh_count++;
 
     // Второй куб.
-    mesh* cube_mesh_2 = &app_state->meshes[app_state->mesh_count];
-    cube_mesh_2->geometry_count = 1;
-    cube_mesh_2->geometries = kallocate_tc(geometry*, cube_mesh_2->geometry_count, MEMORY_TAG_ARRAY);
-    geometry_config g_config_2 = geometry_system_generate_cube_config(5.0f, 5.0f, 5.0f, 1.0f, 1.0f, "test_cube_2", "test_material");
-    geometry_generate_tangent(g_config_2.vertex_count, g_config_2.vertices, g_config_2.index_count, g_config_2.indices);
-    cube_mesh_2->geometries[0] = geometry_system_acquire_from_config(&g_config_2, true);
-    cube_mesh_2->transform = transform_from_position(vec3_create(10.0f, 0.0f, 1.0f));
-    transform_set_parent(&cube_mesh_2->transform, &cube_mesh->transform);
-    geometry_system_config_dispose(&g_config_2);
-    app_state->mesh_count++;
+    // mesh* cube_mesh_2 = &app_state->meshes[app_state->mesh_count];
+    // cube_mesh_2->geometry_count = 1;
+    // cube_mesh_2->geometries = kallocate_tc(geometry*, cube_mesh_2->geometry_count, MEMORY_TAG_ARRAY);
+    // geometry_config g_config_2 = geometry_system_generate_cube_config(5.0f, 5.0f, 5.0f, 1.0f, 1.0f, "test_cube_2", "test_material");
+    // cube_mesh_2->geometries[0] = geometry_system_acquire_from_config(&g_config_2, true);
+    // cube_mesh_2->transform = transform_from_position(vec3_create(10.0f, 0.0f, 1.0f));
+    // transform_set_parent(&cube_mesh_2->transform, &cube_mesh->transform);
+    // geometry_system_config_dispose(&g_config_2);
+    // app_state->mesh_count++;
 
     // Третий куб.
-    mesh* cube_mesh_3 = &app_state->meshes[app_state->mesh_count];
-    cube_mesh_3->geometry_count = 1;
-    cube_mesh_3->geometries = kallocate_tc(geometry*, cube_mesh_3->geometry_count, MEMORY_TAG_ARRAY);
-    geometry_config g_config_3 = geometry_system_generate_cube_config(2.0f, 2.0f, 2.0f, 1.0f, 1.0f, "test_cube_3", "test_material");
-    geometry_generate_tangent(g_config_3.vertex_count, g_config_3.vertices, g_config_3.index_count, g_config_3.indices);
-    cube_mesh_3->geometries[0] = geometry_system_acquire_from_config(&g_config_3, true);
-    cube_mesh_3->transform = transform_from_position(vec3_create(5.0f, 0.0f, 1.0f));
-    transform_set_parent(&cube_mesh_3->transform, &cube_mesh_2->transform);
-    geometry_system_config_dispose(&g_config_3);
-    app_state->mesh_count++;
+    // mesh* cube_mesh_3 = &app_state->meshes[app_state->mesh_count];
+    // cube_mesh_3->geometry_count = 1;
+    // cube_mesh_3->geometries = kallocate_tc(geometry*, cube_mesh_3->geometry_count, MEMORY_TAG_ARRAY);
+    // geometry_config g_config_3 = geometry_system_generate_cube_config(2.0f, 2.0f, 2.0f, 1.0f, 1.0f, "test_cube_3", "test_material");
+    // cube_mesh_3->geometries[0] = geometry_system_acquire_from_config(&g_config_3, true);
+    // cube_mesh_3->transform = transform_from_position(vec3_create(5.0f, 0.0f, 1.0f));
+    // transform_set_parent(&cube_mesh_3->transform, &cube_mesh_2->transform);
+    // geometry_system_config_dispose(&g_config_3);
+    // app_state->mesh_count++;
+
+    // Машина.
+    mesh* car_mesh = &app_state->meshes[app_state->mesh_count];
+    resource car_mesh_resource = {};
+    if(!resource_system_load("falcon", RESOURCE_TYPE_MESH, &car_mesh_resource))
+    {
+        kerror("Failed to load car test mesh.");
+    }
+    else
+    {
+        geometry_config* configs = car_mesh_resource.data;
+        car_mesh->geometry_count = car_mesh_resource.data_size; // Передается из mesh_loader.
+        car_mesh->geometries = kallocate_tc(geometry*, car_mesh->geometry_count, MEMORY_TAG_ARRAY);
+
+        for(u32 i = 0; i < car_mesh->geometry_count; ++i)
+        {
+            geometry_config* cfg = &configs[i];
+            car_mesh->geometries[i] = geometry_system_acquire_from_config(cfg, true);
+        }
+
+        car_mesh->transform = transform_from_position(vec3_create(0.0f, 7.0f, 0.0f));
+
+        // NOTE: Очистка конфигурации происходит в загрузчике.
+        resource_system_unload(&car_mesh_resource);
+        app_state->mesh_count++;
+    }
 
     // UI геометрия.
     geometry_config ui_config;
@@ -367,7 +389,7 @@ bool application_run()
 
     f64 running_time     = 0;
     u16 frame_count      = 0;
-    f64 frame_limit_time = 1.0f / 240; // TODO: сделать настраиваемым!
+    f64 frame_limit_time = 1.0f / 120; // TODO: сделать настраиваемым!
 
     while(app_state->is_running)
     {
@@ -412,15 +434,15 @@ bool application_run()
                 quat rotation = quat_from_axis_angle(vec3_up(), 0.5f * delta, false);
                 transform_rotate(&app_state->meshes[0].transform, rotation);
 
-                if(app_state->mesh_count > 1)
-                {
-                    transform_rotate(&app_state->meshes[1].transform, rotation);
-                }
+                // if(app_state->mesh_count > 1)
+                // {
+                //     transform_rotate(&app_state->meshes[1].transform, rotation);
+                // }
 
-                if(app_state->mesh_count > 2)
-                {
-                    transform_rotate(&app_state->meshes[2].transform, rotation);
-                }
+                // if(app_state->mesh_count > 2)
+                // {
+                //     transform_rotate(&app_state->meshes[2].transform, rotation);
+                // }
 
                 for(u32 i = 0; i < app_state->mesh_count; ++i)
                 {

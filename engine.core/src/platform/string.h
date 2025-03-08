@@ -13,18 +13,35 @@ KAPI u64 platform_string_length(const char* str);
     @brief Посимвольно сравнивает две строки с учетом регистра символов.
     @param lstr Указатель на первую cтроку.
     @param rstr Указатель на вторую cтрока.
-    @return True - если строки одинаковые, false - разные.
+    @return True если строки одинаковые, false разные.
 */
 KAPI bool platform_string_equal(const char* lstr, const char* rstr);
 
 /*
-    TODO: Реализовать!
     @brief Посимвольно сравнивает две строки без учетом регистра символов.
     @param lstr Указатель на первую cтроку.
     @param rstr Указатель на вторую cтрока.
-    @return True - если строки одинаковые, false - разные.
+    @return True если строки одинаковые, false разные.
 */
 KAPI bool platform_string_equali(const char* lstr, const char* rstr);
+
+/*
+    @brief Посимвольно сравнивает заданое количество символов двух строк с учетом регистра символов.
+    @param lstr Указатель на первую cтроку.
+    @param rstr Указатель на вторую cтрока.
+    @param length Количество символов которое нужно сравнить.
+    @return True если строки совпадают, false не совпадают.
+*/
+KAPI bool platform_string_nequal(const char* lstr, const char* rstr, u64 length);
+
+/*
+    @brief Посимвольно сравнивает заданое количество символов двух строки без учета регистра символов.
+    @param lstr Указатель на первую cтроку.
+    @param rstr Указатель на вторую cтрока.
+    @param length Количество символов которое нужно сравнить.
+    @return True если строки совпадают, false не совпадают.
+*/
+KAPI bool platform_string_nequali(const char* lstr, const char* rstr, u64 length);
 
 /*
     @brief Выполняет форматирование строки в соответствии с заданным форматом
@@ -76,7 +93,7 @@ KAPI bool platform_string_isspace(char c);
            форматной строкой.
     @param str Указатель на строку для выполнения чтения данных.
     @param format Форматная строка.
-    @param ... Параметры в соответствии со строкой формата.
+    @param ... Указатели на память для сохранения параметров в соответствии со строкой формата.
     @return Количество полученных элементов, -1 в случае ошибки в строке для чтения.
 */
 KAPI i32 platform_string_sscanf(const char* str, const char* format, ...);

@@ -232,9 +232,10 @@ KAPI bool shader_system_apply_global();
 /*
     @brief Применяет изменения uniform переменных области действия экземпляра.
     NOTE: Действует для используемого шейдера в данный момент.
+    @param needs_update Указывает, на необходимость обновить uniform переменные или связать их.
     @return True в случае успеха, false если есть ошибки.
 */
-KAPI bool shader_system_apply_instance();
+KAPI bool shader_system_apply_instance(bool needs_update);
 
 /*
     @brief Связывает экземпляр с указаным идентификатором для использлвания.

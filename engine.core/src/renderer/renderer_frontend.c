@@ -250,18 +250,16 @@ bool renderer_draw_frame(render_packet* packet)
                 m = material_system_get_default();
             }
 
-            if(m->render_frame_number != state_ptr->backend.frame_number)
+            // Применение материала.
+            bool needs_update = m->render_frame_number != state_ptr->backend.frame_number;
+            if(!material_system_apply_instance(m, needs_update))
             {
-                // Применение материала.
-                if(!material_system_apply_instance(m))
-                {
-                    kwarng("Failed to apply material '%s'. Skipping draw.", m->name);
-                    continue;
-                }
-                else
-                {
-                    m->render_frame_number = state_ptr->backend.frame_number;
-                }
+                kwarng("Failed to apply material '%s'. Skipping draw.", m->name);
+                continue;
+            }
+            else
+            {
+                m->render_frame_number = state_ptr->backend.frame_number;
             }
 
             // Применение локальной позиции объекта.
@@ -311,10 +309,15 @@ bool renderer_draw_frame(render_packet* packet)
             }
 
             // Применение материала.
-            if(!material_system_apply_instance(m))
+            bool needs_update = m->render_frame_number != state_ptr->backend.frame_number;
+            if(!material_system_apply_instance(m, needs_update))
             {
                 kwarng("Failed to apply UI material '%s'. Skipping draw.", m->name);
                 continue;
+            }
+            else
+            {
+                m->render_frame_number = state_ptr->backend.frame_number;
             }
 
             // Применение локальной позиции объекта.
@@ -423,9 +426,9 @@ bool renderer_shader_apply_globals(shader* s)
     return state_ptr->backend.shader_apply_globals(s);
 }
 
-bool renderer_shader_apply_instance(shader* s)
+bool renderer_shader_apply_instance(shader* s, bool needs_update)
 {
-    return state_ptr->backend.shader_apply_instance(s);
+    return state_ptr->backend.shader_apply_instance(s, needs_update);
 }
 
 bool renderer_shader_acquire_instance_resources(shader* s, u32* out_instance_id)

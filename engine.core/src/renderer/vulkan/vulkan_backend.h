@@ -47,7 +47,7 @@ bool vulkan_renderer_shader_bind_instance(struct shader* shader, u32 instance_id
 
 bool vulkan_renderer_shader_apply_globals(struct shader* shader);
 
-bool vulkan_renderer_shader_apply_instance(struct shader* shader);
+bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_update);
 
 bool vulkan_renderer_shader_acquire_instance_resources(struct shader* shader, u32* out_instance_id);
 

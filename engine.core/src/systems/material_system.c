@@ -446,7 +446,7 @@ bool material_system_apply_global(u32 shader_id, const mat4* projection, const m
     return true;
 }
 
-bool material_system_apply_instance(material* m)
+bool material_system_apply_instance(material* m, bool needs_update)
 {
     if(!material_system_status_valid(__FUNCTION__))
     {
@@ -455,26 +455,29 @@ bool material_system_apply_instance(material* m)
 
     MATERIAL_APPLY_OR_FAIL(shader_system_bind_instance(m->internal_id));
 
-    if(m->shader_id == state_ptr->material_shader_id)
+    if(needs_update)
     {
-        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.shininess, &m->shininess));
-        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_color, &m->diffuse_color));
-        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_texture, m->diffuse_map.texture));
-        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.specular_texture, m->specular_map.texture));
-        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.normal_texture, m->normal_map.texture));
-    }
-    else if(m->shader_id == state_ptr->ui_shader_id)
-    {
-        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_color, &m->diffuse_color));
-        MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_texture, m->diffuse_map.texture));
-    }
-    else
-    {
-        kerror("Function '%s': Unrecognized shader id '%d' on shader '%s'.", __FUNCTION__, m->shader_id, m->name);
-        return false;
+        if(m->shader_id == state_ptr->material_shader_id)
+        {
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.shininess, &m->shininess));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_color, &m->diffuse_color));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_texture, m->diffuse_map.texture));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.specular_texture, m->specular_map.texture));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.normal_texture, m->normal_map.texture));
+        }
+        else if(m->shader_id == state_ptr->ui_shader_id)
+        {
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_color, &m->diffuse_color));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_texture, m->diffuse_map.texture));
+        }
+        else
+        {
+            kerror("Function '%s': Unrecognized shader id '%d' on shader '%s'.", __FUNCTION__, m->shader_id, m->name);
+            return false;
+        }
     }
 
-    MATERIAL_APPLY_OR_FAIL(shader_system_apply_instance());
+    MATERIAL_APPLY_OR_FAIL(shader_system_apply_instance(needs_update));
     return true;
 }
 
@@ -507,7 +510,7 @@ bool default_materials_create()
     string_ncopy(state_ptr->default_material.name, DEFAULT_MATERIAL_NAME, MATERIAL_NAME_MAX_LENGTH);
     state_ptr->default_material.diffuse_color = vec4_one();    // Белый цвет.
     state_ptr->default_material.diffuse_map.use = TEXTURE_USE_MAP_DIFFUSE;
-    state_ptr->default_material.diffuse_map.texture = texture_system_get_default_diffuse_texture();
+    state_ptr->default_material.diffuse_map.texture = texture_system_get_default_texture();
 
     state_ptr->default_material.specular_map.use = TEXTURE_USE_MAP_SPECULAR;
     state_ptr->default_material.specular_map.texture = texture_system_get_default_specular_texture();
@@ -558,7 +561,7 @@ bool material_load(material_config* config, material* m)
                 "Function '%s': Unable to load diffuse texture '%s' for material '%s', using default.",
                 __FUNCTION__, config->diffuse_map_name, m->name
             );
-            diff_map->texture = texture_system_get_default_diffuse_texture();
+            diff_map->texture = texture_system_get_default_texture();
         }
     }
     else

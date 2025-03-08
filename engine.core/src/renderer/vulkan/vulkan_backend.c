@@ -1387,7 +1387,7 @@ bool vulkan_renderer_shader_apply_globals(shader* shader)
     return true;
 }
 
-bool vulkan_renderer_shader_apply_instance(shader* shader)
+bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_update)
 {
     if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__))
     {
@@ -1408,78 +1408,80 @@ bool vulkan_renderer_shader_apply_instance(shader* shader)
     vulkan_shader_instance_state* object_state = &vk_shader->instance_states[shader->bound_instance_id];
     VkDescriptorSet object_descriptor_set = object_state->descriptor_set_state.descriptor_sets[image_index];
 
-    // TODO: Если необходимо обновить?
-    VkWriteDescriptorSet descriptor_writes[2]; // Всегда максимум 2 набора дескрипторов.
-    kzero_tc(descriptor_writes, VkWriteDescriptorSet, 2);
-    u32 descriptor_count = 0;
-    u32 descriptor_index = 0;
-
-    // Дескриптор 0 - Uniform буфер.
-    // Выполнять только если это дескриптор еще не был обновлен.
-    u8* instance_ubo_generation = &object_state->descriptor_set_state.descriptor_states[descriptor_index].generations[image_index];
-    if(*instance_ubo_generation == INVALID_ID_U8 /* || *global_ubo_generation != material->generation */)
+    if(needs_update)
     {
-        VkDescriptorBufferInfo buffer_info;
-        buffer_info.buffer = vk_shader->uniform_buffer.handle;
-        buffer_info.offset = object_state->offset;
-        buffer_info.range = shader->ubo_stride;
+        VkWriteDescriptorSet descriptor_writes[2]; // Всегда максимум 2 набора дескрипторов.
+        kzero_tc(descriptor_writes, VkWriteDescriptorSet, 2);
+        u32 descriptor_count = 0;
+        u32 descriptor_index = 0;
 
-        VkWriteDescriptorSet ubo_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-        ubo_descriptor.dstSet = object_descriptor_set;
-        ubo_descriptor.dstBinding = descriptor_index;
-        ubo_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        ubo_descriptor.descriptorCount = 1;
-        ubo_descriptor.pBufferInfo = &buffer_info;
-
-        descriptor_writes[descriptor_count] = ubo_descriptor;
-        descriptor_count++;
-
-        // Обновление генерации.
-        *instance_ubo_generation = 1;
-    }
-    descriptor_index++;
-
-    // Сэмплеры всегда будут в привязке. Если количество привязок меньше 2, то сэмплеров нет.
-    if(vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].binding_count > 1)
-    {
-        u32 total_sampler_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
-        u32 update_sampler_count = 0;
-        VkDescriptorImageInfo image_infos[VULKAN_SHADER_MAX_GLOBAL_TEXTURES];
-
-        for(u32 i = 0; i < total_sampler_count; ++i)
+        // Дескриптор 0 - Uniform буфер.
+        // Выполнять только если это дескриптор еще не был обновлен.
+        u8* instance_ubo_generation = &object_state->descriptor_set_state.descriptor_states[descriptor_index].generations[image_index];
+        if(*instance_ubo_generation == INVALID_ID_U8 /* || *global_ubo_generation != material->generation */)
         {
-            texture* t = vk_shader->instance_states[shader->bound_instance_id].instance_textures[i];
-            vulkan_texture_data* internal_data = t->internal_data;
+            VkDescriptorBufferInfo buffer_info;
+            buffer_info.buffer = vk_shader->uniform_buffer.handle;
+            buffer_info.offset = object_state->offset;
+            buffer_info.range = shader->ubo_stride;
 
-            image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            image_infos[i].imageView = internal_data->image.view;
-            image_infos[i].sampler = internal_data->sampler;
+            VkWriteDescriptorSet ubo_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+            ubo_descriptor.dstSet = object_descriptor_set;
+            ubo_descriptor.dstBinding = descriptor_index;
+            ubo_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            ubo_descriptor.descriptorCount = 1;
+            ubo_descriptor.pBufferInfo = &buffer_info;
 
-            // TODO: Изменить состояние дескриптора.
-            // Синхронизируем генерацию кадров, если не используется текстура по умолчанию.
-            // if(t->generation != INVALID_ID)
-            // {
-            //     *descriptor_generation = t->generation;
-            //     *descriptor_id = t->id;
-            // }
+            descriptor_writes[descriptor_count] = ubo_descriptor;
+            descriptor_count++;
 
-            update_sampler_count++;
+            // Обновление генерации.
+            *instance_ubo_generation = 1;
+        }
+        descriptor_index++;
+
+        // Сэмплеры всегда будут в привязке. Если количество привязок меньше 2, то сэмплеров нет.
+        if(vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].binding_count > 1)
+        {
+            u32 total_sampler_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
+            u32 update_sampler_count = 0;
+            VkDescriptorImageInfo image_infos[VULKAN_SHADER_MAX_GLOBAL_TEXTURES];
+
+            for(u32 i = 0; i < total_sampler_count; ++i)
+            {
+                texture* t = vk_shader->instance_states[shader->bound_instance_id].instance_textures[i];
+                vulkan_texture_data* internal_data = t->internal_data;
+
+                image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                image_infos[i].imageView = internal_data->image.view;
+                image_infos[i].sampler = internal_data->sampler;
+
+                // TODO: Изменить состояние дескриптора.
+                // Синхронизируем генерацию кадров, если не используется текстура по умолчанию.
+                // if(t->generation != INVALID_ID)
+                // {
+                //     *descriptor_generation = t->generation;
+                //     *descriptor_id = t->id;
+                // }
+
+                update_sampler_count++;
+            }
+
+            VkWriteDescriptorSet sampler_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+            sampler_descriptor.dstSet = object_descriptor_set;
+            sampler_descriptor.dstBinding = descriptor_index;
+            sampler_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            sampler_descriptor.descriptorCount = update_sampler_count;
+            sampler_descriptor.pImageInfo = image_infos;
+
+            descriptor_writes[descriptor_count] = sampler_descriptor;
+            descriptor_count++;
         }
 
-        VkWriteDescriptorSet sampler_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-        sampler_descriptor.dstSet = object_descriptor_set;
-        sampler_descriptor.dstBinding = descriptor_index;
-        sampler_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        sampler_descriptor.descriptorCount = update_sampler_count;
-        sampler_descriptor.pImageInfo = image_infos;
-
-        descriptor_writes[descriptor_count] = sampler_descriptor;
-        descriptor_count++;
-    }
-
-    if(descriptor_count > 0)
-    {
-        vkUpdateDescriptorSets(context->device.logical, descriptor_count, descriptor_writes, 0, null);
+        if(descriptor_count > 0)
+        {
+            vkUpdateDescriptorSets(context->device.logical, descriptor_count, descriptor_writes, 0, null);
+        }
     }
 
     // Привязывание наборов дескрипторов для обновления или в случае изменения шейдера.
@@ -1521,7 +1523,7 @@ bool vulkan_renderer_shader_acquire_instance_resources(shader* shader, u32* out_
     instance_state->instance_textures = kallocate_tc(texture*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
 
     // Устанавка всех указателей текстур на значения по умолчанию, пока они не назначены.
-    texture* default_texture = texture_system_get_default_diffuse_texture();
+    texture* default_texture = texture_system_get_default_texture();
     for(u32 i = 0; i < instance_texture_count; ++i)
     {
         instance_state->instance_textures[i] = default_texture;

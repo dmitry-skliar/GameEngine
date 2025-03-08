@@ -5,6 +5,24 @@
 #include <resources/resource_types.h>
 #include <systems/resource_system.h>
 
+// TODO: Добавить другие.
+// @brief Типы файлов с которорыми работают системные загрузчики.
+typedef enum loader_filetype {
+    // @brief Неизвестный файл.
+    LOADER_FILETYPE_NOT_FOUND,
+    // @brief Сетка геометрий kohi.
+    LOADER_FILETYPE_MESH_KSM,
+    // @brief Сетка геометрий obj.
+    LOADER_FILETYPE_MESH_OBJ
+} loader_filetype;
+
+// @brief Запись таблицы известных файлов (для каждого загрузчика индивидуально).
+typedef struct loader_filetype_entry {
+    char* extension;
+    loader_filetype type;
+    bool is_binary;
+} loader_filetype_entry;
+
 /*
 */
 void resource_unload(resource_loader* self, resource* resource, memory_tag tag, const char* func_name);

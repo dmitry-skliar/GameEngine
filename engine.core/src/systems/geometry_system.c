@@ -4,9 +4,12 @@
 
 // Внутренние подключения.
 #include "logger.h"
-#include "memory/memory.h"
 #include "kstring.h"
+#include "memory/memory.h"
+#include "math/geometry_utils.h"
 #include "renderer/renderer_frontend.h"
+
+#include "debug/assert.h"
 
 typedef struct geometry_reference {
     // @brief Количество ссылок на геометрию.
@@ -506,6 +509,8 @@ geometry_config geometry_system_generate_plane_config(
         string_ncopy(config.material_name, DEFAULT_MATERIAL_NAME, MATERIAL_NAME_MAX_LENGTH);
     }
 
+    geometry_generate_tangent(config.vertex_count, config.vertices, config.index_count, config.indices);
+
     return config;
 }
 
@@ -681,6 +686,8 @@ geometry_config geometry_system_generate_cube_config(
     {
         string_ncopy(config.material_name, DEFAULT_MATERIAL_NAME, MATERIAL_NAME_MAX_LENGTH);
     }
+
+    geometry_generate_tangent(config.vertex_count, config.vertices, config.index_count, config.indices);
 
     return config;
 }

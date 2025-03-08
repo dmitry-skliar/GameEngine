@@ -73,9 +73,10 @@ bool material_system_apply_global(u32 shader_id, const mat4* projection, const m
 /*
     @brief Применяет данные материала на уровне экземпляра для предоставленного материала.
     @param m Указатель на материал для которого нужно применить данные.
+    @param needs_update Указывает, на необходимость обновить material или связать его.
     @return True в случае успеха, false если есть ошибки.
 */
-bool material_system_apply_instance(material* m);
+bool material_system_apply_instance(material* m, bool needs_update);
 
 /*
     @brief Применяет данные материала на локальном уровне для предоставленного материала.

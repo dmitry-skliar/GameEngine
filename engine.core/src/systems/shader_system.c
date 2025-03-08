@@ -434,14 +434,14 @@ bool shader_system_apply_global()
     return renderer_shader_apply_globals(&state_ptr->shaders[state_ptr->bound_shader_id]);
 }
 
-bool shader_system_apply_instance()
+bool shader_system_apply_instance(bool needs_update)
 {
     if(!shader_system_status_valid(__FUNCTION__))
     {
         return false;
     }
 
-    return renderer_shader_apply_instance(&state_ptr->shaders[state_ptr->bound_shader_id]);
+    return renderer_shader_apply_instance(&state_ptr->shaders[state_ptr->bound_shader_id], needs_update);
 }
 
 bool shader_system_bind_instance(u32 instance_id)
@@ -567,7 +567,7 @@ bool add_sampler(shader* shader, shader_uniform_config* config)
         }
 
         location = global_texture_count;
-        darray_push(shader->global_textures, texture_system_get_default_diffuse_texture());
+        darray_push(shader->global_textures, texture_system_get_default_texture());
     }
     else
     {

@@ -20,6 +20,8 @@ typedef struct geometry_config {
     u32 index_size;
     u32 index_count;
     void* indices;
+    vec3 center;
+    extents_3d extents;
     char name[GEOMETRY_NAME_MAX_LENGTH];
     char material_name[MATERIAL_NAME_MAX_LENGTH];
 } geometry_config;

@@ -13,6 +13,7 @@ typedef struct texture_system_state {
     // Конфигурация системы.
     texture_system_config config;
     // Текстура по умолчанию.
+    texture default_texture;
     texture default_diffuse_texture;
     texture default_specular_texture;
     texture default_normal_texture;
@@ -156,6 +157,12 @@ texture* texture_system_acquire(const char* name, bool auto_release)
         return null;
     }
 
+    if(string_equali(name, DEFAULT_TEXTURE_NAME))
+    {
+        kwarng("Function '%s' called for default texture. Call 'texture_system_get_default_texture'!", __FUNCTION__);
+        return &state_ptr->default_texture;
+    }
+    
     if(string_equali(name, DEFAULT_DIFFUSE_TEXTURE_NAME))
     {
         kwarng("Function '%s' called for default diffuse texture. Call 'texture_system_get_default_diffuse_texture'!", __FUNCTION__);
@@ -302,6 +309,16 @@ void texture_system_release(const char* name)
     }
 }
 
+texture* texture_system_get_default_texture()
+{
+    if(!texture_system_status_valid(__FUNCTION__))
+    {
+        return null;
+    }
+
+    return &state_ptr->default_texture;
+}
+
 texture* texture_system_get_default_diffuse_texture()
 {
     if(!texture_system_status_valid(__FUNCTION__))
@@ -370,11 +387,21 @@ bool default_textures_create()
         }
     }
 
+    string_ncopy(state_ptr->default_texture.name, DEFAULT_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
+    state_ptr->default_texture.width = tex_dimension;
+    state_ptr->default_texture.height = tex_dimension;
+    state_ptr->default_texture.channel_count = bpp;
+    state_ptr->default_texture.has_transparency = false;
+    state_ptr->default_texture.generation = INVALID_ID;
+    renderer_create_texture(&state_ptr->default_texture, pixels);
+
     // Diffuse.
     string_ncopy(state_ptr->default_diffuse_texture.name, DEFAULT_DIFFUSE_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
-    state_ptr->default_diffuse_texture.width = tex_dimension;
-    state_ptr->default_diffuse_texture.height = tex_dimension;
-    state_ptr->default_diffuse_texture.channel_count = bpp;
+    u8 diff_pixels[1024];
+    kset_tc(diff_pixels, u8, 1024, 255);
+    state_ptr->default_diffuse_texture.width = 16;
+    state_ptr->default_diffuse_texture.height = 16;
+    state_ptr->default_diffuse_texture.channel_count = 4;
     state_ptr->default_diffuse_texture.has_transparency = false;
     state_ptr->default_diffuse_texture.generation = INVALID_ID;
     renderer_create_texture(&state_ptr->default_diffuse_texture, pixels);
@@ -392,7 +419,6 @@ bool default_textures_create()
 
     // Normal.
     u8 norm_pixels[1024];
-    kzero_tc(norm_pixels, u8, 1024);
     for(u64 i = 0; i < 1024; i += 4)
     {
         norm_pixels[i + 0] = 180;
@@ -414,6 +440,7 @@ bool default_textures_create()
 
 void default_textures_destroy()
 {
+    texture_destroy(&state_ptr->default_texture);
     texture_destroy(&state_ptr->default_diffuse_texture);
     texture_destroy(&state_ptr->default_specular_texture);
     texture_destroy(&state_ptr->default_normal_texture);

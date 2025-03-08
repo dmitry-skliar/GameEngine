@@ -12,6 +12,7 @@
 #include "resources/loaders/binary_loader.h"
 #include "resources/loaders/text_loader.h"
 #include "resources/loaders/shader_loader.h"
+#include "resources/loaders/mesh_loader.h"
 
 typedef struct resource_system_state {
     resource_system_config config;
@@ -77,6 +78,7 @@ bool resource_system_initialize(u64* memory_requirement, void* memory, resource_
     resource_system_register_loader(binary_resource_loader_create());
     resource_system_register_loader(text_resource_loader_create());
     resource_system_register_loader(shader_resource_loader_create());
+    resource_system_register_loader(mesh_resource_loader_create());
 
     return true;
 }
@@ -163,7 +165,7 @@ KAPI bool resource_system_load(const char* name, resource_type type, resource* o
         }
     }
 
-    kerror("Function '%s': No loader for type %d was found.", __FUNCTION__, type);
+    kerror("Function '%s': No loader for type %d was found. Resource '%s' is skipped...", __FUNCTION__, type, name);
     out_resource->loader_id = INVALID_ID;
     return false;
 }

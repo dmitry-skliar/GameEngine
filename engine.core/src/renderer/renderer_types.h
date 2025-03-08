@@ -80,7 +80,7 @@ typedef struct renderer_backend {
 
     bool (*shader_apply_globals)(struct shader* s);
 
-    bool (*shader_apply_instance)(struct shader* s);
+    bool (*shader_apply_instance)(struct shader* s, bool needs_update);
 
     bool (*shader_acquire_instance_resources)(struct shader* s, u32* out_instance_id);
 

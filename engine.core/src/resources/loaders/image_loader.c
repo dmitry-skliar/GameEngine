@@ -6,6 +6,7 @@
 #include "logger.h"
 #include "kstring.h"
 #include "memory/memory.h"
+#include "platform/file.h"
 #include "resources/resource_types.h"
 #include "systems/resource_system.h"
 
@@ -20,8 +21,27 @@ bool image_loader_load(resource_loader* self, const char* name, resource* out_re
     stbi_set_flip_vertically_on_load(true);
     char full_file_path[512];
 
-    // TODO: разные расширения.
-    string_format(full_file_path, format_str, resource_system_base_path(), self->type_path, name, ".png");
+    #define IMAGE_EXTENSION_COUNT 4
+    char* extentions[IMAGE_EXTENSION_COUNT] = { ".tga", ".png", ".jpg", ".bmp" };
+    bool found = false;
+
+    // Поиск расширений.
+    for(u32 i = 0; i < IMAGE_EXTENSION_COUNT; ++i)
+    {
+        string_format(full_file_path, format_str, resource_system_base_path(), self->type_path, name, extentions[i]);
+
+        if(platform_file_exists(full_file_path))
+        {
+            found = true;
+            break;
+        }
+    }
+
+    if(!found)
+    {
+        kerror("Function '%s': Failed to find file '%s' or with any supported extention.", __FUNCTION__, full_file_path);
+        return false;
+    }
 
     i32 width;
     i32 height;
@@ -30,21 +50,21 @@ bool image_loader_load(resource_loader* self, const char* name, resource* out_re
     // TODO: конфигурируемым.
     u8* data = stbi_load(full_file_path, &width, &height, &channel_count, required_channel_count);
 
-    const char* fail_reason = stbi_failure_reason();
-    if(fail_reason)
-    {
-        kerror("Function '%s': Failed to load file '%s': %s.", __FUNCTION__, full_file_path, fail_reason);
+    // const char* fail_reason = stbi_failure_reason();
+    // if(fail_reason)
+    // {
+    //     kerror("Function '%s': Failed to load file '%s': %s.", __FUNCTION__, full_file_path, fail_reason);
 
-        // Очистка ошибок stbi, что бы следующая текстура могла загрузиться.
-        stbi__err(0, 0);
+    //     // Очистка ошибок stbi, что бы следующая текстура могла загрузиться.
+    //     stbi__err(0, 0);
 
-        if(data)
-        {
-            stbi_image_free(data);
-        }
+    //     if(data)
+    //     {
+    //         stbi_image_free(data);
+    //     }
 
-        return false;
-    }
+    //     return false;
+    // }
 
     if(!data)
     {

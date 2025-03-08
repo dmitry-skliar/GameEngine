@@ -19,7 +19,7 @@ bool shader_loader_load(resource_loader* self, const char* name, resource* out_r
     }
 
     char* format_str = "%s/%s/%s%s";
-    char  filepath_str[512];                // TODO: Сделать общей константой. Добавить в проверку длину имени!
+    char  filepath_str[512];                // TODO: Сделать общей константой длинну. Добавить в проверку длину имени!
     string_format(filepath_str, format_str, resource_system_base_path(), self->type_path, name, ".shadercfg");
 
     file* f;
@@ -46,11 +46,10 @@ bool shader_loader_load(resource_loader* self, const char* name, resource* out_r
     resource_data->name = null;
 
     char bufferline[512] = "";
-    char* p = bufferline;
     u64 line_length = 0;
     u32 line_number = 1;
 
-    while(platform_file_read_line(f, 511, p, &line_length))
+    while(platform_file_read_line(f, 511, bufferline, &line_length))
     {
         char* trimmed = string_trim(bufferline);
         line_length = string_length(trimmed);

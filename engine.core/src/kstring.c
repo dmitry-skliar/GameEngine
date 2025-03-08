@@ -321,3 +321,84 @@ void string_cleanup_split_array(char** str_darray)
         kfree_tc(str_darray[i], char, length, MEMORY_TAG_STRING);
     }
 }
+
+void string_append_char(char* dest, const char* src, const char symbol)
+{
+    platform_string_format(dest, "%s%c", src, symbol);
+}
+
+void string_append_string(char* dest, const char* src, const char* str)
+{
+    platform_string_format(dest, "%s%s", src, str);
+}
+
+void string_append_i32(char* dest, const char* src, i32 value)
+{
+    platform_string_format(dest, "%s%i", src, value);
+}
+
+void string_append_i64(char* dest, const char* src, i64 value)
+{
+    platform_string_format(dest, "%s%lli", src, value);
+}
+
+void string_append_u32(char* dest, const char* src, u32 value)
+{
+    platform_string_format(dest, "%s%u", src, value);
+}
+
+void string_append_u64(char* dest, const char* src, u64 value)
+{
+    platform_string_format(dest, "%s%llu", src, value);
+}
+
+void string_append_f32(char* dest, const char* src, f32 value)
+{
+    platform_string_format(dest, "%s%f", src, value);
+}
+
+void string_append_bool(char* dest, const char* src, bool value)
+{
+    platform_string_format(dest, "%s%s", src, value ? "true" : "false");
+}
+
+void string_directory_from_path(char* directory, const char* path)
+{
+    u64 length = platform_string_length(path);
+
+    for(i64 i = length; i >= 0; --i)
+    {
+        char c = path[i];
+
+        if(c == '/' || c == '\\')
+        {
+            platform_string_ncopy(directory, path, i + 1);
+            return;
+        }
+    }
+}
+
+void string_filename_from_path(char* filename, const char* path, bool with_extension)
+{
+    u64 length = platform_string_length(path);
+    u64 start = 0;
+    u64 end = with_extension ? length : 0;
+
+    for(i64 i = length; i >= 0; --i)
+    {
+        char c = path[i];
+
+        if(end == 0 && c == '.')
+        {
+            end = i;
+        }
+
+        if(start == 0 && (c == '/' || c == '\\'))
+        {
+            start = i + 1;
+            break;
+        }
+    }
+
+    string_mid(filename, path, start, end - start);
+}
