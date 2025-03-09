@@ -150,17 +150,17 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
 
     // Создание матриц проекции и вида (world).
     // TODO: Сделать настраиваемыми!
-    state_ptr->fov_radians = deg_to_rad(45.0f);
+    state_ptr->fov_radians = deg_to_rad(60.0f);
     state_ptr->near_clip = 0.1f;
-    state_ptr->far_clip = 1000.0f;
+    state_ptr->far_clip = 500.0f;
     f32 aspect = window_state->width / (f32)window_state->height;
 
     state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
     // TODO: Конфигурация стартовой позиции камеры.
-    state_ptr->view = mat4_translation((vec3){{0, 0, 30.0f}});
+    state_ptr->view = mat4_translation((vec3){{0, 0, 30.0f}}); // game.c установка камеры!
     state_ptr->view = mat4_inverse(state_ptr->view);
     // TODO: Получение из сцены.
-    state_ptr->ambient_color = (vec4){{0.07f, 0.07f, 0.07f, 1.0f}};
+    state_ptr->ambient_color = (vec4){{0.15f, 0.15f, 0.15f, 1.0f}};
 
     // Создание матриц проекции и вида (ui).
     state_ptr->ui_near_clip = -100.0f;

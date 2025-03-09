@@ -90,6 +90,7 @@ typedef struct renderer_backend {
 
 } renderer_backend;
 
+// TODO: Провести рефактор render_packet.
 typedef struct render_packet {
     f32 delta_time;
 

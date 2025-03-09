@@ -307,10 +307,36 @@ bool application_create(game* game_inst)
             car_mesh->geometries[i] = geometry_system_acquire_from_config(cfg, true);
         }
 
-        car_mesh->transform = transform_from_position(vec3_create(0.0f, 7.0f, 0.0f));
+        car_mesh->transform = transform_from_position(vec3_create(15.0f, 0.0f, 0.0f));
 
         // NOTE: Очистка конфигурации происходит в загрузчике.
         resource_system_unload(&car_mesh_resource);
+        app_state->mesh_count++;
+    }
+
+    // Sponza.
+    mesh* sponza_mesh = &app_state->meshes[app_state->mesh_count];
+    resource sponza_mesh_resource = {};
+    if(!resource_system_load("sponza_small", RESOURCE_TYPE_MESH, &sponza_mesh_resource))
+    {
+        kerror("Failed to load sponza test mesh.");
+    }
+    else
+    {
+        geometry_config* configs = sponza_mesh_resource.data;
+        sponza_mesh->geometry_count = sponza_mesh_resource.data_size; // Передается из mesh_loader.
+        sponza_mesh->geometries = kallocate_tc(geometry*, sponza_mesh->geometry_count, MEMORY_TAG_ARRAY);
+
+        for(u32 i = 0; i < sponza_mesh->geometry_count; ++i)
+        {
+            geometry_config* cfg = &configs[i];
+            sponza_mesh->geometries[i] = geometry_system_acquire_from_config(cfg, true);
+        }
+
+        sponza_mesh->transform = transform_from_position(vec3_create(0.0f, 0.0f, 0.0f));
+
+        // NOTE: Очистка конфигурации происходит в загрузчике.
+        resource_system_unload(&sponza_mesh_resource);
         app_state->mesh_count++;
     }
 
@@ -389,7 +415,12 @@ bool application_run()
 
     f64 running_time     = 0;
     u16 frame_count      = 0;
-    f64 frame_limit_time = 1.0f / 120; // TODO: сделать настраиваемым!
+    f64 frame_limit_time = 1.0f / 60; // TODO: сделать настраиваемым!
+
+    // TODO: Временный тестовый код: начало.
+    render_packet packet;
+    packet.geometries = darray_create(geometry_render_data);
+    // TODO: Временный тестовый код: конец.
 
     while(app_state->is_running)
     {
@@ -421,28 +452,14 @@ bool application_run()
                 break;
             }
 
-            // TODO: Провести рефактор render_packet.
-            render_packet packet;
+            // TODO: Временный тестовый код: начало.
             packet.delta_time = (f32)delta;
             packet.geometry_count = 0;
-
-            // TODO: Временный тестовый код: начало.
-            packet.geometries = darray_create(geometry_render_data);
 
             if(app_state->mesh_count > 0)
             {
                 quat rotation = quat_from_axis_angle(vec3_up(), 0.5f * delta, false);
                 transform_rotate(&app_state->meshes[0].transform, rotation);
-
-                // if(app_state->mesh_count > 1)
-                // {
-                //     transform_rotate(&app_state->meshes[1].transform, rotation);
-                // }
-
-                // if(app_state->mesh_count > 2)
-                // {
-                //     transform_rotate(&app_state->meshes[2].transform, rotation);
-                // }
 
                 for(u32 i = 0; i < app_state->mesh_count; ++i)
                 {
@@ -473,12 +490,9 @@ bool application_run()
                 break;
             }
 
-            // TODO: Временный код: очистка геометрий.
-            if(packet.geometries)
-            {
-                darray_destroy(packet.geometries);
-                packet.geometries = null;
-            }
+            // TODO: Временный тестовый код: начало.
+            darray_clear(packet.geometries);
+            // TODO: Временный тестовый код: конец.
 
             // Расчет времени кадра.
             f64 frame_end_time = platform_time_absolute();
@@ -508,6 +522,14 @@ bool application_run()
             app_state->last_time = current_time;
         }
     }
+
+    // TODO: Временный тестовый код: начало.
+    if(packet.geometries)
+    {
+        darray_destroy(packet.geometries);
+        packet.geometries = null;
+    }
+    // TODO: Временный тестовый код: конецы.
 
     kfree(app_state->game_inst->state, app_state->game_inst->state_memory_requirement, MEMORY_TAG_GAME);
     kinfor("Game stopped.");

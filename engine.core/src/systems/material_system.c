@@ -566,8 +566,8 @@ bool material_load(material_config* config, material* m)
     }
     else
     {
-        diff_map->use = TEXTURE_USE_UNKNOWN;
-        diff_map->texture = null;
+        diff_map->use = TEXTURE_USE_MAP_DIFFUSE;
+        diff_map->texture = texture_system_get_default_texture();
     }
 
     // Specular.

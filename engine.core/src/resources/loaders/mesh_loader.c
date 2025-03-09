@@ -455,17 +455,157 @@ bool convert_obj_group_to(vec3* positions, vec3* normals, vec2* texcoords, mesh_
     return true;
 }
 
+// TODO: Переработать!
+// NOTE: Выглядит ужасно, но это временная мера.
+bool import_mtl_file(const char* mtl_filename, const char* kmt_filename)
+{
+    char kmt_filepath[MATERIAL_NAME_MAX_LENGTH];
+    char mtl_filepath[MATERIAL_NAME_MAX_LENGTH];
+    string_format(mtl_filepath, "%s/models/%s", resource_system_base_path(), mtl_filename);
+    string_format(kmt_filepath, "%s/materials/%s.kmt", resource_system_base_path(), kmt_filename);
+
+    if(platform_file_exists(kmt_filepath))
+    {
+        // kwarng("Function '%s': File '%s' is already exists.", __FUNCTION__, kmt_filepath);
+        return false;
+    }
+
+    file* mtl_file;
+    if(!platform_file_open(mtl_filepath, FILE_MODE_READ, &mtl_file))
+    {
+        kerror("Function '%s': Cannot open file '%s' for reading. Skipping...", __FUNCTION__, mtl_filepath);
+        return false;
+    }
+
+    file* kmt_file;
+    if(!platform_file_open(kmt_filepath, FILE_MODE_WRITE, &kmt_file))
+    {
+        kerror("Function '%s': Cannot open file '%s' for writing. Skipping...", __FUNCTION__, mtl_filepath);
+        platform_file_close(mtl_file);
+        return false;
+    }
+
+    char texture_name[256];
+    char write_line_str[256];
+    platform_file_write_line(kmt_file, "version=0.1");
+    string_format(write_line_str, "name=%s", kmt_filename);
+    platform_file_write_line(kmt_file, write_line_str);
+    platform_file_write_line(kmt_file, "shader=Builtin.MaterialShader");
+
+    char bufferline[512] = "";
+    u64 line_length = 0;
+    bool line_skip = true;
+    bool bump_written = false;
+    // u32 line_number = 1;
+
+    while(platform_file_read_line(mtl_file, 511, bufferline, &line_length))
+    {
+        char* trimmed = string_trim(bufferline);
+        line_length = string_length(trimmed);
+        
+        // Пропуск пустых строк и коментариев.
+        if(line_length < 1 || bufferline[0] == '#')
+        {
+            // line_number++;
+            continue;
+        }
+
+        if(string_nequali(trimmed, "newmtl ", 7))
+        {
+            line_skip = true;
+
+            if(string_equali(&trimmed[7], kmt_filename))
+            {
+                line_skip = false;
+            }
+        }
+        else if(line_skip)
+        {
+            continue;
+        }
+        else if(string_nequali(trimmed, "Ns ", 3))
+        {
+            // Коэффициент зеркального отражения.
+            string_append_string(write_line_str, "shininess=", &trimmed[3]);
+            platform_file_write_line(kmt_file, write_line_str);
+        }
+        else if(string_nequali(trimmed, "Ka ", 3))
+        {
+            // TODO: Обработать! Ambient-свойства материала (цвет окружающего освещения)!
+        }
+        else if(string_nequali(trimmed, "Kd ", 3))
+        {
+            // Диффузный цвет материала.
+            string_format(write_line_str, "diffuse_color=%s 1.0", &trimmed[3]);
+            platform_file_write_line(kmt_file, write_line_str);
+        }
+        else if(string_nequali(trimmed, "Ks ", 3))
+        {
+            // TODO: Обработать! Specular-свойства материала!
+        }
+        else if(string_nequali(trimmed, "Ke ", 3))
+        {
+            // TODO: Обработать!
+        }
+        else if(string_nequali(trimmed, "Ni ", 3))
+        {
+            // TODO: Обработать!
+        }
+        else if(string_nequali(trimmed, "d ", 2))
+        {
+            // TODO: Обработать!
+        }
+        else if(string_nequali(trimmed, "illum ", 6))
+        {
+            // TODO: Обработать!
+        }
+        else if(string_nequali(trimmed, "map_Kd ", 7))
+        {
+            string_filename_from_path(texture_name, &trimmed[7], false);
+            string_append_string(write_line_str, "diffuse_map_name=", texture_name);
+            platform_file_write_line(kmt_file, write_line_str);
+        }
+        else if(string_nequali(trimmed, "map_Ks ", 7))
+        {
+            string_filename_from_path(texture_name, &trimmed[7], false);
+            string_append_string(write_line_str, "specular_map_name=", texture_name);
+            platform_file_write_line(kmt_file, write_line_str);
+        }
+        else if(!bump_written && string_nequali(trimmed, "map_bump ", 9))
+        {
+            string_filename_from_path(texture_name, &trimmed[9], false);
+            string_append_string(write_line_str, "normal_map_name=", texture_name);
+            platform_file_write_line(kmt_file, write_line_str);
+            bump_written = true;
+        }
+        else if(!bump_written && string_nequali(trimmed, "bump ", 5))
+        {
+            string_filename_from_path(texture_name, &trimmed[5], false);
+            string_append_string(write_line_str, "normal_map_name=", texture_name);
+            platform_file_write_line(kmt_file, write_line_str);
+            bump_written = true;
+        }
+
+        kzero_tc(bufferline, char, 512);
+        // line_number++;
+    }
+
+    platform_file_close(mtl_file);
+    platform_file_close(kmt_file);
+
+    return true;
+}
+
 bool load_obj_file(file* obj_file, const char* name, geometry_config** out_geometries_darray)
 {
-    // TODO: Файл материалов записывается но не используется.
-    char material_filename[MATERIAL_NAME_MAX_LENGTH] = "";
+    char mtl_filename[MATERIAL_NAME_MAX_LENGTH];
     vec3* positions = darray_reserve(vec3, 16384);
     vec3* normals = darray_reserve(vec3, 16384);
     vec2* texcoords = darray_reserve(vec2, 16384);
     mesh_group_data* groups = darray_reserve(mesh_group_data, 4);
 
     // Разбор obj файла и формирование исходных данных.
-    parse_obj_file(obj_file, &positions, &normals, &texcoords, &groups, material_filename);
+    parse_obj_file(obj_file, &positions, &normals, &texcoords, &groups, mtl_filename);
 
     u32 group_count = darray_length(groups);
     u32 normal_count = darray_length(normals);
@@ -474,6 +614,9 @@ bool load_obj_file(file* obj_file, const char* name, geometry_config** out_geome
     // Формирование групп геометрий.
     for(u64 i = 0; i < group_count; ++i)
     {
+        // TODO: Временная функция импорта материалов из mtl в kmt.
+        import_mtl_file(mtl_filename, groups[i].material_name);
+
         geometry_config new_config;
         string_ncopy(new_config.name, name, GEOMETRY_NAME_MAX_LENGTH);
         string_append_u64(new_config.name, new_config.name, i);

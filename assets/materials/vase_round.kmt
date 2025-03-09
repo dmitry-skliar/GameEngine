@@ -1,0 +1,8 @@
+version=0.1
+name=vase_round
+shader=Builtin.MaterialShader
+shininess=10.0000
+diffuse_color=0.5880 0.5880 0.5880 1.0
+diffuse_map_name=vase_round_bc
+specular_map_name=vase_round_spec
+normal_map_name=vase_round_ddn

@@ -1,0 +1,8 @@
+version=0.1
+name=ceiling
+shader=Builtin.MaterialShader
+shininess=10.0000
+diffuse_color=0.5880 0.5880 0.5880 1.0
+diffuse_map_name=sponza_ceiling_a_diff
+specular_map_name=sponza_ceiling_a_spec
+normal_map_name=sponza_ceiling_a_ddn

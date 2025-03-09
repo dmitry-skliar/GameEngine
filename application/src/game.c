@@ -58,7 +58,7 @@ void camera_pitch(game_state* state, f32 amount)
     state->camera_euler.x += amount;
 
     // Обрезание наклонов.
-    f32 limit = deg_to_rad(40.0f);
+    f32 limit = deg_to_rad(90.0f);
     state->camera_euler.x = KCLAMP(state->camera_euler.x, -limit, limit);
     
     state->camera_view_dirty = true;
@@ -69,8 +69,8 @@ bool game_initialize(game* inst)
     game_state* state = inst->state;
 
     // Стартовая позиция камеры.
-    state->camera_position = vec3_create(0, 0, 30.0f);
-    state->camera_euler = vec3_zero();
+    state->camera_position = vec3_create(47.65f, 14.88f, -6.06f);
+    state->camera_euler = vec3_create(-0.16f, 1.55f, 0.0f);
 
     state->view = mat4_translation(state->camera_position);
     state->view = mat4_inverse(state->view);
@@ -169,7 +169,8 @@ bool game_update(game* inst, f32 delta_time)
 
     if(input_keyboard_key_press_detect('P'))
     {
-        kdebug("Camera pos:[%.2f, %.2f, %.2f]", state->camera_position.x, state->camera_position.y, state->camera_position.z);
+        kdebug("Camera position: [%.2f, %.2f, %.2f]", state->camera_position.x, state->camera_position.y, state->camera_position.z);
+        kdebug("Camera euler   : [%.2f, %.2f, %.2f]", state->camera_euler.x, state->camera_euler.y, state->camera_euler.z);
     }
 
     if(input_keyboard_key_press_detect('1'))

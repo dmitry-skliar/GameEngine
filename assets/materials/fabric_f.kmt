@@ -1,0 +1,8 @@
+version=0.1
+name=fabric_f
+shader=Builtin.MaterialShader
+shininess=10.0000
+diffuse_color=0.5880 0.5880 0.5880 1.0
+diffuse_map_name=sponza_curtain_green_diff
+specular_map_name=sponza_curtain_spec
+normal_map_name=sponza_curtain_ddn
