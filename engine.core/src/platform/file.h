@@ -66,7 +66,7 @@ KAPI bool platform_file_write_line(file* file, const char* string);
     @param file Указатель на экземпляр файла.
     @param buffer_size Размер буфера и максимально возможное количество считываемых байт.
     @param buffer Указатель на буфер, куда будут записаны байты.
-    @param True успешно считано, false не удалось прочитать.
+    @param True успешно считано запрошенное количество байт, false не удалось прочитать.
 */
 KAPI bool platfrom_file_read(file* file, u64 buffer_size, void* buffer);
 
@@ -75,7 +75,7 @@ KAPI bool platfrom_file_read(file* file, u64 buffer_size, void* buffer);
     @param file Указатель на экземпляр файла.
     @param data_size Количество байт для записи.
     @param Указатель на память откуда следует брать данные.
-    @param True успешно записано, false не удалось записать.
+    @param True успешно записано запрошенное количество байт, false не удалось записать.
 */
 KAPI bool platform_file_write(file* file, u64 data_size, const void* data);
 

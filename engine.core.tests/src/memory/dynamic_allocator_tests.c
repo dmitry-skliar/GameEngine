@@ -4,7 +4,6 @@
 
 #include <memory/allocators/dynamic_allocator.h>
 #include <memory/memory.h>
-#include <debug/assert.h>
 
 u8 test1()
 {

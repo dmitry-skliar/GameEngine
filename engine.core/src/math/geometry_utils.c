@@ -2,9 +2,7 @@
 #include "math/geometry_utils.h"
 
 // Внутренние подключения.
-#include "logger.h"
 #include "math/kmath.h"
-#include "memory/memory.h"
 
 void geometry_generate_normals(u32 vertex_count, vertex_3d* vertices, u32 index_count, u32* indices)
 {
@@ -68,55 +66,4 @@ void geometry_generate_tangent(u32 vertex_count, vertex_3d* vertices, u32 index_
         vertices[i1].tangent = t4;
         vertices[i2].tangent = t4;
     }
-}
-
-void geometry_reassign_index(u32 index_count, u32* indices, u32 from, u32 to)
-{
-    for(u32 i = 0; i < index_count; ++i)
-    {
-        if(indices[i] == from)
-        {
-            indices[i] = to;
-        }
-        else if(indices[i] > from)
-        {
-            indices[i]--;
-        }
-    }
-}
-
-void geometry_deduplicate_vertices(u32 vertex_count, vertex_3d* vertices, u32 index_count, u32* indices, u32* out_vertex_count, vertex_3d** out_vertices)
-{
-    vertex_3d* unique_vertices = kallocate_tc(vertex_3d, vertex_count, MEMORY_TAG_ARRAY);
-    *out_vertex_count = 0;
-
-    u32 found_count = 0;
-    for(u32 v = 0; v < vertex_count; ++v)
-    {
-        bool found = false;
-
-        for(u32 u = 0; u < *out_vertex_count; ++u)
-        {
-            if(vertex_3d_equal(vertices[v], unique_vertices[u]))
-            {
-                geometry_reassign_index(index_count, indices, v - found_count, u);
-                found = true;
-                found_count++;
-                break;
-            }
-        }
-
-        if(!found)
-        {
-            unique_vertices[*out_vertex_count] = vertices[v];
-            (*out_vertex_count)++;
-        }
-    }
-
-    *out_vertices = kallocate_tc(vertex_3d, (*out_vertex_count), MEMORY_TAG_ARRAY);
-    kcopy_tc(*out_vertices, unique_vertices, vertex_3d, (*out_vertex_count));
-
-    kfree_tc(unique_vertices, vertex_3d, vertex_count, MEMORY_TAG_ARRAY);
-
-    kdebug("Function '%s': Removed %u vertices, orign/now %u/%u.", __FUNCTION__, found_count, vertex_count, *out_vertex_count);
 }

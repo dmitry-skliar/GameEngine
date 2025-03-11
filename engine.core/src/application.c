@@ -266,28 +266,6 @@ bool application_create(game* game_inst)
     geometry_system_config_dispose(&g_config);
     app_state->mesh_count++;
 
-    // Второй куб.
-    // mesh* cube_mesh_2 = &app_state->meshes[app_state->mesh_count];
-    // cube_mesh_2->geometry_count = 1;
-    // cube_mesh_2->geometries = kallocate_tc(geometry*, cube_mesh_2->geometry_count, MEMORY_TAG_ARRAY);
-    // geometry_config g_config_2 = geometry_system_generate_cube_config(5.0f, 5.0f, 5.0f, 1.0f, 1.0f, "test_cube_2", "test_material");
-    // cube_mesh_2->geometries[0] = geometry_system_acquire_from_config(&g_config_2, true);
-    // cube_mesh_2->transform = transform_from_position(vec3_create(10.0f, 0.0f, 1.0f));
-    // transform_set_parent(&cube_mesh_2->transform, &cube_mesh->transform);
-    // geometry_system_config_dispose(&g_config_2);
-    // app_state->mesh_count++;
-
-    // Третий куб.
-    // mesh* cube_mesh_3 = &app_state->meshes[app_state->mesh_count];
-    // cube_mesh_3->geometry_count = 1;
-    // cube_mesh_3->geometries = kallocate_tc(geometry*, cube_mesh_3->geometry_count, MEMORY_TAG_ARRAY);
-    // geometry_config g_config_3 = geometry_system_generate_cube_config(2.0f, 2.0f, 2.0f, 1.0f, 1.0f, "test_cube_3", "test_material");
-    // cube_mesh_3->geometries[0] = geometry_system_acquire_from_config(&g_config_3, true);
-    // cube_mesh_3->transform = transform_from_position(vec3_create(5.0f, 0.0f, 1.0f));
-    // transform_set_parent(&cube_mesh_3->transform, &cube_mesh_2->transform);
-    // geometry_system_config_dispose(&g_config_3);
-    // app_state->mesh_count++;
-
     // Машина.
     mesh* car_mesh = &app_state->meshes[app_state->mesh_count];
     resource car_mesh_resource = {};
@@ -317,7 +295,7 @@ bool application_create(game* game_inst)
     // Sponza.
     mesh* sponza_mesh = &app_state->meshes[app_state->mesh_count];
     resource sponza_mesh_resource = {};
-    if(!resource_system_load("sponza_small", RESOURCE_TYPE_MESH, &sponza_mesh_resource))
+    if(!resource_system_load("sponza", RESOURCE_TYPE_MESH, &sponza_mesh_resource))
     {
         kerror("Failed to load sponza test mesh.");
     }

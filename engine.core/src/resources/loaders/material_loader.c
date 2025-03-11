@@ -32,7 +32,7 @@ bool material_loader_load(resource_loader* self, const char* name, resource* out
     kzero_tc(resource_data, material_config, 1);
 
     resource_data->shader_name = "Builtin.Material";
-    resource_data->auto_release = true;
+    resource_data->auto_release = false; // TODO: Сделать настраиваемым!
     resource_data->diffuse_color = vec4_one(); // белый.
     string_ncopy(resource_data->name, name, MATERIAL_NAME_MAX_LENGTH);
 

@@ -26,7 +26,8 @@ static const loader_filetype_entry supported_filetypes[SUPPORTED_FILETYPE_COUNT]
 };
 
 bool load_obj_file(file* obj_file, const char* name, geometry_config** out_geometries_darray);
-bool load_ksm_file(file* ksm_file, const char* name, geometry_config** out_geometries_darray);
+bool load_ksm_file(file* ksm_file, geometry_config** out_geometries_darray);
+bool write_ksm_file(const char* name, geometry_config* geometries);
 
 bool mesh_loader_load(struct resource_loader* self, const char* name, resource* out_resource)
 {
@@ -69,11 +70,12 @@ bool mesh_loader_load(struct resource_loader* self, const char* name, resource* 
     bool result = false;
     switch(type)
     {
+        case LOADER_FILETYPE_MESH_KSM:
+            result = load_ksm_file(f, &resource_data);
+            break;
         case LOADER_FILETYPE_MESH_OBJ:
             result = load_obj_file(f, name, &resource_data);
-            break;
-        case LOADER_FILETYPE_MESH_KSM:
-            result = load_ksm_file(f, name, &resource_data);
+            write_ksm_file(name, resource_data);
             break;
         default:
             result = false;
@@ -137,9 +139,115 @@ resource_loader mesh_resource_loader_create()
 
 //-------------------------------------- KSM ----------------------------------------------
 
-bool load_ksm_file(file* ksm_file, const char* name, geometry_config** out_geometries_darray)
+bool load_ksm_file(file* ksm_file, geometry_config** out_geometries_darray)
 {
-    // TODO: Чтение ksm файла.
+    // NOTE: Ниже игнорируется результат чтения!
+
+    u16 version = 0;
+    platfrom_file_read(ksm_file, sizeof(u16), &version);
+
+    u32 name_length = 0;
+    char name[GEOMETRY_NAME_MAX_LENGTH];
+    platfrom_file_read(ksm_file, sizeof(u32), &name_length);
+    platfrom_file_read(ksm_file, sizeof(char) * name_length, name);
+
+    u64 geometry_count = 0;
+    platfrom_file_read(ksm_file, sizeof(u64), &geometry_count);
+
+    for(u64 i = 0; i < geometry_count; ++i)
+    {
+        geometry_config gconf = {};
+
+        // Имя сетки геометрии.
+        u32 g_name_length = 0;
+        platfrom_file_read(ksm_file, sizeof(u32), &g_name_length);
+        platfrom_file_read(ksm_file, sizeof(char) * g_name_length, gconf.name);
+
+        // Имя материала геометрии.
+        u32 m_name_length = 0;
+        platfrom_file_read(ksm_file, sizeof(u32), &m_name_length);
+        platfrom_file_read(ksm_file, sizeof(char) * m_name_length, gconf.material_name);
+
+        // Размеры и центр геометрии.
+        platfrom_file_read(ksm_file, sizeof(vec3), &gconf.center);
+        platfrom_file_read(ksm_file, sizeof(extents_3d), &gconf.extents);
+
+        // Вершины (размер/количество/данные вершин)
+        platfrom_file_read(ksm_file, sizeof(u32), &gconf.vertex_size);
+        platfrom_file_read(ksm_file, sizeof(u32), &gconf.vertex_count);
+        gconf.vertices = kallocate(gconf.vertex_size * gconf.vertex_count, MEMORY_TAG_ARRAY);
+        platfrom_file_read(ksm_file, gconf.vertex_size * gconf.vertex_count, gconf.vertices);
+
+        // Индексы (размер/количество/данные индексов)
+        platfrom_file_read(ksm_file, sizeof(u32), &gconf.index_size);
+        platfrom_file_read(ksm_file, sizeof(u32), &gconf.index_count);
+        gconf.indices = kallocate(gconf.index_size * gconf.index_count, MEMORY_TAG_ARRAY);
+        platfrom_file_read(ksm_file, gconf.index_size * gconf.index_count, gconf.indices);
+
+        darray_push(*out_geometries_darray, gconf);
+    }
+
+    return true;
+}
+
+bool write_ksm_file(const char* name, geometry_config* geometries)
+{
+    char ksm_filepath[GEOMETRY_NAME_MAX_LENGTH];
+    string_format(ksm_filepath, "%s/models/%s.ksm", resource_system_base_path(), name);
+
+    if(platform_file_exists(ksm_filepath))
+    {
+        // kwarng("Function '%s': File '%s' is already exists.", __FUNCTION__, ksm_filepath);
+        return false;
+    }
+
+    file* ksm_file;
+    if(!platform_file_open(ksm_filepath, FILE_MODE_WRITE | FILE_MODE_BINARY, &ksm_file))
+    {
+        kerror("Function '%s': Cannot open file '%s' for binary writing. Skipping...", __FUNCTION__, ksm_filepath);
+        return false;
+    }
+
+    u16 version = 0x0001U;
+    platform_file_write(ksm_file, sizeof(u16), &version);
+
+    u32 name_length = string_length(name) + 1;
+    platform_file_write(ksm_file, sizeof(u32), &name_length);
+    platform_file_write(ksm_file, sizeof(char) * name_length, name);
+
+    u64 geometry_count = darray_length(geometries);
+    platform_file_write(ksm_file, sizeof(u64), &geometry_count);
+
+    for(u64 i = 0; i < geometry_count; ++i)
+    {
+        geometry_config* g = &geometries[i];
+
+        // Имя сетки геометрии.
+        u32 g_name_length = string_length(g->name) + 1;
+        platform_file_write(ksm_file, sizeof(u32), &g_name_length);
+        platform_file_write(ksm_file, sizeof(char) * g_name_length, g->name);
+
+        // Имя материала геометрии.
+        u32 m_name_length = string_length(g->material_name) + 1;
+        platform_file_write(ksm_file, sizeof(u32), &m_name_length);
+        platform_file_write(ksm_file, sizeof(char) * m_name_length, g->material_name);
+
+        // Размеры и центр геометрии.
+        platform_file_write(ksm_file, sizeof(vec3), &g->center);
+        platform_file_write(ksm_file, sizeof(extents_3d), &g->extents);
+
+        // Вершины (размер/количество/данные вершин)
+        platform_file_write(ksm_file, sizeof(u32), &g->vertex_size);
+        platform_file_write(ksm_file, sizeof(u32), &g->vertex_count);
+        platform_file_write(ksm_file, g->vertex_size * g->vertex_count, g->vertices);
+
+        // Индексы (размер/количество/данные индексов)
+        platform_file_write(ksm_file, sizeof(u32), &g->index_size);
+        platform_file_write(ksm_file, sizeof(u32), &g->index_count);
+        platform_file_write(ksm_file, g->index_size * g->index_count, g->indices);
+    }
+
+    platform_file_close(ksm_file);
     return true;
 }
 

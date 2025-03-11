@@ -9,8 +9,6 @@
 #include "math/geometry_utils.h"
 #include "renderer/renderer_frontend.h"
 
-#include "debug/assert.h"
-
 typedef struct geometry_reference {
     // @brief Количество ссылок на геометрию.
     u64 reference_count;

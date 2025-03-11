@@ -32,7 +32,7 @@
         }
 
         u8 index = 0;
-        char mode_str[4];
+        char mode_str[4] = {};
 
         if(mode & FILE_MODE_WRITE)
         {
@@ -56,6 +56,9 @@
             mode_str[index++] = 'b';
         }
 
+        // NOTE: Раскоментировать для отладки.
+        // kdebug("For file '%s' in mode %s.", path, mode_str);
+
         mode_str[index] = 0;
 
         // Попытка открыть файл.
@@ -72,7 +75,7 @@
         u64 filesize = ftell(file);
         rewind(file);
 
-        if(!filesize)
+        if(!filesize && !(mode & FILE_MODE_WRITE))
         {
             kerror("Function '%s': Failed to get file size of file '%s'.", __FUNCTION__, path);
         }
@@ -154,7 +157,7 @@
         }
 
         u64 size = fread(buffer, 1, buffer_size, file->handle);
-        return (size && size <= buffer_size);
+        return size == buffer_size;
     }
 
     bool platform_file_write(file* file, u64 data_size, const void* data)
