@@ -440,8 +440,8 @@ bool convert_obj_group_to(vec3* positions, vec3* normals, vec2* texcoords, mesh_
             current_vert.position = positions[obj_position_index];
             current_vert.texcoord = texcoord_count ? texcoords[index_data->texcoord_index - 1] : vec2_zero();
             current_vert.normal = normal_count ? normals[index_data->normal_index - 1] : vec3_create(0, 0, 1);
-            current_vert.color = vec4_one();    // TODO: Цвет. А пока по-умолчанию белый цвет.
-            current_vert.tangent = vec4_zero(); // TODO: Тангент. А пока по-умолчанию 0 вектор.
+            current_vert.color = vec4_one();    // TODO: Цвет. А пока по умолчанию белый цвет.
+            current_vert.tangent = vec4_zero(); // TODO: Тангент. А пока по умолчанию 0 вектор.
 
             // Поиск существующего индекса. Вероятно это может быть та самая вершина, если это не так, то
             // назначим ей новый индекс и по старому индексу сохраним ссылку на следующий индекс и т.д.

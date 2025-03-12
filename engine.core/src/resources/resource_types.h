@@ -39,6 +39,7 @@ typedef struct texture {
     u32 height;
     u8 channel_count;
     bool has_transparency;
+    bool is_writable;
     u32 generation;
     char name[TEXTURE_NAME_MAX_LENGTH];
     void* internal_data;
@@ -51,9 +52,27 @@ typedef enum texture_use {
     TEXTURE_USE_MAP_NORMAL,
 } texture_use;
 
+typedef enum texture_filter {
+    TEXTURE_FILTER_NEAREST,
+    TEXTURE_FILTER_LINEAR
+} texture_filter;
+
+typedef enum texture_repeat {
+    TEXTURE_REPEAT_REPEAT,
+    TEXTURE_REPEAT_MIRRORED_REPEAT,
+    TEXTURE_REPEAT_CLAMP_TO_EDGE,
+    TEXTURE_REPEAT_CLAMP_TO_BORDER
+} texture_repeat;
+
 typedef struct texture_map {
     texture* texture;
     texture_use use;
+    texture_filter filter_minify;  // При уменьшении.
+    texture_filter filter_magnify; // При увеличении.
+    texture_repeat repeat_u;       // X
+    texture_repeat repeat_v;       // Y
+    texture_repeat repeat_w;       // Z
+    void* internal_data;           // Указатель на внутренние данные рендера. Обычно для сэмплера.
 } texture_map;
 
 typedef struct material_config {

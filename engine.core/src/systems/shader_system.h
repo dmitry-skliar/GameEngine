@@ -83,8 +83,8 @@ typedef struct shader {
     u64 push_constant_size;
     // @brief Шаг push-констант (выравнивание на 4 байта для Vulkan).
     u64 push_constant_stride;
-    // @brief Массив глобальных текстур (используется darray).
-    texture** global_textures;
+    // @brief Массив указателей глобальных карт текстур (используется darray).
+    texture_map** global_texture_maps;
     // @brief Количество текстур экземпляров.
     u8 instance_texture_count;
     // @brief Текущая область действия для связывания.

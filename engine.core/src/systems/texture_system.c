@@ -29,7 +29,7 @@ typedef struct texture_reference {
     // Индекс текстуры в массиве текстур.
     u32 index;
     // Авто уничтожение текстуры.
-    bool auto_release;
+    bool auto_release; // TODO: Умную выгрузку текстур. Например вугружать те материалы которые можно выгружать и только при достижении определенной границы памяти для загрузки новых.
 } texture_reference;
 
 static texture_system_state* state_ptr = null;
@@ -114,7 +114,7 @@ bool texture_system_initialize(u64* memory_requirement, void* memory, texture_sy
         state_ptr->textures[i].generation = INVALID_ID;
     }
 
-    // Создание текстуры по-умолчанию.
+    // Создание текстуры по умолчанию.
     if(!default_textures_create())
     {
         kerror("Function '%s': Failed to create default textures.", __FUNCTION__);
@@ -144,7 +144,7 @@ void texture_system_shutdown()
         }
     }
 
-    // Уничтожение текстур по-умолчанию.
+    // Уничтожение текстур по умолчанию.
     default_textures_destroy();
 
     state_ptr = null;
@@ -391,9 +391,11 @@ bool default_textures_create()
     state_ptr->default_texture.width = tex_dimension;
     state_ptr->default_texture.height = tex_dimension;
     state_ptr->default_texture.channel_count = bpp;
-    state_ptr->default_texture.has_transparency = false;
     state_ptr->default_texture.generation = INVALID_ID;
+    state_ptr->default_texture.has_transparency = false;
+    state_ptr->default_texture.is_writable = false;
     renderer_create_texture(&state_ptr->default_texture, pixels);
+    state_ptr->default_texture.generation = INVALID_ID;
 
     // Diffuse.
     string_ncopy(state_ptr->default_diffuse_texture.name, DEFAULT_DIFFUSE_TEXTURE_NAME, TEXTURE_NAME_MAX_LENGTH);
@@ -402,9 +404,11 @@ bool default_textures_create()
     state_ptr->default_diffuse_texture.width = 16;
     state_ptr->default_diffuse_texture.height = 16;
     state_ptr->default_diffuse_texture.channel_count = 4;
-    state_ptr->default_diffuse_texture.has_transparency = false;
     state_ptr->default_diffuse_texture.generation = INVALID_ID;
+    state_ptr->default_diffuse_texture.has_transparency = false;
+    state_ptr->default_diffuse_texture.is_writable = false;
     renderer_create_texture(&state_ptr->default_diffuse_texture, pixels);
+    state_ptr->default_diffuse_texture.generation = INVALID_ID;
 
     // Specular.
     u8 spec_pixels[1024]; // w * h * channels
@@ -415,7 +419,9 @@ bool default_textures_create()
     state_ptr->default_specular_texture.channel_count = 4;
     state_ptr->default_specular_texture.generation = INVALID_ID;
     state_ptr->default_specular_texture.has_transparency = false;
+    state_ptr->default_specular_texture.is_writable = false;
     renderer_create_texture(&state_ptr->default_specular_texture, spec_pixels);
+    state_ptr->default_specular_texture.generation = INVALID_ID;
 
     // Normal.
     u8 norm_pixels[1024];
@@ -432,7 +438,9 @@ bool default_textures_create()
     state_ptr->default_normal_texture.channel_count = 4;
     state_ptr->default_normal_texture.generation = INVALID_ID;
     state_ptr->default_normal_texture.has_transparency = false;
+    state_ptr->default_normal_texture.is_writable = false;
     renderer_create_texture(&state_ptr->default_normal_texture, norm_pixels);
+    state_ptr->default_normal_texture.generation = INVALID_ID;
 
     kfree(pixels, pixels_size, MEMORY_TAG_TEXTURE);
     return true;
@@ -479,6 +487,7 @@ bool texture_load(const char* texture_name, texture* t)
     string_ncopy(t->name, texture_name, TEXTURE_NAME_MAX_LENGTH);
     t->generation = 0;
     t->has_transparency = has_transparency;
+    t->is_writable = false;
 
     // Загрузка в графический процессор.
     renderer_create_texture(t, resource_data->pixels);

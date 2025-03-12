@@ -85,7 +85,7 @@ bool geometry_system_initialize(u64* memory_requirement, void* memory, geometry_
         state_ptr->geometries[i].geometry.internal_id = INVALID_ID;
     }
 
-    // Создание геометрии по-умолчанию.
+    // Создание геометрии по умолчанию.
     if(!default_geometries_create())
     {
         kerror("Function '%s': Failed to create default geometries.", __FUNCTION__);

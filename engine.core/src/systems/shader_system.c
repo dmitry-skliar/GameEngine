@@ -166,7 +166,7 @@ bool shader_system_create(const shader_config* config)
     shader->bound_instance_id = INVALID_ID;
 
     // Создание динамаических массивов.
-    shader->global_textures = darray_create(texture*);
+    shader->global_texture_maps = darray_create(texture_map*);
     shader->uniforms = darray_create(shader_uniform);
     shader->attributes = darray_create(shader_attribute);
 
@@ -556,7 +556,7 @@ bool add_sampler(shader* shader, shader_uniform_config* config)
     u32 location = 0;
     if(config->scope == SHADER_SCOPE_GLOBAL)
     {
-        u32 global_texture_count = darray_length(shader->global_textures);
+        u32 global_texture_count = darray_length(shader->global_texture_maps);
         if(global_texture_count + 1 > state_ptr->config.max_global_textures)
         {
             kerror(
@@ -567,7 +567,24 @@ bool add_sampler(shader* shader, shader_uniform_config* config)
         }
 
         location = global_texture_count;
-        darray_push(shader->global_textures, texture_system_get_default_texture());
+
+        // NOTE: Создание карты текстур для использования по умолчанию, может быть обновлена позже.
+        texture_map default_map = {};
+        default_map.filter_magnify = TEXTURE_FILTER_LINEAR;
+        default_map.filter_minify  = TEXTURE_FILTER_LINEAR;
+        default_map.repeat_u = default_map.repeat_v = default_map.repeat_w = TEXTURE_REPEAT_REPEAT;
+        default_map.use = TEXTURE_USE_UNKNOWN;
+
+        if(!renderer_texture_map_acquire_resources(&default_map))
+        {
+            kerror("Function '%s': Failed to acquire resources for global texture map during shader creation.", __FUNCTION__);
+            return false;
+        }
+
+        texture_map* map = kallocate_tc(texture_map, 1, MEMORY_TAG_RENDERER);
+        *map = default_map;
+        map->texture = texture_system_get_default_texture();
+        darray_push(shader->global_texture_maps, map);
     }
     else
     {
@@ -728,6 +745,14 @@ void shader_destroy(shader* s)
     // Делает шейдер недоступным.
     s->state = SHADER_STATE_NOT_CREATED;
 
+    // Освобождение карт текстур.
+    u32 sampler_count = darray_length(s->global_texture_maps);
+    for(u32 i = 0; i < sampler_count; ++i)
+    {
+        kfree_tc(s->global_texture_maps[i], texture_map, 1, MEMORY_TAG_RENDERER);
+    }
+    darray_destroy(s->global_texture_maps);
+
     // Сделать индекс шейдера в таблице недействительным.
     if(!hashtable_set(state_ptr->lookup, s->name, &s->id, true))
     {
@@ -754,9 +779,6 @@ void shader_destroy(shader* s)
     // Освобождение hashtable.
     hashtable_destroy(s->uniform_lookup);
     kfree(s->uniform_lookup_memory, s->uniform_lookup_memory_requirement, MEMORY_TAG_HASHTABLE);
-
-    // Освобождение текстур.
-    darray_destroy(s->global_textures);
 
     // Освободить слот шейдера, для новых использований!
     kzero_tc(s, shader, 1);

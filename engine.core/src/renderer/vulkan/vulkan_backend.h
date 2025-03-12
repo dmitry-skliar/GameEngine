@@ -49,8 +49,12 @@ bool vulkan_renderer_shader_apply_globals(struct shader* shader);
 
 bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_update);
 
-bool vulkan_renderer_shader_acquire_instance_resources(struct shader* shader, u32* out_instance_id);
+bool vulkan_renderer_shader_acquire_instance_resources(struct shader* shader, texture_map** maps, u32* out_instance_id);
 
 bool vulkan_renderer_shader_release_instance_resources(struct shader* shader, u32 instance_id);
 
 bool vulkan_renderer_shader_set_uniform(struct shader* shader, struct shader_uniform* uniform, const void* value);
+
+bool vulkan_renderer_texture_map_acquire_resources(texture_map* map);
+
+void vulkan_renderer_texture_map_release_resources(texture_map* map);

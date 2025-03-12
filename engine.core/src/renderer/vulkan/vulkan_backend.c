@@ -694,32 +694,6 @@ void vulkan_renderer_create_texture(texture* texture, const void* pixels)
     // Уничтожение толко после записи буфера команд, потому что во время выполнение может оказаться нулевыми данными!
     vulkan_buffer_destroy(context, &staging);
 
-    // Создание фильтрации для текстуры.
-    VkSamplerCreateInfo sampler_info = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-    // TODO: Эти фильтры должны быть настраиваемыми.
-    sampler_info.magFilter = VK_FILTER_LINEAR;
-    sampler_info.minFilter = VK_FILTER_LINEAR;
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.anisotropyEnable = VK_TRUE;
-    sampler_info.maxAnisotropy = 16;
-    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    sampler_info.unnormalizedCoordinates = VK_FALSE;
-    sampler_info.compareEnable = VK_FALSE;
-    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
-    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    sampler_info.mipLodBias = 0.0f;
-    sampler_info.minLod = 0.0f;
-    sampler_info.maxLod = 0.0f;
-
-    VkResult result = vkCreateSampler(context->device.logical, &sampler_info, context->allocator, &data->sampler);
-    if(!vulkan_result_is_success(result))
-    {
-        kerror("Function '%s': Error creating texture sampler: %s", __FUNCTION__, vulkan_result_get_string(result, true));
-        return;
-    }
-
     texture->generation++;
 }
 
@@ -733,19 +707,7 @@ void vulkan_renderer_destroy_texture(texture* texture)
     {
         vulkan_image_destroy(context, &data->image);
         kzero_tc(&data->image, struct vulkan_image, 1);
-        vkDestroySampler(context->device.logical, data->sampler, context->allocator);
         kfree_tc(texture->internal_data, vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
-    }
-    else
-    {
-        if(texture->generation != INVALID_ID)
-        {
-            kerror("Function '%s': Failed to get vulkan specific data of texture.", __FUNCTION__);
-        }
-        else
-        {
-            kwarng("Function '%s': Texture was not created. Skipping...", __FUNCTION__);
-        }
     }
 
     kzero_tc(texture, struct texture, 1);
@@ -1449,12 +1411,13 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
 
             for(u32 i = 0; i < total_sampler_count; ++i)
             {
-                texture* t = vk_shader->instance_states[shader->bound_instance_id].instance_textures[i];
+                texture_map* map = vk_shader->instance_states[shader->bound_instance_id].instance_texture_maps[i];
+                texture* t = map->texture;
                 vulkan_texture_data* internal_data = t->internal_data;
 
                 image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 image_infos[i].imageView = internal_data->image.view;
-                image_infos[i].sampler = internal_data->sampler;
+                image_infos[i].sampler = (VkSampler)map->internal_data;
 
                 // TODO: Изменить состояние дескриптора.
                 // Синхронизируем генерацию кадров, если не используется текстура по умолчанию.
@@ -1492,7 +1455,85 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
     return true;
 }
 
-bool vulkan_renderer_shader_acquire_instance_resources(shader* shader, u32* out_instance_id)
+VkSamplerAddressMode convert_repeat_type(const char* axis, texture_repeat repeat)
+{
+    switch(repeat)
+    {
+        case TEXTURE_REPEAT_REPEAT:
+            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        case TEXTURE_REPEAT_MIRRORED_REPEAT:
+            return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+        case TEXTURE_REPEAT_CLAMP_TO_EDGE:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        case TEXTURE_REPEAT_CLAMP_TO_BORDER:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        default:
+            kwarng("Function '%s' (axis='%s'): Type '%x' not supported, defaulting to repeat.", __FUNCTION__, axis, repeat);
+            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    }
+}
+
+VkFilter convert_filter_type(const char* op, texture_filter filter)
+{
+    switch(filter)
+    {
+        case TEXTURE_FILTER_NEAREST:
+            return VK_FILTER_NEAREST;
+        case TEXTURE_FILTER_LINEAR:
+            return VK_FILTER_LINEAR;
+        default:
+            kwarng("Function '%s' (op='%s'): Unsupported filter type '%x', defaulting to linear.", __FUNCTION__, op, filter);
+            return VK_FILTER_LINEAR;
+    }
+}
+
+bool vulkan_renderer_texture_map_acquire_resources(texture_map* map)
+{
+    // Создание сэмплера для текстуры.
+    VkSamplerCreateInfo sampler_info = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+
+    sampler_info.minFilter = convert_filter_type("min", map->filter_minify);
+    sampler_info.magFilter = convert_filter_type("mag", map->filter_magnify);
+    sampler_info.addressModeU = convert_repeat_type("U", map->repeat_u);
+    sampler_info.addressModeV = convert_repeat_type("V", map->repeat_v);
+    sampler_info.addressModeW = convert_repeat_type("W", map->repeat_w);
+
+    // TODO: Настраиваемые.
+    sampler_info.anisotropyEnable = VK_TRUE;
+    sampler_info.maxAnisotropy = 16;
+    sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    sampler_info.unnormalizedCoordinates = VK_FALSE;
+    sampler_info.compareEnable = VK_FALSE;
+    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.mipLodBias = 0.0f;
+    sampler_info.minLod = 0.0f;
+    sampler_info.maxLod = 0.0f;
+
+    VkResult result = vkCreateSampler(context->device.logical, &sampler_info, context->allocator, (VkSampler*)&map->internal_data);
+    if(!vulkan_result_is_success(result))
+    {
+        kerror("Function '%s': Error creating texture sampler: %s", __FUNCTION__, vulkan_result_get_string(result, true));
+        return false;
+    }
+
+    return true;
+}
+
+void vulkan_renderer_texture_map_release_resources(texture_map* map)
+{
+    if(!map || !map->internal_data)
+    {
+        kerror("Function '%s' requires a valid pointer to texture map and their internal data.", __FUNCTION__);
+    }
+
+    vkDeviceWaitIdle(context->device.logical);
+
+    vkDestroySampler(context->device.logical, map->internal_data, context->allocator);
+    map->internal_data = null;
+}
+
+bool vulkan_renderer_shader_acquire_instance_resources(struct shader* shader, texture_map** maps, u32* out_instance_id)
 {
     if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__) || !out_instance_id)
     {
@@ -1520,13 +1561,17 @@ bool vulkan_renderer_shader_acquire_instance_resources(shader* shader, u32* out_
 
     vulkan_shader_instance_state* instance_state = &vk_shader->instance_states[*out_instance_id];
     u32 instance_texture_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
-    instance_state->instance_textures = kallocate_tc(texture*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
+    instance_state->instance_texture_maps = kallocate_tc(texture_map*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
 
-    // Устанавка всех указателей текстур на значения по умолчанию, пока они не назначены.
+    // Установка всех указателей текстур на значения по умолчанию, пока они не назначены.
     texture* default_texture = texture_system_get_default_texture();
     for(u32 i = 0; i < instance_texture_count; ++i)
     {
-        instance_state->instance_textures[i] = default_texture;
+        instance_state->instance_texture_maps[i] = maps[i];
+        if(!maps[i]->texture)
+        {
+            instance_state->instance_texture_maps[i]->texture = default_texture;
+        }
     }
 
     // Выделение места в UBO по шагу, а не по размеру.
@@ -1607,10 +1652,10 @@ bool vulkan_renderer_shader_release_instance_resources(shader* shader, u32 insta
 
     kzero_tc(instance_state->descriptor_set_state.descriptor_sets, vulkan_descriptor_state, VULKAN_SHADER_MAX_BINDINGS);
 
-    if(instance_state->instance_textures)
+    if(instance_state->instance_texture_maps)
     {
-        kfree_tc(instance_state->instance_textures, texture*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
-        instance_state->instance_textures = null;
+        kfree_tc(instance_state->instance_texture_maps, texture_map*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
+        instance_state->instance_texture_maps = null;
     }
 
     vulkan_buffer_free(&vk_shader->uniform_buffer, shader->ubo_stride, instance_state->offset);
@@ -1633,11 +1678,11 @@ bool vulkan_renderer_shader_set_uniform(shader* shader, struct shader_uniform* u
     {
         if(uniform->scope == SHADER_SCOPE_GLOBAL)
         {
-            shader->global_textures[uniform->location] = (texture*)value;
+            shader->global_texture_maps[uniform->location] = (texture_map*)value;
         }
         else
         {
-            vk_shader->instance_states[shader->bound_instance_id].instance_textures[uniform->location] = (texture*)value;
+            vk_shader->instance_states[shader->bound_instance_id].instance_texture_maps[uniform->location] = (texture_map*)value;
         }
     }
     else

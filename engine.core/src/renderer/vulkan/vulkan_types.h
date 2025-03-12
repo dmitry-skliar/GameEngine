@@ -12,8 +12,6 @@
 */
 #define VK_CHECK(expr) kassert(expr == VK_SUCCESS, "")
 
-struct vulkan_context;
-
 /*
     @brief Контекст буфер Vulkan.
     NOTE: Используется для загрузки данных на видеокарту.
@@ -272,8 +270,8 @@ typedef struct vulkan_shader_instance_state {
     u64 offset;
     // @brief Состояние набора дескрипторов.
     vulkan_shader_descriptor_set_state descriptor_set_state;
-    // @brief Указатель на текстуры экземпляра.
-    texture** instance_textures;
+    // @brief Указатель на карты текстур экземпляра.
+    texture_map** instance_texture_maps;
 } vulkan_shader_instance_state;
 
 // @brief Стадия конкретного модуля шейдера (+конвейер).
@@ -365,5 +363,4 @@ typedef struct vulkan_context {
 // @brief Контекст данных текстуры.
 typedef struct vulkan_texture_data {
     vulkan_image image;
-    VkSampler sampler;
 } vulkan_texture_data;

@@ -170,7 +170,7 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
         state_ptr->materials[i].render_frame_number = INVALID_ID;
     }
 
-    // Создание материала по-умолчанию.
+    // Создание материала по умолчанию.
     if(!default_materials_create())
     {
         kerror("Function '%s': Failed to create default materials.", __FUNCTION__);
@@ -200,7 +200,7 @@ void material_system_shutdown()
         }
     }
 
-    // Уничтожение материалов по-умолчанию.
+    // Уничтожение материалов по умолчанию.
     default_materials_destroy();
 
     state_ptr = null;
@@ -461,14 +461,14 @@ bool material_system_apply_instance(material* m, bool needs_update)
         {
             MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.shininess, &m->shininess));
             MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_color, &m->diffuse_color));
-            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_texture, m->diffuse_map.texture));
-            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.specular_texture, m->specular_map.texture));
-            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.normal_texture, m->normal_map.texture));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.diffuse_texture, &m->diffuse_map));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.specular_texture, &m->specular_map));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->material_locations.normal_texture, &m->normal_map));
         }
         else if(m->shader_id == state_ptr->ui_shader_id)
         {
             MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_color, &m->diffuse_color));
-            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_texture, m->diffuse_map.texture));
+            MATERIAL_APPLY_OR_FAIL(shader_system_uniform_set_by_index(state_ptr->ui_locations.diffuse_texture, &m->diffuse_map));
         }
         else
         {
@@ -518,8 +518,9 @@ bool default_materials_create()
     state_ptr->default_material.normal_map.use = TEXTURE_USE_MAP_NORMAL;
     state_ptr->default_material.normal_map.texture = texture_system_get_default_normal_texture();
 
+    texture_map* maps[3] = { &state_ptr->default_material.diffuse_map, &state_ptr->default_material.specular_map, &state_ptr->default_material.normal_map };
     shader* s = shader_system_get(BUILTIN_SHADER_NAME_MATERIAL);
-    if(!renderer_shader_acquire_instance_resources(s, &state_ptr->default_material.internal_id))
+    if(!renderer_shader_acquire_instance_resources(s, maps, &state_ptr->default_material.internal_id))
     {
         kerror("Function '%s': Failed to acquire renderer resource for default material.", __FUNCTION__);
         return false;
@@ -549,7 +550,17 @@ bool material_load(material_config* config, material* m)
     m->shininess = config->shininess;
 
     // Diffuse.
+    // TODO: Сделать настраиваемым.
     texture_map* diff_map = &m->diffuse_map;
+    diff_map->filter_minify = diff_map->filter_magnify = TEXTURE_FILTER_LINEAR;
+    diff_map->repeat_u = diff_map->repeat_v = diff_map->repeat_w = TEXTURE_REPEAT_REPEAT;
+
+    if(!renderer_texture_map_acquire_resources(diff_map))
+    {
+        kerror("Function '%s': Unable to acquire resources for diffuse texture map.", __FUNCTION__);
+        return false;
+    }
+
     if(string_length(config->diffuse_map_name) > 0)
     {
         diff_map->use = TEXTURE_USE_MAP_DIFFUSE;
@@ -567,11 +578,20 @@ bool material_load(material_config* config, material* m)
     else
     {
         diff_map->use = TEXTURE_USE_MAP_DIFFUSE;
-        diff_map->texture = texture_system_get_default_texture();
+        diff_map->texture = texture_system_get_default_diffuse_texture();
     }
 
     // Specular.
+    // TODO: Сделать настраиваемым.
     texture_map* spec_map = &m->specular_map;
+    spec_map->filter_minify = spec_map->filter_magnify = TEXTURE_FILTER_LINEAR;
+    spec_map->repeat_u = spec_map->repeat_v = spec_map->repeat_w = TEXTURE_REPEAT_REPEAT;
+    if(!renderer_texture_map_acquire_resources(spec_map))
+    {
+        kerror("Function '%s': Unable to acquire resources for specular texture map.", __FUNCTION__);
+        return false;
+    }
+
     if(string_length(config->specular_map_name) > 0)
     {
         spec_map->use = TEXTURE_USE_MAP_SPECULAR;
@@ -588,12 +608,21 @@ bool material_load(material_config* config, material* m)
     }
     else
     {
-        spec_map->use = TEXTURE_USE_UNKNOWN;
-        spec_map->texture = null;
+        spec_map->use = TEXTURE_USE_MAP_SPECULAR;
+        spec_map->texture = texture_system_get_default_specular_texture();
     }
 
     // Normal.
+    // TODO: Сделать настраиваемым.
     texture_map* norm_map = &m->normal_map;
+    norm_map->filter_minify = norm_map->filter_magnify = TEXTURE_FILTER_LINEAR;
+    norm_map->repeat_u = norm_map->repeat_v = norm_map->repeat_w = TEXTURE_REPEAT_REPEAT;
+    if(!renderer_texture_map_acquire_resources(norm_map))
+    {
+        kerror("Function '%s': Unable to acquire resources for normal texture map.", __FUNCTION__);
+        return false;
+    }
+
     if(string_length(config->normal_map_name) > 0)
     {
         norm_map->use = TEXTURE_USE_MAP_NORMAL;
@@ -610,8 +639,8 @@ bool material_load(material_config* config, material* m)
     }
     else
     {
-        norm_map->use = TEXTURE_USE_UNKNOWN;
-        norm_map->texture = null;
+        norm_map->use = TEXTURE_USE_MAP_NORMAL;
+        norm_map->texture = texture_system_get_default_normal_texture();
     }
 
     // TODO: другие разметки.
@@ -627,7 +656,9 @@ bool material_load(material_config* config, material* m)
         return false;
     }
 
-    if(!renderer_shader_acquire_instance_resources(s, &m->internal_id))
+    // Список указателей на карты текстур.
+    texture_map* maps[3] = { diff_map, spec_map, norm_map };
+    if(!renderer_shader_acquire_instance_resources(s, maps, &m->internal_id))
     {
         kerror("Function '%s': Failed to acquire renderer resource for material '%s'.", __FUNCTION__, m->name);
         return false;
@@ -638,7 +669,7 @@ bool material_load(material_config* config, material* m)
 
 void material_destroy(material* m)
 {
-    // Удаление загруженый текстур.
+    // Освобождение загруженых текстур.
     if(m->diffuse_map.texture)
     {
         texture_system_release(m->diffuse_map.texture->name);
@@ -653,6 +684,11 @@ void material_destroy(material* m)
     {
         texture_system_release(m->normal_map.texture->name);
     }
+
+    // Освобождение карт текстур.
+    renderer_texture_map_release_resources(&m->diffuse_map);
+    renderer_texture_map_release_resources(&m->specular_map);
+    renderer_texture_map_release_resources(&m->normal_map);
 
     // Удаление из памяти графического процессора.
     if(m->shader_id != INVALID_ID && m->internal_id != INVALID_ID)

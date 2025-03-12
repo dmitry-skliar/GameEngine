@@ -32,6 +32,8 @@ bool renderer_backend_create(renderer_backend_type type, renderer_backend* out_r
         out_renderer_backend->shader_acquire_instance_resources  = vulkan_renderer_shader_acquire_instance_resources;
         out_renderer_backend->shader_release_instance_resources  = vulkan_renderer_shader_release_instance_resources;
         out_renderer_backend->shader_set_uniform                 = vulkan_renderer_shader_set_uniform;
+        out_renderer_backend->texture_map_acquire_resources      = vulkan_renderer_texture_map_acquire_resources;
+        out_renderer_backend->texture_map_release_resources      = vulkan_renderer_texture_map_release_resources;
         return true;
     }
     return false;

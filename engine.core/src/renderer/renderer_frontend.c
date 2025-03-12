@@ -431,9 +431,9 @@ bool renderer_shader_apply_instance(shader* s, bool needs_update)
     return state_ptr->backend.shader_apply_instance(s, needs_update);
 }
 
-bool renderer_shader_acquire_instance_resources(shader* s, u32* out_instance_id)
+bool renderer_shader_acquire_instance_resources(shader* s, texture_map** maps, u32* out_instance_id)
 {
-    return state_ptr->backend.shader_acquire_instance_resources(s, out_instance_id);
+    return state_ptr->backend.shader_acquire_instance_resources(s, maps, out_instance_id);
 }
 
 bool renderer_shader_release_instance_resources(shader* s, u32 instance_id)
@@ -444,4 +444,14 @@ bool renderer_shader_release_instance_resources(shader* s, u32 instance_id)
 bool renderer_shader_set_uniform(shader* s, shader_uniform* uniform, const void* value)
 {
     return state_ptr->backend.shader_set_uniform(s, uniform, value);
+}
+
+bool renderer_texture_map_acquire_resources(texture_map* map)
+{
+    return state_ptr->backend.texture_map_acquire_resources(map);
+}
+
+void renderer_texture_map_release_resources(texture_map* map)
+{
+    state_ptr->backend.texture_map_release_resources(map);
 }

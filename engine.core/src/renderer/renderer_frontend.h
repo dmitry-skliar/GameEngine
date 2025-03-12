@@ -144,10 +144,11 @@ bool renderer_shader_apply_instance(shader* s, bool needs_update);
 /*
     @brief Получает внутренние ресурсы уровня экземпляра и предоставляет идентификатор экземпляра.
     @param s Указатель на шейдер из которого нужно получить ресурсы экземпляра.
+    @param maps Указатель на массив указателей карт текстур. Должен быть один на текстуру в экземпляре.
     @param out_instance_id Указатель на переменную для сохранения идентификатора экземпляра.
     @return True операция завершена успешно, false в случае ошибок.
 */
-bool renderer_shader_acquire_instance_resources(shader* s, u32* out_instance_id);
+bool renderer_shader_acquire_instance_resources(shader* s, texture_map** maps, u32* out_instance_id);
 
 /*
     @brief Освобождает внутренние ресурсы уровня экземпляра по предоставленному идентификатору экземпляра.
@@ -165,3 +166,16 @@ bool renderer_shader_release_instance_resources(shader* s, u32 instance_id);
     @return True операция завершена успешно, false в случае ошибок.
 */
 bool renderer_shader_set_uniform(shader* s, shader_uniform* uniform, const void* value);
+
+/*
+    @brief Получает внутренние ресурсы для предоставленной карты текстуры.
+    @param map Указатель на карту текстуры для получения ресурсов.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_texture_map_acquire_resources(texture_map* map);
+
+/*
+    @brief Освобождает внутренние русурсы для предоставленной карты текстуры.
+    @param map Указатель на карту текстуры для освобождения ресурсов.
+*/
+void renderer_texture_map_release_resources(texture_map* map);
