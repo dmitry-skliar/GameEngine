@@ -32,16 +32,32 @@ typedef struct image_resouce_data {
     u8* pixels;
 } image_resouce_data;
 
+typedef enum texture_flag_bits {
+    // @brief Указывает, что текстура имеет прозрачность.
+    TEXTURE_FLAG_HAS_TRANSPARENCY = 0x01,
+    // @brief Указывает, что текстура может быть записана.
+    TEXTURE_FLAG_IS_WRITABLE      = 0x02,
+    // @brief Указывает, что текстура создана с помощью обертывания.
+    TEXTURE_FLAG_IS_WRAPPED       = 0x04
+} texture_flag_bits;
+
 // @brief Данные текстуры.
 typedef struct texture {
+    // @brief Уникальный идентификатор текстуры.
     u32 id;
+    // @brief Ширина текстуры в пикселях.
     u32 width;
+    // @brief Высота текстуры в пикселях.
     u32 height;
+    // @brief Ширина канала пикселя.
     u8 channel_count;
-    bool has_transparency;
-    bool is_writable;
+    // @brief Содержит флаги текстуры.
+    texture_flag_bits flags;
+    // @brief Генератор изменений, используется для обновления текстуры.
     u32 generation;
+    // @brief Имя текстуры.
     char name[TEXTURE_NAME_MAX_LENGTH];
+    // @brief Внутренние данные рендера. Обычно текстура в памяти видеокарты.
     void* internal_data;
 } texture;
 
@@ -72,7 +88,7 @@ typedef struct texture_map {
     texture_repeat repeat_u;       // X
     texture_repeat repeat_v;       // Y
     texture_repeat repeat_w;       // Z
-    void* internal_data;           // Указатель на внутренние данные рендера. Обычно для сэмплера.
+    void* internal_data;           // Внутренние данные рендера. Обычно для сэмплера.
 } texture_map;
 
 typedef struct material_config {

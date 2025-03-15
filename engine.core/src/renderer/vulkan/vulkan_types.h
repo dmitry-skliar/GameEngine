@@ -86,10 +86,8 @@ typedef struct vulkan_swapchain {
     u32 image_count;
     // @brief Формат пикселей.
     VkSurfaceFormatKHR image_format;
-    // @brief Изображений (используется darray).
-    VkImage* images;
-    // @brief Представления изображений (используется darray).
-    VkImageView* views;
+    // @brief Массив целей рендеринга, содержащий изображения цепочки обмена.
+    texture** render_textures;
     // @brief Цепочка обмена.
     VkSwapchainKHR handle;
     // @brief Буфер глубины.
@@ -359,8 +357,3 @@ typedef struct vulkan_context {
 
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
 } vulkan_context;
-
-// @brief Контекст данных текстуры.
-typedef struct vulkan_texture_data {
-    vulkan_image image;
-} vulkan_texture_data;

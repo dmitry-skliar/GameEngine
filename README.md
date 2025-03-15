@@ -2,7 +2,7 @@
 
 Этот движок основан на идеях [https://github.com/travisvroman/kohi](link) c моими изменениями и дополнениями. Пишется в учебных целях для изучения копьютерной графики.
 
-![Test application](/screens/20250309-205255.png?raw=true "Test application")
+![Test application](/images/20250309-205255.png?raw=true "Test application")
 
 В чем отличие от оригинала:
   - Реализавана платформо-зависимая прослойка иначе (полностью отрезана)

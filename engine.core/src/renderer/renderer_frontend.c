@@ -266,7 +266,7 @@ bool renderer_draw_frame(render_packet* packet)
             material_system_apply_local(m, &packet->geometries[i].model);
 
             // Нарисовать!
-            state_ptr->backend.draw_geometry(packet->geometries[i]);
+            state_ptr->backend.geometry_draw(packet->geometries[i]);
         }
 
         if(!state_ptr->backend.end_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_WORLD))
@@ -324,7 +324,7 @@ bool renderer_draw_frame(render_packet* packet)
             material_system_apply_local(m, &packet->ui_geometries[i].model);
 
             // Нарисовать!
-            state_ptr->backend.draw_geometry(packet->ui_geometries[i]);
+            state_ptr->backend.geometry_draw(packet->ui_geometries[i]);
         }
 
         if(!state_ptr->backend.end_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_UI))
@@ -348,27 +348,52 @@ void renderer_set_view(mat4 view, vec3 view_position)
     state_ptr->view_position = view_position;
 }
 
-void renderer_create_texture(texture* texture, const void* pixels)
+void renderer_texture_create(texture* texture, const void* pixels)
 {
-    state_ptr->backend.create_texture(texture, pixels);
+    state_ptr->backend.texture_create(texture, pixels);
 }
 
-void renderer_destroy_texture(texture* texture)
+void renderer_texture_create_writable(texture* texture)
 {
-    state_ptr->backend.destroy_texture(texture);
+    state_ptr->backend.texture_create_writable(texture);
 }
 
-bool renderer_create_geometry(
+void renderer_texture_resize(texture* texture, u32 new_width, u32 new_height)
+{
+    state_ptr->backend.texture_resize(texture, new_width, new_height);
+}
+
+void renderer_texture_write_data(texture* texture, u32 offset, u32 size, const void* pixels)
+{
+    state_ptr->backend.texture_write_data(texture, offset, size, pixels);
+}
+
+void renderer_texture_destroy(texture* texture)
+{
+    state_ptr->backend.texture_destroy(texture);
+}
+
+bool renderer_texture_map_acquire_resources(texture_map* map)
+{
+    return state_ptr->backend.texture_map_acquire_resources(map);
+}
+
+void renderer_texture_map_release_resources(texture_map* map)
+{
+    state_ptr->backend.texture_map_release_resources(map);
+}
+
+bool renderer_geometry_create(
     geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
     const void* indices
 )
 {
-    return state_ptr->backend.create_geometry(geometry, vertex_size, vertex_count, vertices, index_size, index_count, indices);
+    return state_ptr->backend.geometry_create(geometry, vertex_size, vertex_count, vertices, index_size, index_count, indices);
 }
 
-void renderer_destroy_geometry(geometry* geometry)
+void renderer_geometry_destroy(geometry* geometry)
 {
-    state_ptr->backend.destroy_geometry(geometry);
+    state_ptr->backend.geometry_destroy(geometry);
 }
 
 bool renderer_renderpass_id(const char* name, u8* out_renderpass_id)
@@ -444,14 +469,4 @@ bool renderer_shader_release_instance_resources(shader* s, u32 instance_id)
 bool renderer_shader_set_uniform(shader* s, shader_uniform* uniform, const void* value)
 {
     return state_ptr->backend.shader_set_uniform(s, uniform, value);
-}
-
-bool renderer_texture_map_acquire_resources(texture_map* map)
-{
-    return state_ptr->backend.texture_map_acquire_resources(map);
-}
-
-void renderer_texture_map_release_resources(texture_map* map)
-{
-    state_ptr->backend.texture_map_release_resources(map);
 }

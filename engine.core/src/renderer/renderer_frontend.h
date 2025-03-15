@@ -41,13 +41,55 @@ KAPI void renderer_set_view(mat4 view, vec3 view_position);
     @param texture Указатель на текстуру которую необходимо создать.
     @param pixels Указатель на необработанные данные изображения для загрузки.
 */
-void renderer_create_texture(texture* texture, const void* pixels);
+void renderer_texture_create(texture* texture, const void* pixels);
+
+/*
+    @brief Создает новую записываемую текстуру без записанных в нее данных.
+    @param texture Указатель на текстуру для получения ресурсов.
+*/
+void renderer_texture_create_writable(texture* texture);
+
+/*
+    @brief Изменяет размер текстуры. На этом уровне нет проверки на возможность
+           записи текстуры. Внутренние ресурсы уничтожаются и создаются заново с
+           новым разрешением. Данные теряются и должны быть перезагружены.
+    @param texture Указатель на текстуру для изменения размера.
+    @param new_width Новая ширина в пикселях.
+    @param new_height Новая высота в пикселях.
+*/
+void renderer_texture_resize(texture* texture, u32 new_width, u32 new_height);
+
+/*
+    @brief Записывает указанные данные в предоставленную текстуру.
+    NOTE: На этом уровне это может быть как записываемая, так и не записываемая
+          текстура, поскольку она также обрабатывает начальную загрузку текстуры.
+          Сама система текстур должна отвечать за блокировку запросов на запись
+          в не записываемые текстуры.
+    @param texture Указатель на текстуру для записи данных.
+    @param offset Смещение в байтах откуда начать запись данных.
+    @param size Количество байт данных для записи.
+    @param pixels Необработаные данные изображения (пиксели) которые будут записаны.
+*/
+void renderer_texture_write_data(texture* texture, u32 offset, u32 size, const void* pixels);
 
 /*
     @brief Уничтожает предоставленную текстуру, освобождая память графического процессора.
     @param Указатель на текстуру, которую необходимо уничтожить.
 */
-void renderer_destroy_texture(texture* texture);
+void renderer_texture_destroy(texture* texture);
+
+/*
+    @brief Получает внутренние ресурсы для предоставленной карты текстуры.
+    @param map Указатель на карту текстуры для получения ресурсов.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_texture_map_acquire_resources(texture_map* map);
+
+/*
+    @brief Освобождает внутренние русурсы для предоставленной карты текстуры.
+    @param map Указатель на карту текстуры для освобождения ресурсов.
+*/
+void renderer_texture_map_release_resources(texture_map* map);
 
 /*
     @brief Получает ресурсы графического процессора и загружает данные геометрии.
@@ -60,7 +102,7 @@ void renderer_destroy_texture(texture* texture);
     @param indices Массив индексов геометрии.
     @return True операция завершена успешно, false в случае ошибок.
 */
-bool renderer_create_geometry(
+bool renderer_geometry_create(
     geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
     const void* indices
 );
@@ -69,7 +111,7 @@ bool renderer_create_geometry(
     @brief Уничтожает предоставленную геометрию, освобождая ресурсы графического процессора.
     @param geometry Указатель на геометрию, которую необходимо уничтожить.
 */
-void renderer_destroy_geometry(geometry* geometry);
+void renderer_geometry_destroy(geometry* geometry);
 
 /*
     @brief Получает идентификатор прохода рендеринга с указанным именем.
@@ -166,16 +208,3 @@ bool renderer_shader_release_instance_resources(shader* s, u32 instance_id);
     @return True операция завершена успешно, false в случае ошибок.
 */
 bool renderer_shader_set_uniform(shader* s, shader_uniform* uniform, const void* value);
-
-/*
-    @brief Получает внутренние ресурсы для предоставленной карты текстуры.
-    @param map Указатель на карту текстуры для получения ресурсов.
-    @return True операция завершена успешно, false в случае ошибок.
-*/
-bool renderer_texture_map_acquire_resources(texture_map* map);
-
-/*
-    @brief Освобождает внутренние русурсы для предоставленной карты текстуры.
-    @param map Указатель на карту текстуры для освобождения ресурсов.
-*/
-void renderer_texture_map_release_resources(texture_map* map);

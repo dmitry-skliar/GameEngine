@@ -281,7 +281,7 @@ bool default_geometries_create()
     state_ptr->default_geometry.material = material_system_get_default();
     state_ptr->default_geometry.internal_id = INVALID_ID;
 
-    if(!renderer_create_geometry(
+    if(!renderer_geometry_create(
         &state_ptr->default_geometry, sizeof(vertex_3d), VERT_COUNT, verts, sizeof(u32), INDEX_COUNT, indices
     ))
     {
@@ -320,7 +320,7 @@ bool default_geometries_create()
     state_ptr->default_2d_geometry.material = material_system_get_default();
     state_ptr->default_2d_geometry.internal_id = INVALID_ID;
 
-    if(!renderer_create_geometry(
+    if(!renderer_geometry_create(
         &state_ptr->default_2d_geometry, sizeof(vertex_2d), VERT_COUNT, verts2d, sizeof(u32), INDEX_COUNT, indices2d
     ))
     {
@@ -334,7 +334,7 @@ bool default_geometries_create()
 bool geometry_create(geometry_config* config, geometry* g)
 {
     // Загрузка геометрии в память графического процессора.
-    if(!renderer_create_geometry(
+    if(!renderer_geometry_create(
         g, config->vertex_size, config->vertex_count, config->vertices, config->index_size, config->index_count,
         config->indices
     ))
@@ -367,7 +367,7 @@ bool geometry_create(geometry_config* config, geometry* g)
 void geometry_destroy(geometry* g)
 {
     // Уничтожение геометрии в памяти графического процессора.
-    renderer_destroy_geometry(g);
+    renderer_geometry_destroy(g);
 
     g->id = INVALID_ID;
     g->internal_id = INVALID_ID;

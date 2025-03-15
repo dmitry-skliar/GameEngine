@@ -581,7 +581,7 @@ bool vulkan_renderer_end_renderpass(renderer_backend* backend, builtin_renderpas
     return true;
 }
 
-void vulkan_renderer_draw_geometry(geometry_render_data data)
+void vulkan_renderer_geometry_draw(geometry_render_data data)
 {
     // Игнорирование не загруженных геометрий.
     if(!data.geometry || data.geometry->internal_id == INVALID_ID)
@@ -591,33 +591,6 @@ void vulkan_renderer_draw_geometry(geometry_render_data data)
 
     vulkan_geometry_data* buffer_data = &context->geometries[data.geometry->internal_id];
     vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
-
-    // material* m = data.geometry->material;
-    // if(!m)
-    // {
-    //     m = material_system_get_default();
-    // }
-
-    // switch(m->type)
-    // {
-    //     case MATERIAL_TYPE_WORLD:
-    //         vulkan_shader_bind_instance(&context->material_shader, m->internal_id);
-    //         vulkan_shader_set_uniform_vec4(&context->material_shader, context->material_shader_diffuse_color_location, m->diffuse_color);
-    //         vulkan_shader_set_sampler(&context->material_shader, context->material_shader_diffuse_texture_location, m->diffuse_map.texture);
-    //         vulkan_shader_set_uniform_mat4(&context->material_shader, context->material_shader_mode_location, data.model);
-    //         vulkan_shader_apply_instance(&context->material_shader);
-    //         break;
-    //     case MATERIAL_TYPE_UI:
-    //         vulkan_shader_bind_instance(&context->ui_shader, m->internal_id);
-    //         vulkan_shader_set_uniform_vec4(&context->ui_shader, context->ui_shader_diffuse_color_location, m->diffuse_color);
-    //         vulkan_shader_set_sampler(&context->ui_shader, context->ui_shader_diffuse_texture_location, m->diffuse_map.texture);
-    //         vulkan_shader_set_uniform_mat4(&context->ui_shader, context->ui_shader_mode_location, data.model);
-    //         vulkan_shader_apply_instance(&context->ui_shader);
-    //         break;
-    //     default:
-    //         kerror("Function '%s': Unknown material type.", __FUNCTION__);
-    //         return;
-    // }
 
     // Привязка буфера вершин co смещением.
     VkDeviceSize offset[1] = { buffer_data->vertex_buffer_offset };
@@ -641,51 +614,120 @@ void vulkan_renderer_draw_geometry(geometry_render_data data)
     }
 }
 
-void vulkan_renderer_create_texture(texture* texture, const void* pixels)
+VkFormat channel_count_to_format(u8 channel_count, VkFormat default_format)
 {
-    // Создание data.
-    // TODO: Используется распределитель памяти тут.
-    texture->internal_data = kallocate_tc(vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
-    vulkan_texture_data* data = texture->internal_data;
-    VkDeviceSize image_size = texture->width * texture->height * texture->channel_count;
+    switch(channel_count)
+    {
+        case 1:
+            return VK_FORMAT_R8_UNORM;
+        case 2:
+            return VK_FORMAT_R8G8_UNORM;
+        case 3:
+            return VK_FORMAT_R8G8B8_UNORM;
+        case 4:
+            return VK_FORMAT_R8G8B8A8_UNORM;
+        default:
+            return default_format;
+    }
+}
 
-    // NOTE: Предполагается 8 бит на канал.
+void vulkan_renderer_texture_create(texture* t, const void* pixels)
+{
+    t->internal_data = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE);
+    vulkan_image* image = t->internal_data;
     VkFormat image_format = VK_FORMAT_R8G8B8A8_UNORM;
+
+    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
+    vulkan_image_create(
+        context, VK_IMAGE_TYPE_2D, t->width, t->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
+        image
+    );
+
+    // Загрузка данных.
+    u32 image_size = t->width * t->height * t->channel_count;
+    vulkan_renderer_texture_write_data(t, 0, image_size, pixels);
+
+    t->generation++;
+}
+
+void vulkan_renderer_texture_create_writable(texture* t)
+{
+    t->internal_data = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE);
+    vulkan_image* image = t->internal_data;
+    VkFormat image_format = channel_count_to_format(t->channel_count, VK_FORMAT_R8G8B8A8_UNORM);
+
+    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
+    vulkan_image_create(
+        context, VK_IMAGE_TYPE_2D, t->width, t->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
+        image
+    );
+
+    t->generation++;
+}
+
+void vulkan_renderer_texture_resize(texture* t, u32 new_width, u32 new_height)
+{
+    if(!t || !t->internal_data)
+    {
+        kerror("Function '%s' requires a valid pointer to texture and their internal data.", __FUNCTION__);
+        return;
+    }
+
+    vulkan_image* image = t->internal_data;
+    vulkan_image_destroy(context, image);
+
+    VkFormat image_format = channel_count_to_format(t->channel_count, VK_FORMAT_R8G8B8A8_UNORM);
+
+    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
+    vulkan_image_create(
+        context, VK_IMAGE_TYPE_2D, new_width, new_height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
+        image
+    );
+
+    t->generation++;
+}
+
+void vulkan_renderer_texture_write_data(texture* t, u32 offset, u32 size, const void* pixels)
+{
+    if(!t || !t->internal_data || !pixels)
+    {
+        kerror("Function '%s' requires a valid pointer to texture and their internal data and data pixels", __FUNCTION__);
+        return;
+    }
+
+    vulkan_image* image = t->internal_data;
+    VkFormat image_format = channel_count_to_format(t->channel_count, VK_FORMAT_R8G8B8A8_UNORM);
+    VkDeviceSize image_size = t->width * t->height * t->channel_count;
 
     // Создание промежуточного буфера и загрузка данных в него.
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     vulkan_buffer staging;
     vulkan_buffer_create(context, image_size, usage, memory_flags, true, &staging);
-
     vulkan_buffer_load_data(context, &staging, 0, image_size, 0, pixels);
-
-    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
-    vulkan_image_create(
-        context, VK_IMAGE_TYPE_2D, texture->width, texture->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
-        &data->image
-    );
 
     vulkan_command_buffer command_buffer;
     VkCommandPool pool = context->device.graphics_queue.command_pool;
     VkQueue queue = context->device.graphics_queue.handle;
-
     vulkan_command_buffer_allocate_and_begin_single_use(context, pool, &command_buffer);
 
     // Изменение текущий макета на оптимальный для приема данных.
     vulkan_image_transition_layout(
-        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_UNDEFINED, 
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        context, &command_buffer, image, &image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
     );
 
     // Копирование данных из буфера.
-    vulkan_image_copy_from_buffer(context, &data->image, staging.handle, &command_buffer);
+    vulkan_image_copy_from_buffer(context, image, staging.handle, &command_buffer);
 
     // Переход от оптимальной компоновки для получения данных к оптимальной компоновке только для чтения шейдеров.
     vulkan_image_transition_layout(
-        context, &command_buffer, &data->image, &image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        context, &command_buffer, image, &image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     );
 
@@ -694,26 +736,23 @@ void vulkan_renderer_create_texture(texture* texture, const void* pixels)
     // Уничтожение толко после записи буфера команд, потому что во время выполнение может оказаться нулевыми данными!
     vulkan_buffer_destroy(context, &staging);
 
-    texture->generation++;
+    t->generation++;
 }
 
-void vulkan_renderer_destroy_texture(texture* texture)
+void vulkan_renderer_texture_destroy(texture* t)
 {
     vkDeviceWaitIdle(context->device.logical);
 
-    vulkan_texture_data* data = texture->internal_data;
-
-    if(data)
+    if(t->internal_data)
     {
-        vulkan_image_destroy(context, &data->image);
-        kzero_tc(&data->image, struct vulkan_image, 1);
-        kfree_tc(texture->internal_data, vulkan_texture_data, 1, MEMORY_TAG_TEXTURE);
+        vulkan_image_destroy(context, t->internal_data);
+        kfree_tc(t->internal_data, vulkan_image, 1, MEMORY_TAG_TEXTURE);
     }
 
-    kzero_tc(texture, struct texture, 1);
+    kzero_tc(t, texture, 1);
 }
 
-bool vulkan_renderer_create_geometry(
+bool vulkan_renderer_geometry_create(
     geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count,
     const void* indices
 )
@@ -821,7 +860,7 @@ bool vulkan_renderer_create_geometry(
     return true;
 }
 
-void vulkan_renderer_destroy_geometry(geometry* geometry)
+void vulkan_renderer_geometry_destroy(geometry* geometry)
 {
     if(!geometry || geometry->internal_id == INVALID_ID)
     {
@@ -1413,11 +1452,11 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
             {
                 texture_map* map = vk_shader->instance_states[shader->bound_instance_id].instance_texture_maps[i];
                 texture* t = map->texture;
-                vulkan_texture_data* internal_data = t->internal_data;
+                vulkan_image* image = t->internal_data;
 
                 image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                image_infos[i].imageView = internal_data->image.view;
-                image_infos[i].sampler = (VkSampler)map->internal_data;
+                image_infos[i].imageView = image->view;
+                image_infos[i].sampler = map->internal_data;
 
                 // TODO: Изменить состояние дескриптора.
                 // Синхронизируем генерацию кадров, если не используется текстура по умолчанию.
@@ -1533,14 +1572,14 @@ void vulkan_renderer_texture_map_release_resources(texture_map* map)
     map->internal_data = null;
 }
 
-bool vulkan_renderer_shader_acquire_instance_resources(struct shader* shader, texture_map** maps, u32* out_instance_id)
+bool vulkan_renderer_shader_acquire_instance_resources(shader* s, texture_map** maps, u32* out_instance_id)
 {
-    if(!vulkan_renderer_shader_status_valid(shader, __FUNCTION__) || !out_instance_id)
+    if(!vulkan_renderer_shader_status_valid(s, __FUNCTION__) || !out_instance_id)
     {
         return false;
     }
 
-    vulkan_shader* vk_shader = shader->internal_data;
+    vulkan_shader* vk_shader = s->internal_data;
 
     *out_instance_id = INVALID_ID;
     for(u32 i = 0; i < 1024; ++i)
@@ -1561,13 +1600,13 @@ bool vulkan_renderer_shader_acquire_instance_resources(struct shader* shader, te
 
     vulkan_shader_instance_state* instance_state = &vk_shader->instance_states[*out_instance_id];
     u32 instance_texture_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
-    instance_state->instance_texture_maps = kallocate_tc(texture_map*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
+    instance_state->instance_texture_maps = kallocate_tc(texture_map*, s->instance_texture_count, MEMORY_TAG_ARRAY);
+    kcopy_tc(instance_state->instance_texture_maps, maps, texture_map*, s->instance_texture_count);
 
-    // Установка всех указателей текстур на значения по умолчанию, пока они не назначены.
+    // Установка всех неустановленных указателей текстур на значения по умолчанию.
     texture* default_texture = texture_system_get_default_texture();
     for(u32 i = 0; i < instance_texture_count; ++i)
     {
-        instance_state->instance_texture_maps[i] = maps[i];
         if(!maps[i]->texture)
         {
             instance_state->instance_texture_maps[i]->texture = default_texture;
@@ -1575,7 +1614,7 @@ bool vulkan_renderer_shader_acquire_instance_resources(struct shader* shader, te
     }
 
     // Выделение места в UBO по шагу, а не по размеру.
-    u64 size = shader->ubo_stride;
+    u64 size = s->ubo_stride;
     if(!vulkan_buffer_allocate(&vk_shader->uniform_buffer, size, &instance_state->offset))
     {
         kerror("Function '%': Failed t oacuire ubo space.", __FUNCTION__);
@@ -1795,6 +1834,7 @@ void framebuffers_regenerate(bool first_destroy_buffers)
     u32 image_count = context->swapchain.image_count;
     for(u32 i = 0; i < image_count; ++i)
     {
+        vulkan_image* image = context->swapchain.render_textures[i]->internal_data;
         VkFramebuffer* current_world_framebuffer = &context->world_framebuffers[i];
         VkFramebuffer* current_swapchain_framebuffer = &context->swapchain.framebuffers[i];
 
@@ -1804,7 +1844,7 @@ void framebuffers_regenerate(bool first_destroy_buffers)
             vkDestroyFramebuffer(context->device.logical, *current_swapchain_framebuffer, context->allocator);
         }
 
-        VkImageView world_attachments[2] = { context->swapchain.views[i], context->swapchain.depth_attachment.view };
+        VkImageView world_attachments[2] = { image->view, context->swapchain.depth_attachment.view };
         VkFramebufferCreateInfo world_framebufferinfo = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
         world_framebufferinfo.renderPass = context->main_renderpass.handle;
         world_framebufferinfo.attachmentCount = 2;
@@ -1820,7 +1860,7 @@ void framebuffers_regenerate(bool first_destroy_buffers)
         }
 
         // Кардровые буферы цепочки обмена (UI pass).
-        VkImageView ui_attachments[1] = { context->swapchain.views[i] };
+        VkImageView ui_attachments[1] = { image->view };
         VkFramebufferCreateInfo ui_framebufferinfo = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
         ui_framebufferinfo.renderPass = context->ui_renderpass.handle;
         ui_framebufferinfo.attachmentCount = 1;

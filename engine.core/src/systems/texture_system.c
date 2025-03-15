@@ -23,13 +23,15 @@ typedef struct texture_system_state {
     hashtable* texture_references_table;
 } texture_system_state;
 
+// TODO: Умную выгрузку текстур. Например вугружать те материалы которые можно выгружать
+//       и только при достижении определенной границы памяти для загрузки новых.
 typedef struct texture_reference {
+    // Индекс текстуры в массиве текстур.
+    u32 id;
     // Количество ссылок на текстуру.
     u64 reference_count;
-    // Индекс текстуры в массиве текстур.
-    u32 index;
     // Авто уничтожение текстуры.
-    bool auto_release; // TODO: Умную выгрузку текстур. Например вугружать те материалы которые можно выгружать и только при достижении определенной границы памяти для загрузки новых.
+    bool auto_release;
 } texture_reference;
 
 static texture_system_state* state_ptr = null;
@@ -55,6 +57,8 @@ bool default_textures_create();
 void default_textures_destroy();
 bool texture_load(const char* texture_name, texture* t);
 void texture_destroy(texture* t);
+bool texture_process_acquire(const char* name, bool auto_release, bool skip_load, u32* out_texture_id);
+bool texture_process_release(const char* name);
 
 bool texture_system_initialize(u64* memory_requirement, void* memory, texture_system_config* config)
 {
@@ -152,10 +156,7 @@ void texture_system_shutdown()
 
 texture* texture_system_acquire(const char* name, bool auto_release)
 {
-    if(!texture_system_status_valid(__FUNCTION__))
-    {
-        return null;
-    }
+    if(!texture_system_status_valid(__FUNCTION__)) return null;
 
     if(string_equali(name, DEFAULT_TEXTURE_NAME))
     {
@@ -177,175 +178,163 @@ texture* texture_system_acquire(const char* name, bool auto_release)
 
     if(string_equali(name, DEFAULT_NORMAL_TEXTURE_NAME))
     {
-        kwarng("Function '%s' called for default diffuse texture. Call 'texture_system_get_default_normal_texture'!", __FUNCTION__);
+        kwarng("Function '%s' called for default normal texture. Call 'texture_system_get_default_normal_texture'!", __FUNCTION__);
         return &state_ptr->default_normal_texture;
     }
 
-    texture_reference ref;
-    // NOTE: После появления записи в hashtable заново она не создается, reference_count = 0 всегда, если текстура не используется!
-    //       Если авто освобождение отключено, то ref.index будет иметь индекс созданой текстуры!
-    //       Но если авто освобождение включено, то текстура будет удаляться из памяти, и ref.index будет равен INVAID_ID
-    //       а следовательно, что по этому же имени нужно заново использовать эту ссылку!
-    if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.index == INVALID_ID)
+    u32 id = INVALID_ID;
+    if(!texture_process_acquire(name, auto_release, false, &id))
     {
-        ref.reference_count = 0;
-        ref.auto_release = auto_release;
-        ref.index = INVALID_ID;
-    }
-
-    ref.reference_count++;
-
-    if(ref.index == INVALID_ID)
-    {
-        // Поиск свободной памяти для текстуры.
-        for(u32 i = 0; i < state_ptr->config.max_texture_count; ++i)
-        {
-            if(state_ptr->textures[i].id == INVALID_ID)
-            {
-                ref.index = i;
-                break;
-            }
-        }
-
-        // Если свободный участок памяти не найден.
-        if(ref.index == INVALID_ID)
-        {
-            kerror(
-                "Function '%s': Texture system cannot hold anymore textures. Adjust configuration to allow more.",
-                __FUNCTION__
-            );
-            return null;
-        }
-
-        texture* t = &state_ptr->textures[ref.index];
-        t->id = ref.index;
-
-        // Создание текстуры.
-        if(!texture_load(name, t))
-        {
-            kerror("Function '%s': Failed to load texture '%s'.", __FUNCTION__, name);
-            return null;
-        }
-
-        ktrace(
-            "Function '%s': Texture '%s' does not exist. Created, and reference count is now %i.",
-            __FUNCTION__, name, ref.reference_count
-        );
-    }
-    else
-    {
-        ktrace(
-            "Function '%s': Texture '%s' already exists, and reference count increased to %i.",
-            __FUNCTION__, name, ref.reference_count
-        );
-    }
-
-    // TODO: Имя создается однажды и остается до конца существования таблицы, может красть память под текстуры!
-    // Обновление ссылки на текстуру.
-    if(!hashtable_set(state_ptr->texture_references_table, name, &ref, true))
-    {
-        kerror("Function '%s' Failed to update texture reference.", __FUNCTION__);
+        kerror("Function '%s': Failed to obtain a new texture id.", __FUNCTION__);
         return null;
     }
 
-    return &state_ptr->textures[ref.index];
+    return &state_ptr->textures[id];
+}
+
+texture* texture_system_acquire_writable(const char* name, u32 width, u32 height, u8 channel_count, bool has_transparency)
+{
+    if(!texture_system_status_valid(__FUNCTION__)) return null;
+
+    u32 id = INVALID_ID;
+    if(!texture_process_acquire(name, false, true, &id))
+    {
+        kerror("Function '%s': Failed to obtain a new texture id.", __FUNCTION__);
+        return null;
+    }
+
+    texture* t = &state_ptr->textures[id];
+    string_ncopy(t->name, name, TEXTURE_NAME_MAX_LENGTH);
+    t->width = width;
+    t->height = height;
+    t->channel_count = channel_count;
+    t->generation = INVALID_ID;
+    t->flags |= has_transparency ? TEXTURE_FLAG_HAS_TRANSPARENCY : 0;
+    t->flags |= TEXTURE_FLAG_IS_WRITABLE;
+    t->internal_data = null;
+    renderer_texture_create_writable(t);
+    return t;
 }
 
 void texture_system_release(const char* name)
 {
-    if(!texture_system_status_valid(__FUNCTION__))
-    {
-        return;
-    }
+    if(!texture_system_status_valid(__FUNCTION__)) return;
 
-    // Игнорирование удаления текстуры по умолчанию.
-    if(string_equali(name, DEFAULT_DIFFUSE_TEXTURE_NAME))
+    // Игнорирование удаления текстур по умолчанию.
+    if(string_equali(name, DEFAULT_TEXTURE_NAME) || string_equali(name, DEFAULT_DIFFUSE_TEXTURE_NAME)
+    || string_equali(name, DEFAULT_SPECULAR_TEXTURE_NAME) || string_equali(name, DEFAULT_NORMAL_TEXTURE_NAME))
     {
         kwarng("Function '%s' called for default texture.", __FUNCTION__);
         return;
     }
 
-    texture_reference ref;
-    if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.reference_count == 0)
+    if(!texture_process_release(name))
     {
-        kwarng("Function '%s': Tried to release non-existent texture '%s'.", __FUNCTION__, name);
-        return;
+        kerror("Function '%s': Failed to release texture '%s' properly.", __FUNCTION__, name);
     }
+}
 
-    // Копия имени.
-    char name_copy[TEXTURE_NAME_MAX_LENGTH];
-    string_ncopy(name_copy, name, TEXTURE_NAME_MAX_LENGTH);
+texture* texture_system_wrap_internal(
+    const char* name, u32 width, u32 height, u8 channel_count, bool has_transparency, bool is_writable,
+    bool register_texture, void* internal_data
+)
+{
+    if(!texture_system_status_valid(__FUNCTION__) || !name) return false;
 
-    ref.reference_count--;
+    u32 id = INVALID_ID;
+    texture* t = null;
 
-    if(ref.reference_count == 0 && ref.auto_release)
+    if(register_texture)
     {
-        texture* t = &state_ptr->textures[ref.index];
+        if(!texture_process_acquire(name, false, true, &id))
+        {
+            kwarng("Function '%s': Failed to obtain a new texture id.", __FUNCTION__);
+            return null;
+        }
 
-        // Освобождение/восстановление памяти текстуры для новой.
-        texture_destroy(t);
-
-        // Освобождение ссылки.
-        ref.index = INVALID_ID;
-        ref.auto_release = false;
-
-        ktrace(
-            "Function '%s': Released texture '%s', because reference count is 0 and auto release used.",
-            __FUNCTION__, name_copy
-        );
+        t = &state_ptr->textures[id];
     }
     else
     {
+        t = kallocate_tc(texture, 1, MEMORY_TAG_TEXTURE);
         ktrace(
-            "Function '%s': Released texture '%s', now has a reference count is %i and auto release is %s.",
-            __FUNCTION__, name_copy, ref.reference_count, ref.auto_release ? "used" : "unused"
+            "Function '%s': Created texture '%s', but not registering, resulting in an allocation. It is up to the called to free this memory.",
+            __FUNCTION__, name
         );
     }
 
-    // Обновление ссылки на текстуру.
-    if(!hashtable_set(state_ptr->texture_references_table, name_copy, &ref, true))
+    string_ncopy(t->name, name, TEXTURE_NAME_MAX_LENGTH);
+    t->width = width;
+    t->height = height;
+    t->channel_count = channel_count;
+    t->generation = INVALID_ID;
+    t->flags |= has_transparency ? TEXTURE_FLAG_HAS_TRANSPARENCY : 0;
+    t->flags |= is_writable ? TEXTURE_FLAG_IS_WRITABLE : 0;
+    t->flags |= TEXTURE_FLAG_IS_WRAPPED;
+    t->internal_data = internal_data;
+
+    return t;
+}
+
+bool texture_system_set_internal(texture* t, void* internal_data)
+{
+    if(!texture_system_status_valid(__FUNCTION__) || !t) return false;
+
+    t->internal_data = internal_data;
+    t->generation++;
+    return true;
+}
+
+bool texture_system_resize(texture* t, u32 width, u32 height, bool regenerate_internal_data)
+{
+    if(!texture_system_status_valid(__FUNCTION__) || !t) return false;
+
+    if(!(t->flags & TEXTURE_FLAG_IS_WRITABLE))
     {
-        kerror("Function '%s' Failed to update texture reference.", __FUNCTION__);
+        kwarng("Function '%s' should not be called on textures that are not weitable.", __FUNCTION__);
+        return false;
     }
+
+    t->width = width;
+    t->height = height;
+
+    // Только для необернутых текстур.
+    if(!(t->flags & TEXTURE_FLAG_IS_WRAPPED) && regenerate_internal_data)
+    {
+        renderer_texture_resize(t, width, height);
+        return false;
+    }
+
+    t->generation++;
+    return true;
+}
+
+bool texture_system_write_data(texture* t, u32 offset, u32 size, void* data)
+{
+    return false;
 }
 
 texture* texture_system_get_default_texture()
 {
-    if(!texture_system_status_valid(__FUNCTION__))
-    {
-        return null;
-    }
-
+    if(!texture_system_status_valid(__FUNCTION__)) return null;
     return &state_ptr->default_texture;
 }
 
 texture* texture_system_get_default_diffuse_texture()
 {
-    if(!texture_system_status_valid(__FUNCTION__))
-    {
-        return null;
-    }
-
+    if(!texture_system_status_valid(__FUNCTION__)) return null;
     return &state_ptr->default_diffuse_texture;
 }
 
 texture* texture_system_get_default_specular_texture()
 {
-    if(!texture_system_status_valid(__FUNCTION__))
-    {
-        return null;
-    }
-
+    if(!texture_system_status_valid(__FUNCTION__)) return null;
     return &state_ptr->default_specular_texture;
 }
 
 texture* texture_system_get_default_normal_texture()
 {
-    if(!texture_system_status_valid(__FUNCTION__))
-    {
-        return null;
-    }
-
+    if(!texture_system_status_valid(__FUNCTION__)) return null;
     return &state_ptr->default_normal_texture;
 }
 
@@ -392,9 +381,8 @@ bool default_textures_create()
     state_ptr->default_texture.height = tex_dimension;
     state_ptr->default_texture.channel_count = bpp;
     state_ptr->default_texture.generation = INVALID_ID;
-    state_ptr->default_texture.has_transparency = false;
-    state_ptr->default_texture.is_writable = false;
-    renderer_create_texture(&state_ptr->default_texture, pixels);
+    state_ptr->default_texture.flags = 0;
+    renderer_texture_create(&state_ptr->default_texture, pixels);
     state_ptr->default_texture.generation = INVALID_ID;
 
     // Diffuse.
@@ -405,9 +393,8 @@ bool default_textures_create()
     state_ptr->default_diffuse_texture.height = 16;
     state_ptr->default_diffuse_texture.channel_count = 4;
     state_ptr->default_diffuse_texture.generation = INVALID_ID;
-    state_ptr->default_diffuse_texture.has_transparency = false;
-    state_ptr->default_diffuse_texture.is_writable = false;
-    renderer_create_texture(&state_ptr->default_diffuse_texture, pixels);
+    state_ptr->default_diffuse_texture.flags = 0;
+    renderer_texture_create(&state_ptr->default_diffuse_texture, pixels);
     state_ptr->default_diffuse_texture.generation = INVALID_ID;
 
     // Specular.
@@ -418,9 +405,8 @@ bool default_textures_create()
     state_ptr->default_specular_texture.height = 16;
     state_ptr->default_specular_texture.channel_count = 4;
     state_ptr->default_specular_texture.generation = INVALID_ID;
-    state_ptr->default_specular_texture.has_transparency = false;
-    state_ptr->default_specular_texture.is_writable = false;
-    renderer_create_texture(&state_ptr->default_specular_texture, spec_pixels);
+    state_ptr->default_specular_texture.flags = 0;
+    renderer_texture_create(&state_ptr->default_specular_texture, spec_pixels);
     state_ptr->default_specular_texture.generation = INVALID_ID;
 
     // Normal.
@@ -437,9 +423,8 @@ bool default_textures_create()
     state_ptr->default_normal_texture.height = 16;
     state_ptr->default_normal_texture.channel_count = 4;
     state_ptr->default_normal_texture.generation = INVALID_ID;
-    state_ptr->default_normal_texture.has_transparency = false;
-    state_ptr->default_normal_texture.is_writable = false;
-    renderer_create_texture(&state_ptr->default_normal_texture, norm_pixels);
+    state_ptr->default_normal_texture.flags = 0;
+    renderer_texture_create(&state_ptr->default_normal_texture, norm_pixels);
     state_ptr->default_normal_texture.generation = INVALID_ID;
 
     kfree(pixels, pixels_size, MEMORY_TAG_TEXTURE);
@@ -486,11 +471,10 @@ bool texture_load(const char* texture_name, texture* t)
     // Копирование имени текстуры.
     string_ncopy(t->name, texture_name, TEXTURE_NAME_MAX_LENGTH);
     t->generation = 0;
-    t->has_transparency = has_transparency;
-    t->is_writable = false;
+    t->flags = has_transparency ? TEXTURE_FLAG_HAS_TRANSPARENCY : 0;
 
     // Загрузка в графический процессор.
-    renderer_create_texture(t, resource_data->pixels);
+    renderer_texture_create(t, resource_data->pixels);
 
     // Очистка данных.
     resource_system_unload(&img_resource);
@@ -500,10 +484,123 @@ bool texture_load(const char* texture_name, texture* t)
 void texture_destroy(texture* t)
 {
     // Удаление из памяти графического процессора.
-    renderer_destroy_texture(t);
+    renderer_texture_destroy(t);
 
     // Освобождение памяти для новой текстуры.
     kzero_tc(t, texture, 1);
     t->id = INVALID_ID;
     t->generation = INVALID_ID;
+}
+
+bool texture_process_acquire(const char* name, bool auto_release, bool skip_load, u32* out_texture_id)
+{
+    texture_reference ref;
+
+    // Когда текстуры нет или запись помечена как не действительная, то это момент создания новой текстуры.
+    if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.id == INVALID_ID)
+    {
+        ref.reference_count = 0;
+        ref.auto_release = auto_release;
+
+        // Поиск свободной памяти для текстуры.
+        for(u32 i = 0; i < state_ptr->config.max_texture_count; ++i)
+        {
+            if(state_ptr->textures[i].id == INVALID_ID)
+            {
+                ref.id = i;
+                break;
+            }
+        }
+
+        // Если свободный участок памяти не найден.
+        if(ref.id == INVALID_ID)
+        {
+            kerror(
+                "Function '%s': Texture system cannot hold anymore textures. Adjust configuration to allow more.",
+                __FUNCTION__
+            );
+            return false;
+        }
+
+        texture* t = &state_ptr->textures[ref.id];
+        t->id = ref.id;
+
+        // Создание текстуры.
+        if(!skip_load && !texture_load(name, t))
+        {
+            kerror("Function '%s': Failed to load texture '%s'.", __FUNCTION__, name);
+            return false;
+        }
+
+        ktrace(
+            "Function '%s': Texture '%s' does not exist. Created, and reference count is now %i.",
+            __FUNCTION__, name, ref.reference_count
+        );
+    }
+    else
+    {
+        ktrace(
+            "Function '%s': Texture '%s' already exists, and reference count increased to %i.",
+            __FUNCTION__, name, ref.reference_count
+        );
+    }
+
+    ref.reference_count++;
+
+    // TODO: hash таблица update function!
+    // Обновление ссылки на текстуру.
+    if(!hashtable_set(state_ptr->texture_references_table, name, &ref, true))
+    {
+        kerror("Function '%s' Failed to update texture reference.", __FUNCTION__);
+        return false;
+    }
+
+    *out_texture_id = ref.id;
+    return true;
+}
+
+bool texture_process_release(const char* name)
+{
+    texture_reference ref;
+    if(!hashtable_get(state_ptr->texture_references_table, name, &ref) || ref.reference_count == 0)
+    {
+        kwarng("Function '%s': Tried to release non-existent texture '%s'.", __FUNCTION__, name);
+        return false;
+    }
+
+    ref.reference_count--;
+
+    if(ref.reference_count == 0 && ref.auto_release)
+    {
+        texture* t = &state_ptr->textures[ref.id];
+
+        // Освобождение/восстановление памяти текстуры для новой.
+        texture_destroy(t);
+
+        // Освобождение ссылки.
+        ref.id = INVALID_ID;
+        ref.auto_release = false;
+
+        ktrace(
+            "Function '%s': Released texture '%s', because reference count is 0 and auto release used.",
+            __FUNCTION__, name
+        );
+    }
+    else
+    {
+        ktrace(
+            "Function '%s': Released texture '%s', now has a reference count is %i and auto release is %s.",
+            __FUNCTION__, name, ref.reference_count, ref.auto_release ? "used" : "unused"
+        );
+    }
+
+    // TODO: hash таблица update function!
+    // Обновление ссылки на текстуру.
+    if(!hashtable_set(state_ptr->texture_references_table, name, &ref, true))
+    {
+        kerror("Function '%s' Failed to update texture reference.", __FUNCTION__);
+        return false;
+    }
+
+    return true;
 }

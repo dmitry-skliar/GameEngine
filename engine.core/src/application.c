@@ -285,7 +285,7 @@ bool application_create(game* game_inst)
             car_mesh->geometries[i] = geometry_system_acquire_from_config(cfg, true);
         }
 
-        car_mesh->transform = transform_from_position(vec3_create(15.0f, 0.0f, 0.0f));
+        car_mesh->transform = transform_from_position(vec3_create(20.0f, 0.0f, 0.0f));
 
         // NOTE: Очистка конфигурации происходит в загрузчике.
         resource_system_unload(&car_mesh_resource);

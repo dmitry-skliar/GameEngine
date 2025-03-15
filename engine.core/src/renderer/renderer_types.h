@@ -56,15 +56,48 @@ typedef struct renderer_backend {
 
     bool (*end_renderpass)(struct renderer_backend* backend, builtin_renderpass renderpass_id);
 
-    void (*draw_geometry)(geometry_render_data data);
+    void (*texture_create)(texture* texture, const void* pixels);
 
-    void (*create_texture)(texture* texture, const void* pixels);
+    void (*texture_destroy)(texture* texture);
 
-    void (*destroy_texture)(texture* texture);
+    /*
+        @brief Создает новую записываемую текстуру без записанных в нее данных.
+        @param texture Указатель на текстуру для получения ресурсов.
+    */
+    void (*texture_create_writable)(texture* texture);
 
-    bool (*create_geometry)(geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count, const void* indices);
+    /*
+        @brief Изменяет размер текстуры. На этом уровне нет проверки на возможность
+               записи текстуры. Внутренние ресурсы уничтожаются и создаются заново с
+               новым разрешением. Данные теряются и должны быть перезагружены.
+        @param texture Указатель на текстуру для изменения размера.
+        @param new_width Новая ширина в пикселях.
+        @param new_height Новая высота в пикселях.
+    */
+    void (*texture_resize)(texture* texture, u32 new_width, u32 new_height);
 
-    void (*destroy_geometry)(geometry* geometry);
+    /*
+        @brief Записывает указанные данные в предоставленную текстуру.
+        NOTE: На этом уровне это может быть как записываемая, так и не записываемая
+              текстура, поскольку она также обрабатывает начальную загрузку текстуры.
+              Сама система текстур должна отвечать за блокировку запросов на запись
+              в не записываемые текстуры.
+        @param texture Указатель на текстуру для записи данных.
+        @param offset Смещение в байтах откуда начать запись данных.
+        @param size Количество байт данных для записи.
+        @param pixels Необработаные данные изображения (пиксели) которые будут записаны.
+    */
+    void (*texture_write_data)(texture* texture, u32 offset, u32 size, const void* pixels);
+
+    bool (*texture_map_acquire_resources)(texture_map* map);
+
+    void (*texture_map_release_resources)(texture_map* map);
+
+    bool (*geometry_create)(geometry* geometry, u32 vertex_size, u32 vertex_count, const void* vertices, u32 index_size, u32 index_count, const void* indices);
+
+    void (*geometry_destroy)(geometry* geometry);
+
+    void (*geometry_draw)(geometry_render_data data);
 
     bool (*shader_create)(struct shader* shader, u8 renderpass_id, u8 stage_count, const char** stage_filenames, shader_stage* stages);
 
@@ -87,10 +120,6 @@ typedef struct renderer_backend {
     bool (*shader_release_instance_resources)(struct shader* s, u32 instance_id);
 
     bool (*shader_set_uniform)(struct shader* frontend_shader, struct shader_uniform* uniform, const void* value);
-
-    bool (*texture_map_acquire_resources)(texture_map* map);
-
-    void (*texture_map_release_resources)(texture_map* map);
 
 } renderer_backend;
 

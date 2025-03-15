@@ -6,7 +6,8 @@
 
 // Внутренние подключения.
 #include "logger.h"
-#include "containers/darray.h"
+#include "memory/memory.h"
+#include "systems/texture_system.h"
 
 // Объявления функицй.
 void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* swapchain);
@@ -26,6 +27,26 @@ void vulkan_swapchain_recreate(vulkan_context* context, u32 width, u32 height, v
 void vulkan_swapchain_destroy(vulkan_context* context, vulkan_swapchain* swapchain)
 {
     destroy(context, swapchain);
+
+    for(u32 i = 0; i < swapchain->image_count; ++i)
+    {
+        kfree_tc(swapchain->render_textures[i]->internal_data, vulkan_image, 1, MEMORY_TAG_TEXTURE);
+    }
+
+    if(swapchain->render_textures)
+    {
+        u32 texture_count = swapchain->image_count;
+        for(u32 i = 0; i < texture_count; ++i)
+        {
+            texture* t = swapchain->render_textures[i];
+            if(t)
+            {
+                kfree_tc(t, texture, 1, MEMORY_TAG_TEXTURE);
+            }
+        }
+
+        kfree_tc(swapchain->render_textures, texture*, swapchain->image_count, MEMORY_TAG_RENDERER);
+    }
 }
 
 bool vulkan_swapchain_acquire_next_image_index(
@@ -208,39 +229,52 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
 
     // Изображения цепочки.
     swapchain->image_count = 0;
-    result = vkGetSwapchainImagesKHR(context->device.logical, swapchain->handle, &swapchain->image_count, null);
-    if(!vulkan_result_is_success(result))
+    VK_CHECK(vkGetSwapchainImagesKHR(context->device.logical, swapchain->handle, &swapchain->image_count, null));
+
+    if(!swapchain->render_textures)
     {
-        kfatal(
-            "Function '%s': Failed to get swapchain image count with result: %s",
-            __FUNCTION__, vulkan_result_get_string(result, true)
-        );
+        swapchain->render_textures = kallocate_tc(texture*, swapchain->image_count, MEMORY_TAG_RENDERER);
+
+        for(u32 i = 0; i < swapchain->image_count; ++i)
+        {
+            void* internal_data = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE);
+            char tex_name[38] = "__internal_vulkan_swapchain_image_0__";
+            tex_name[34] = '0' + (char)i;
+
+            swapchain->render_textures[i] = texture_system_wrap_internal(
+                tex_name, swapchain_extent.width, swapchain_extent.height, 4, false, true, false, internal_data
+            );
+
+            if(!swapchain->render_textures[i])
+            {
+                kfatal("Function '%s': Failed to generate new swapchain image texture!", __FUNCTION__);
+                return;
+            }
+        }
+    }
+    else
+    {
+        for(u32 i = 0; i < swapchain->image_count; ++i)
+        {
+            // Просто обновляется размер текстуры.
+            texture_system_resize(swapchain->render_textures[i], swapchain_extent.width, swapchain_extent.height, false);
+        }
     }
 
-    if(!swapchain->images)
-    {
-        swapchain->images = darray_reserve(VkImage, swapchain->image_count);
-    }
+    VkImage swapchain_images[32];
+    VK_CHECK(vkGetSwapchainImagesKHR(context->device.logical, swapchain->handle, &swapchain->image_count, swapchain_images));
 
-    if(!swapchain->views)
-    {
-        swapchain->views = darray_reserve(VkImageView, swapchain->image_count);
-    }
-
-    result = vkGetSwapchainImagesKHR(context->device.logical, swapchain->handle, &swapchain->image_count, swapchain->images);
-    if(!vulkan_result_is_success(result))
-    {
-        kfatal(
-            "Function '%s': Failed to create swapchain images with result: %s",
-            __FUNCTION__, vulkan_result_get_string(result, true)
-        );
-    }
-
-    // Представления изображений цепочки.
     for(u32 i = 0; i < swapchain->image_count; ++i)
     {
+        // Обновление внутренних данных (изображений).
+        vulkan_image* image = swapchain->render_textures[i]->internal_data;
+        image->handle = swapchain_images[i];
+        image->width = swapchain_extent.width;
+        image->height = swapchain_extent.height;
+
+        // Представления изображений цепочки.
         VkImageViewCreateInfo viewinfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-        viewinfo.image = swapchain->images[i];
+        viewinfo.image = image->handle;
         viewinfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         viewinfo.format = swapchain->image_format.format;
         viewinfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -249,7 +283,7 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
         viewinfo.subresourceRange.baseArrayLayer = 0;
         viewinfo.subresourceRange.layerCount = 1;
 
-        result = vkCreateImageView(context->device.logical, &viewinfo, context->allocator, &swapchain->views[i]);
+        result = vkCreateImageView(context->device.logical, &viewinfo, context->allocator, &image->view);
         if(!vulkan_result_is_success(result))
         {
             kfatal(
@@ -284,14 +318,9 @@ void destroy(vulkan_context* context, vulkan_swapchain* swapchain)
     // обмена и, таким образом, уничтожаются при ее изменении.
     for(u32 i = 0; i < swapchain->image_count; ++i)
     {
-        vkDestroyImageView(context->device.logical, swapchain->views[i], context->allocator);
+        vulkan_image* image = swapchain->render_textures[i]->internal_data;
+        vkDestroyImageView(context->device.logical, image->view, context->allocator);
     }
 
     vkDestroySwapchainKHR(context->device.logical, swapchain->handle, context->allocator);
-
-    // Освобождение памяти.
-    darray_destroy(swapchain->images);
-    swapchain->images = null;
-    darray_destroy(swapchain->views);
-    swapchain->views = null;
 }
