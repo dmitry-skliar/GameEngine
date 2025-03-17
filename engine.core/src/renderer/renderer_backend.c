@@ -11,11 +11,14 @@ bool renderer_backend_create(renderer_backend_type type, renderer_backend* out_r
     {
         out_renderer_backend->initialize                         = vulkan_renderer_backend_initialize;
         out_renderer_backend->shutdown                           = vulkan_renderer_backend_shutdown;
-        out_renderer_backend->begin_frame                        = vulkan_renderer_backend_begin_frame;
-        out_renderer_backend->end_frame                          = vulkan_renderer_backend_end_frame;
         out_renderer_backend->resized                            = vulkan_renderer_backend_on_resized;
-        out_renderer_backend->begin_renderpass                   = vulkan_renderer_begin_renderpass;
-        out_renderer_backend->end_renderpass                     = vulkan_renderer_end_renderpass;
+        out_renderer_backend->frame_begin                        = vulkan_renderer_backend_frame_begin;
+        out_renderer_backend->frame_end                          = vulkan_renderer_backend_frame_end;
+        out_renderer_backend->renderpass_create                  = vulkan_renderer_renderpass_create;
+        out_renderer_backend->renderpass_destroy                 = vulkan_renderer_renderpass_destroy;
+        out_renderer_backend->renderpass_begin                   = vulkan_renderer_renderpass_begin;
+        out_renderer_backend->renderpass_end                     = vulkan_renderer_renderpass_end;
+        out_renderer_backend->renderpass_get                     = vulkan_renderer_renderpass_get;
         out_renderer_backend->texture_create                     = vulkan_renderer_texture_create;
         out_renderer_backend->texture_create_writable            = vulkan_renderer_texture_create_writable;
         out_renderer_backend->texture_destroy                    = vulkan_renderer_texture_destroy;
@@ -37,6 +40,11 @@ bool renderer_backend_create(renderer_backend_type type, renderer_backend* out_r
         out_renderer_backend->shader_acquire_instance_resources  = vulkan_renderer_shader_acquire_instance_resources;
         out_renderer_backend->shader_release_instance_resources  = vulkan_renderer_shader_release_instance_resources;
         out_renderer_backend->shader_set_uniform                 = vulkan_renderer_shader_set_uniform;
+        out_renderer_backend->render_target_create               = vulkan_renderer_render_target_create;
+        out_renderer_backend->render_target_destroy              = vulkan_renderer_render_target_destroy;
+        out_renderer_backend->window_attachment_get              = vulkan_renderer_window_attachment_get;
+        out_renderer_backend->depth_attachment_get               = vulkan_renderer_depth_attachment_get;
+        out_renderer_backend->window_attachment_index_get        = vulkan_renderer_window_attachment_index_get;
         return true;
     }
     return false;

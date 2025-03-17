@@ -239,7 +239,8 @@ texture* texture_system_wrap_internal(
     bool register_texture, void* internal_data
 )
 {
-    if(!texture_system_status_valid(__FUNCTION__) || !name) return false;
+    // NOTE: Невозможно создать текстуру для цепочки обмена, так как система не инициализирована.
+    // if(!texture_system_status_valid(__FUNCTION__) || !name) return false;
 
     u32 id = INVALID_ID;
     texture* t = null;

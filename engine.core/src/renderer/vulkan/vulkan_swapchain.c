@@ -179,6 +179,7 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     swapchaininfo.imageArrayLayers = 1; // NOTE: Всегда 1, а для стереоскопического изображения больше!
     swapchaininfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // NOTE: Непосредственно в изображения, для постобработки добавить VK_IMAGE_USAGE_TRANSFER_DST_BIT.
 
+    // TODO: Вынести инициализацию из цепи пересоздания цепочки.
     // Указание каким образом обрабатывать цепочки обмена.
     if(context->device.graphics_queue.index != context->device.present_queue.index)
     {
@@ -229,8 +230,10 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
 
     // Изображения цепочки.
     swapchain->image_count = 0;
+
     VK_CHECK(vkGetSwapchainImagesKHR(context->device.logical, swapchain->handle, &swapchain->image_count, null));
 
+    // TODO: Вынести инициализацию из цепи пересоздания цепочки.
     if(!swapchain->render_textures)
     {
         swapchain->render_textures = kallocate_tc(texture*, swapchain->image_count, MEMORY_TAG_RENDERER);
@@ -301,18 +304,31 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     }
 
     // Создание буфера глубины (изображение и его представление).
+    vulkan_image* image = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE);
     vulkan_image_create(
         context, VK_IMAGE_TYPE_2D, swapchain_extent.width, swapchain_extent.height, context->device.depth_format,
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        true, VK_IMAGE_ASPECT_DEPTH_BIT, &swapchain->depth_attachment
+        true, VK_IMAGE_ASPECT_DEPTH_BIT, image
     );
+
+    // TODO: Оптимизировать!
+    swapchain->depth_texture = texture_system_wrap_internal(
+        "__default_depth_texture__", swapchain_extent.width, swapchain_extent.height, context->device.depth_channel_count,
+        false, true, false, image
+    );
+
+    // TODO: Обновить размер и изменить internal_data в качестве оптимизации.
 }
 
 void destroy(vulkan_context* context, vulkan_swapchain* swapchain)
 {
     vkDeviceWaitIdle(context->device.logical);
 
-    vulkan_image_destroy(context, &swapchain->depth_attachment);
+    vulkan_image_destroy(context, swapchain->depth_texture->internal_data);
+    kfree_tc(swapchain->depth_texture->internal_data, vulkan_image, 1, MEMORY_TAG_TEXTURE);
+    swapchain->depth_texture->internal_data = null;
+    kfree_tc(swapchain->depth_texture, texture, 1, MEMORY_TAG_TEXTURE);
+    swapchain->depth_texture = null;
 
     // Уничтожить только представление, но не изображения, поскольку они принадлежат цепочке
     // обмена и, таким образом, уничтожаются при ее изменении.

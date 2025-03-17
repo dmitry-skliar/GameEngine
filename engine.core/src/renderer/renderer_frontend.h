@@ -38,26 +38,26 @@ KAPI void renderer_set_view(mat4 view, vec3 view_position);
 
 /*
     @brief Создает новую текстуру по предоставленным данным изображения и загружает в память графического процессора.
-    @param texture Указатель на текстуру которую необходимо создать.
+    @param t Указатель на текстуру которую необходимо создать.
     @param pixels Указатель на необработанные данные изображения для загрузки.
 */
-void renderer_texture_create(texture* texture, const void* pixels);
+void renderer_texture_create(texture* t, const void* pixels);
 
 /*
     @brief Создает новую записываемую текстуру без записанных в нее данных.
-    @param texture Указатель на текстуру для получения ресурсов.
+    @param t Указатель на текстуру для получения ресурсов.
 */
-void renderer_texture_create_writable(texture* texture);
+void renderer_texture_create_writable(texture* t);
 
 /*
     @brief Изменяет размер текстуры. На этом уровне нет проверки на возможность
            записи текстуры. Внутренние ресурсы уничтожаются и создаются заново с
            новым разрешением. Данные теряются и должны быть перезагружены.
-    @param texture Указатель на текстуру для изменения размера.
+    @param t Указатель на текстуру для изменения размера.
     @param new_width Новая ширина в пикселях.
     @param new_height Новая высота в пикселях.
 */
-void renderer_texture_resize(texture* texture, u32 new_width, u32 new_height);
+void renderer_texture_resize(texture* t, u32 new_width, u32 new_height);
 
 /*
     @brief Записывает указанные данные в предоставленную текстуру.
@@ -65,18 +65,18 @@ void renderer_texture_resize(texture* texture, u32 new_width, u32 new_height);
           текстура, поскольку она также обрабатывает начальную загрузку текстуры.
           Сама система текстур должна отвечать за блокировку запросов на запись
           в не записываемые текстуры.
-    @param texture Указатель на текстуру для записи данных.
+    @param t Указатель на текстуру для записи данных.
     @param offset Смещение в байтах откуда начать запись данных.
     @param size Количество байт данных для записи.
     @param pixels Необработаные данные изображения (пиксели) которые будут записаны.
 */
-void renderer_texture_write_data(texture* texture, u32 offset, u32 size, const void* pixels);
+void renderer_texture_write_data(texture* t, u32 offset, u32 size, const void* pixels);
 
 /*
     @brief Уничтожает предоставленную текстуру, освобождая память графического процессора.
-    @param Указатель на текстуру, которую необходимо уничтожить.
+    @param t Указатель на текстуру, которую необходимо уничтожить.
 */
-void renderer_texture_destroy(texture* texture);
+void renderer_texture_destroy(texture* t);
 
 /*
     @brief Получает внутренние ресурсы для предоставленной карты текстуры.
@@ -114,23 +114,22 @@ bool renderer_geometry_create(
 void renderer_geometry_destroy(geometry* geometry);
 
 /*
-    @brief Получает идентификатор прохода рендеринга с указанным именем.
-    @param name Имя прохода ренедринга, для получения идентификатора прохода рендеринга.
-    @param out_renderpass_id Указатель на переменую для сохранения идетификатора прохода рендеринга.
-    @return True операция завершена успешно, false в случае ошибок.
+    @brief Получает проходчик визуализатора с указанным именем.
+    @param name Имя проходчика визуализатора.
+    @return Указатель на проходчик визуализатора, null если не удалось найти.
 */
-bool renderer_renderpass_id(const char* name, u8* out_renderpass_id);
+renderpass* renderer_renderpass_get(const char* name);
 
 /*
     @brief Создает внутренние ресурсы шейдера, используя предоставленные параметры.
     @param s Указатель на шейдер для создания внутренних ресурсов.
-    @param renderpass_id Указатель прохода рендеринга, который будет связан с шейдером.
+    @param pass Указатель проходчика визуализатора, который будет связан с шейдером.
     @param stage_count Количество стадий шейдера.
     @param stage_filenames Массив имен файлов стадий шейдера, которые будут загружены. Должен соотвествовать массиву стадий шейдера.
     @param stages Массив стадий шейдера (вершина, фрагмент и т.д), указывающий какие стадии будут использоваться в этом шейдере.
     @return True операция завершена успешно, false в случае ошибок.
 */
-bool renderer_shader_create(shader* s, u8 renderpass_id, u8 stage_count, const char** stage_filenames, shader_stage* stages);
+bool renderer_shader_create(shader* s, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages);
 
 /*
     @brief Уничтожает предоставленный шейдер и освобождает ресурсы им удерживаемые.
@@ -208,3 +207,37 @@ bool renderer_shader_release_instance_resources(shader* s, u32 instance_id);
     @return True операция завершена успешно, false в случае ошибок.
 */
 bool renderer_shader_set_uniform(shader* s, shader_uniform* uniform, const void* value);
+
+/*
+    @brief Создает новую цель визуализации используя предоставленные данные.
+    @apram attachment_count Количество вложений (указателей на текстуры).
+    @param attachments Массив вложений (указатели текстур).
+    @param pass Указатель на проходчик визуализатора, с которым связана цель визуализации.
+    @param width Ширина цели визуализации в пикселях.
+    @param height Высота цели визуализации в пикселях.
+    @param out_target Указатель на структуру render_target для получения новой цели визуализации.
+*/
+void renderer_render_target_create(u8 attachment_count, texture** attachments, renderpass* pass, u32 width, u32 height, render_target* out_target);
+
+/*
+    @brief Уничтожает предоставленную цель визуализации.
+    @param out_target Указатель на структуру render_target для уничтожения цели визуализации.
+    @param free_internal_memory Указывает, следует ли освободить внутреннюю память.
+*/
+void renderer_render_target_destroy(render_target* target, bool free_internal_memory);
+
+/*
+    @brief Создает новый проходчик визуализации.
+    @param out_renderpass Указатель на проходчик визуализации.
+    @param depth Значение очистки глубины.
+    @param stencil Значение очистки трафарета.
+    @param has_prev_pass Указывает, есть ли предыдущий проход визуализации.
+    @param has_next_pass Указывает, есть ли следующий проход визуализации.
+*/
+void renderer_renderpass_create(renderpass* out_renderpass, f32 depth, u32 stencil, bool has_prev_pass, bool has_next_pass);
+
+/*
+    @brief Уничтожает предоставленный проходчик визуализации.
+    @param pass Указатель на проходчик визуализации для уничтожения.
+*/
+void renderer_renderpass_destroy(renderpass* pass);

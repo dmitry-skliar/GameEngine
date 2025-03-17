@@ -8,7 +8,6 @@
 #include "event.h"
 #include "memory/memory.h"
 #include "math/kmath.h"
-#include "kstring.h"
 #include "resources/resource_types.h"
 #include "systems/resource_system.h"
 #include "systems/material_system.h"
@@ -30,6 +29,17 @@ typedef struct renderer_system_state {
     u32 material_shader_id;
     u32 ui_shader_id;
     u32 render_mode;
+    // Количество целей визуализации (количество кадров цепочки обмена).
+    u8 window_render_target_count;
+    u32 framebuffer_width;
+    u32 framebuffer_height;
+    // TODO: Сделаит настраиваемыми через показы.
+    renderpass* world_renderpass;
+    renderpass* ui_renderpass;
+    // Указывает что сейчас происходит изменение размера окна.
+    bool resizing;
+    // Количество кадров, с последней операции изменения размера окна.
+    u8 frames_since_resize;
 } renderer_system_state;
 
 static renderer_system_state* state_ptr = null;
@@ -40,6 +50,8 @@ static renderer_system_state* state_ptr = null;
         kerror(msg);           \
         return false;          \
     }
+
+void regenerate_render_targets();
 
 bool renderer_on_event(event_code code, void* sender, void* listener, event_context* context)
 {
@@ -104,6 +116,11 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     kzero(memory, *memory_requirement);
     state_ptr = memory;
 
+    state_ptr->framebuffer_width = 1280;
+    state_ptr->framebuffer_height = 720;
+    state_ptr->resizing = false;
+    state_ptr->frames_since_resize = 0;
+
     // Инициализация.
     // TODO: Сделать настраиваемым из приложения!
     renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, &state_ptr->backend);
@@ -111,10 +128,56 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     state_ptr->backend.frame_number = 0;
     state_ptr->render_mode = RENDERER_VIEW_MODE_DEFAULT;
 
+    // Проходчики визуализатора.
+    // TODO: Чтение из конфигурации.
+    const char* world_renderpass_name = "Builtin.RenderpassWorld";
+    const char* ui_renderpass_name = "Builtin.RenderpassUI";
+    renderpass_config pass_config[2];
+    // World.
+    pass_config[0].name = world_renderpass_name;
+    pass_config[0].prev_name = null;
+    pass_config[0].next_name = ui_renderpass_name;
+    pass_config[0].render_area = (vec4){{ 0, 0, state_ptr->framebuffer_width, state_ptr->framebuffer_height }};
+    pass_config[0].clear_color = (vec4){{ 0.0f, 0.0f, 0.2f, 1.0f }};
+    pass_config[0].clear_flags = RENDERPASS_CLEAR_COLOR_BUFFER_FLAG | RENDERPASS_CLEAR_DEPTH_BUFFER_FLAG | RENDERPASS_CLEAR_STENCIL_BUFFER_FLAG;
+    // UI.
+    pass_config[1].name = ui_renderpass_name;
+    pass_config[1].prev_name = world_renderpass_name;
+    pass_config[1].next_name = null;
+    pass_config[1].render_area = (vec4){{ 0, 0, state_ptr->framebuffer_width, state_ptr->framebuffer_height }};
+    pass_config[1].clear_color = (vec4){{ 0.0f, 0.0f, 0.2f, 1.0f }};
+    pass_config[1].clear_flags = RENDERPASS_CLEAR_NONE_FLAG;
+
+    renderer_backend_config renderer_config = {};
+    renderer_config.application_name = window_state->title;
+    renderer_config.on_rendertarget_refresh_required = regenerate_render_targets;
+    renderer_config.renderpass_count = 2;
+    renderer_config.pass_configs = pass_config;
+
     CRITICAL_INIT(
-        state_ptr->backend.initialize(&state_ptr->backend),
+        state_ptr->backend.initialize(&state_ptr->backend, &renderer_config, &state_ptr->window_render_target_count),
         "Renderer backend failed to initialize."
     );
+
+    // TODO: Изменить способ получения.
+    state_ptr->world_renderpass = state_ptr->backend.renderpass_get(world_renderpass_name);
+    state_ptr->world_renderpass->render_target_count = state_ptr->window_render_target_count;
+    state_ptr->world_renderpass->targets = kallocate_tc(render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
+
+    state_ptr->ui_renderpass = state_ptr->backend.renderpass_get(ui_renderpass_name);
+    state_ptr->ui_renderpass->render_target_count = state_ptr->window_render_target_count;
+    state_ptr->ui_renderpass->targets = kallocate_tc(render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
+
+    regenerate_render_targets();
+
+    // Обновление разрешения проходов визуализаторов.
+    state_ptr->world_renderpass->render_area.x = state_ptr->world_renderpass->render_area.y = 0;
+    state_ptr->world_renderpass->render_area.width = state_ptr->framebuffer_width;
+    state_ptr->world_renderpass->render_area.height = state_ptr->framebuffer_height;
+
+    state_ptr->ui_renderpass->render_area.x = state_ptr->ui_renderpass->render_area.y = 0;
+    state_ptr->ui_renderpass->render_area.width = state_ptr->framebuffer_width;
+    state_ptr->ui_renderpass->render_area.height = state_ptr->framebuffer_height;
 
     // Шейдеры.
     resource config_resource;
@@ -175,12 +238,16 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
 
 void renderer_system_shutdown()
 {
-    if(!renderer_system_status_valid(__FUNCTION__))
-    {
-        return;
-    }
+    if(!renderer_system_status_valid(__FUNCTION__)) return;
 
     // NOTE: Уничтожение шейдеров сделает система шейдеров автоматически.
+
+    // Уничтожение целей визуализации.
+    for(u8 i = 0; i < state_ptr->window_render_target_count; ++i)
+    {
+        state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], true);
+        state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], true);
+    }
 
     // Завершение работы рендерера.
     state_ptr->backend.shutdown(&state_ptr->backend);
@@ -191,31 +258,57 @@ void renderer_system_shutdown()
 
 void renderer_on_resize(i32 width, i32 height)
 {
-    if(!renderer_system_status_valid(__FUNCTION__))
-    {
-        return;
-    }
+    if(!renderer_system_status_valid(__FUNCTION__)) return;
 
-    f32 aspect = width / (f32)height;
-    state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
-    state_ptr->ui_projection = mat4_orthographic(0, (f32)width, (f32)height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
-    state_ptr->backend.resized(&state_ptr->backend, width, height);    
+    state_ptr->resizing = true;
+    state_ptr->framebuffer_width = width;
+    state_ptr->framebuffer_height = height;
+    state_ptr->frames_since_resize = 0;
 }
 
 bool renderer_draw_frame(render_packet* packet)
 {
-    if(!renderer_system_status_valid(__FUNCTION__))
-    {
-        return false;
-    }
+    if(!renderer_system_status_valid(__FUNCTION__)) return false;
 
     // Производить генерацию кадров даже, если исход плохой!
     state_ptr->backend.frame_number++;
 
-    if(state_ptr->backend.begin_frame(&state_ptr->backend, packet->delta_time))
+    if(state_ptr->resizing)
     {
+        state_ptr->frames_since_resize++;
+
+        if(state_ptr->frames_since_resize >= 30)
+        {
+            f32 width = state_ptr->framebuffer_width;
+            f32 height = state_ptr->framebuffer_height;
+
+            state_ptr->projection = mat4_perspective(state_ptr->fov_radians, width / height, state_ptr->near_clip, state_ptr->far_clip);
+            state_ptr->ui_projection = mat4_orthographic(0, width, height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
+            state_ptr->backend.resized(&state_ptr->backend, width, height);
+
+            state_ptr->frames_since_resize = 0;
+            state_ptr->resizing = false;
+        }
+        else
+        {
+            // Пропуск кадров.
+            return true;
+        }
+    }
+
+    // TODO: Представление.
+    state_ptr->world_renderpass->render_area.width = state_ptr->framebuffer_width;
+    state_ptr->world_renderpass->render_area.height = state_ptr->framebuffer_height;
+
+    state_ptr->ui_renderpass->render_area.width = state_ptr->framebuffer_width;
+    state_ptr->ui_renderpass->render_area.height = state_ptr->framebuffer_height;
+
+    if(state_ptr->backend.frame_begin(&state_ptr->backend, packet->delta_time))
+    {
+        u8 attachment_index = state_ptr->backend.window_attachment_index_get();
+        
         // Проход (world).
-        if(!state_ptr->backend.begin_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_WORLD))
+        if(!state_ptr->backend.renderpass_begin(&state_ptr->backend, state_ptr->world_renderpass, &state_ptr->world_renderpass->targets[attachment_index]))
         {
             kerror("Begin renderpass -> BUILTIN_RENDERPASS_WORLD failed.");
             return false;
@@ -269,14 +362,14 @@ bool renderer_draw_frame(render_packet* packet)
             state_ptr->backend.geometry_draw(packet->geometries[i]);
         }
 
-        if(!state_ptr->backend.end_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_WORLD))
+        if(!state_ptr->backend.renderpass_end(&state_ptr->backend, state_ptr->world_renderpass))
         {
             kerror("End renderpass -> BUILTIN_RENDERPASS_WORLD failed.");
             return false;
         }
 
         // Проход (UI).
-        if(!state_ptr->backend.begin_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_UI))
+        if(!state_ptr->backend.renderpass_begin(&state_ptr->backend, state_ptr->ui_renderpass, &state_ptr->ui_renderpass->targets[attachment_index]))
         {
             kerror("Begin renderpass -> BUILTIN_RENDERPASS_UI failed.");
             return false;
@@ -327,13 +420,13 @@ bool renderer_draw_frame(render_packet* packet)
             state_ptr->backend.geometry_draw(packet->ui_geometries[i]);
         }
 
-        if(!state_ptr->backend.end_renderpass(&state_ptr->backend, BUILTIN_RENDERPASS_UI))
+        if(!state_ptr->backend.renderpass_end(&state_ptr->backend, state_ptr->ui_renderpass))
         {
             kerror("End renderpass -> BUILTIN_RENDERPASS_UI failed.");
             return false;
         }
 
-        if(!state_ptr->backend.end_frame(&state_ptr->backend, packet->delta_time))
+        if(!state_ptr->backend.frame_end(&state_ptr->backend, packet->delta_time))
         {
             kerror("Failed to complete function 'renderer_end_frame'. Shutting down.");
             return false;
@@ -396,29 +489,14 @@ void renderer_geometry_destroy(geometry* geometry)
     state_ptr->backend.geometry_destroy(geometry);
 }
 
-bool renderer_renderpass_id(const char* name, u8* out_renderpass_id)
+renderpass* renderer_renderpass_get(const char* name)
 {
-    // TODO: Нужны динамические проходы рендеринга!
-
-    if(string_equali("Builtin.RenderpassWorld", name))
-    {
-        *out_renderpass_id = BUILTIN_RENDERPASS_WORLD;
-        return true;
-    }
-    else if(string_equali("Builtin.RenderpassUI", name))
-    {
-        *out_renderpass_id = BUILTIN_RENDERPASS_UI;
-        return true;
-    }
-
-    kerror("Function '%s': No renderpass named '%s'.", __FUNCTION__, name);
-    *out_renderpass_id = INVALID_ID_U8;
-    return false;
+    return state_ptr->backend.renderpass_get(name);
 }
 
-bool renderer_shader_create(shader* s, u8 renderpass_id, u8 stage_count, const char** stage_filenames, shader_stage* stages)
+bool renderer_shader_create(shader* s, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages)
 {
-    return state_ptr->backend.shader_create(s, renderpass_id, stage_count, stage_filenames, stages);
+    return state_ptr->backend.shader_create(s, pass, stage_count, stage_filenames, stages);
 }
 
 void renderer_shader_destroy(shader* s)
@@ -469,4 +547,57 @@ bool renderer_shader_release_instance_resources(shader* s, u32 instance_id)
 bool renderer_shader_set_uniform(shader* s, shader_uniform* uniform, const void* value)
 {
     return state_ptr->backend.shader_set_uniform(s, uniform, value);
+}
+
+void renderer_render_target_create(u8 attachment_count, texture** attachments, renderpass* pass, u32 width, u32 height, render_target* out_target)
+{
+    state_ptr->backend.render_target_create(attachment_count, attachments, pass, width, height, out_target);    
+}
+
+void renderer_render_target_destroy(render_target* target, bool free_internal_memory)
+{
+    state_ptr->backend.render_target_destroy(target, free_internal_memory);
+}
+
+void renderer_renderpass_create(renderpass* out_renderpass, f32 depth, u32 stencil, bool has_prev_pass, bool has_next_pass)
+{
+    state_ptr->backend.renderpass_create(out_renderpass, depth, stencil, has_prev_pass, has_next_pass);    
+}
+
+void renderer_renderpass_destroy(renderpass* pass)
+{
+    state_ptr->backend.renderpass_destroy(pass);
+}
+
+void regenerate_render_targets()
+{
+    static bool first_start = true;
+
+    // TODO: Должно настраиваться.
+    for(u8 i = 0; i < state_ptr->window_render_target_count; ++i)
+    {
+        if(!first_start)
+        {
+            state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], false);
+            state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], false);
+            first_start = false;
+        }
+
+        texture* window_target_texture = state_ptr->backend.window_attachment_get(i);
+        texture* depth_target_texture = state_ptr->backend.depth_attachment_get();
+
+        // World.
+        texture* attachments[2] = { window_target_texture, depth_target_texture };
+        state_ptr->backend.render_target_create(
+            2, attachments, state_ptr->world_renderpass, state_ptr->framebuffer_width, state_ptr->framebuffer_height,
+            &state_ptr->world_renderpass->targets[i]
+        );
+
+        // UI.
+        texture* ui_attachments[1] = { window_target_texture };
+        state_ptr->backend.render_target_create(
+            1, ui_attachments, state_ptr->ui_renderpass, state_ptr->framebuffer_width, state_ptr->framebuffer_height,
+            &state_ptr->ui_renderpass->targets[i]
+        );
+    }
 }

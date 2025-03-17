@@ -4,6 +4,7 @@
 #include <debug/assert.h>
 #include <vulkan/vulkan.h>
 #include <containers/freelist.h>
+#include <containers/hashtable.h>
 #include <renderer/renderer_types.h>
 
 /*
@@ -58,42 +59,33 @@ typedef enum vulkan_renderpass_state {
     VULKAN_RENDERPASS_STATE_NOT_ALLOCATED
 } vulkan_renderpass_state;
 
-typedef enum renderpass_clear_flag {
-    RENDERPASS_CLEAR_NONE_FLAG           = 0x0,
-    RENDERPASS_CLEAR_COLOR_BUFFER_FLAG   = 0x1,
-    RENDERPASS_CLEAR_DEPTH_BUFFER_FLAG   = 0x2,
-    RENDERPASS_CLEAR_STENCIL_BUFFER_FLAG = 0x4,
-} renderpass_clear_flag;
-
 typedef struct vulkan_renderpass {
     VkRenderPass handle;
-    vec4 render_area;
-    vec4 clear_color;
+    f32 depth;
+    u32 stencil;
     bool do_clear_color;
     bool do_clear_depth;
     bool do_clear_stencil;
     bool has_prev_pass;
     bool has_next_pass;
-    f32 depth;
-    f32 stencil;
     vulkan_renderpass_state state;
 } vulkan_renderpass;
 
 typedef struct vulkan_swapchain {
+    // @brief Формат пикселей изображения.
+    VkSurfaceFormatKHR image_format;
     // @brief Количество кадров для визуализации.
     u32 max_frames_in_flight;
-    // @brief Количество кадров цепочки.
-    u32 image_count;
-    // @brief Формат пикселей.
-    VkSurfaceFormatKHR image_format;
-    // @brief Массив целей рендеринга, содержащий изображения цепочки обмена.
-    texture** render_textures;
     // @brief Цепочка обмена.
     VkSwapchainKHR handle;
-    // @brief Буфер глубины.
-    vulkan_image depth_attachment;
-    // @brief Кадровые буферы для визуализации на экране (используется darray).
-    VkFramebuffer framebuffers[5]; // TODO: image_count == 5!
+    // @brief Количество кадров цепочки обмена.
+    u32 image_count;
+    // @brief Массив текстур кадров (цели визуализации).
+    texture** render_textures;
+    // @brief Текстура буфера глубины (цель визуализации).
+    texture* depth_texture;
+    // @brief Цели используемые для визуализации на экран, одна на кадр.
+    render_target render_targets[5];    // TODO: image_count == 5!
 } vulkan_swapchain;
 
 typedef enum vulkan_command_buffer_state {
@@ -170,6 +162,8 @@ typedef struct vulkan_device {
     bool memory_local_host_visible_support;
     // @brief Формат буфера глубины.
     VkFormat depth_format;
+    // @brief Количество каналов выбранного формата глубины.
+    u8 depth_channel_count;
 } vulkan_device;
 
 // @brief Контекст конвейера.
@@ -310,6 +304,8 @@ typedef struct vulkan_shader {
     vulkan_renderpass* renderpass;
 } vulkan_shader;
 
+#define VULKAN_MAX_REGISTERED_RENDERPASSES 31
+
 // @brief Контекст визуализатора.
 typedef struct vulkan_context {
     f32 frame_delta_time;
@@ -343,8 +339,10 @@ typedef struct vulkan_context {
     // @brief Текущий кадр показа.
     u32 current_frame;
 
-    vulkan_renderpass main_renderpass;
-    vulkan_renderpass ui_renderpass;
+    u64 renderpass_memory_requirements;
+    void* renderpass_memory;
+    hashtable* renderpass_table;
+    renderpass registered_passes[VULKAN_MAX_REGISTERED_RENDERPASSES];
 
     vulkan_buffer object_vertex_buffer;
     vulkan_buffer object_index_buffer;
@@ -352,8 +350,11 @@ typedef struct vulkan_context {
     // TODO: Сделать динамическим размер.
     vulkan_geometry_data geometries[VULKAN_SHADER_MAX_GEOMETRY_COUNT];
 
-    // Кадровые буферы используются для визуализации мире на кадр.
-    VkFramebuffer world_framebuffers[5]; // TODO: Потому что image_count == 5!
+    // @brief Цели используемые для визуализации мира на экран, одна на кадр.
+    render_target world_render_targets[5];    // TODO: image_count == 5!
 
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
+
+    void (*on_rendertarget_refresh_required)();
+
 } vulkan_context;
