@@ -517,7 +517,6 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
         {
             if(context->registered_passes[j].id == INVALID_ID_U16)
             {
-                context->registered_passes[j].id = j;
                 id = j;
                 break;
             }
@@ -532,6 +531,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
             return false;
         }
 
+        context->registered_passes[id].id = id;
         context->registered_passes[id].clear_flags = config->pass_configs[i].clear_flags;
         context->registered_passes[id].clear_color = config->pass_configs[i].clear_color;
         context->registered_passes[id].render_area = config->pass_configs[i].render_area;
@@ -544,10 +544,6 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
         hashtable_set(context->renderpass_table, config->pass_configs[i].name, &id, true);
     }
     ktrace("Vulkan renderpasses created.");
-
-    // Создание кадровых буферов цепочки обмена.
-    // framebuffers_regenerate(false);
-    // ktrace("Vulkan framebuffers created.");
 
     // Создание буферов команд.
     command_buffers_create(backend);
@@ -670,16 +666,10 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     }
     ktrace("Vulkan command buffers destroyed.");
 
-    // Уничтожение целей визуализации (кадров) цепочки обмена.
-    u32 image_count = context->swapchain.image_count;
-    for(u32 i = 0; i < image_count; ++i)
-    {
-        vulkan_renderer_render_target_destroy(&context->world_render_targets[i], true);
-        vulkan_renderer_render_target_destroy(&context->swapchain.render_targets[i], true);
-    }
-    ktrace("Vulkan framebuffers destroyed.");
-
     // Уничтожение проходов визуализатора.
+    hashtable_destroy(context->renderpass_table);
+    kfree(context->renderpass_memory, context->renderpass_memory_requirements, MEMORY_TAG_HASHTABLE);
+    
     for(u32 i = 0; i < VULKAN_MAX_REGISTERED_RENDERPASSES; ++i)
     {
         if(context->registered_passes[i].id != INVALID_ID_U16)

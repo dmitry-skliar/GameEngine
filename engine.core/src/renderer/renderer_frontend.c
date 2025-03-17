@@ -38,8 +38,6 @@ typedef struct renderer_system_state {
     renderpass* ui_renderpass;
     // Указывает что сейчас происходит изменение размера окна.
     bool resizing;
-    // Количество кадров, с последней операции изменения размера окна.
-    u8 frames_since_resize;
 } renderer_system_state;
 
 static renderer_system_state* state_ptr = null;
@@ -51,7 +49,33 @@ static renderer_system_state* state_ptr = null;
         return false;          \
     }
 
-void regenerate_render_targets();
+void regenerate_render_targets()
+{
+    // TODO: Должно настраиваться.
+    for(u8 i = 0; i < state_ptr->window_render_target_count; ++i)
+    {
+        // TODO: При инициализации еще нечего уничтожать, а потому возникают ошибки, но они пока допустимые.
+        state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], false);
+        state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], false);
+
+        texture* window_target_texture = state_ptr->backend.window_attachment_get(i);
+        texture* depth_target_texture = state_ptr->backend.depth_attachment_get();
+
+        // World.
+        texture* attachments[2] = { window_target_texture, depth_target_texture };
+        state_ptr->backend.render_target_create(
+            2, attachments, state_ptr->world_renderpass, state_ptr->framebuffer_width, state_ptr->framebuffer_height,
+            &state_ptr->world_renderpass->targets[i]
+        );
+
+        // UI.
+        texture* ui_attachments[1] = { window_target_texture };
+        state_ptr->backend.render_target_create(
+            1, ui_attachments, state_ptr->ui_renderpass, state_ptr->framebuffer_width, state_ptr->framebuffer_height,
+            &state_ptr->ui_renderpass->targets[i]
+        );
+    }
+}
 
 bool renderer_on_event(event_code code, void* sender, void* listener, event_context* context)
 {
@@ -116,15 +140,15 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     kzero(memory, *memory_requirement);
     state_ptr = memory;
 
-    state_ptr->framebuffer_width = 1280;
-    state_ptr->framebuffer_height = 720;
+    // TODO: Должны быть единая точка задания размеров кадрового буфера при инициализации!
+    state_ptr->framebuffer_width = window_state->width;
+    state_ptr->framebuffer_height = window_state->height;
     state_ptr->resizing = false;
-    state_ptr->frames_since_resize = 0;
 
     // Инициализация.
     // TODO: Сделать настраиваемым из приложения!
     renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, &state_ptr->backend);
-    state_ptr->backend.window_state = window_state;
+    state_ptr->backend.window_state = window_state; // TODO: Убрать!
     state_ptr->backend.frame_number = 0;
     state_ptr->render_mode = RENDERER_VIEW_MODE_DEFAULT;
 
@@ -163,10 +187,12 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     state_ptr->world_renderpass = state_ptr->backend.renderpass_get(world_renderpass_name);
     state_ptr->world_renderpass->render_target_count = state_ptr->window_render_target_count;
     state_ptr->world_renderpass->targets = kallocate_tc(render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
+    kzero_tc(state_ptr->world_renderpass->targets, render_target, state_ptr->window_render_target_count);
 
     state_ptr->ui_renderpass = state_ptr->backend.renderpass_get(ui_renderpass_name);
     state_ptr->ui_renderpass->render_target_count = state_ptr->window_render_target_count;
     state_ptr->ui_renderpass->targets = kallocate_tc(render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
+    kzero_tc(state_ptr->ui_renderpass->targets, render_target, state_ptr->window_render_target_count);
 
     regenerate_render_targets();
 
@@ -248,6 +274,8 @@ void renderer_system_shutdown()
         state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], true);
         state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], true);
     }
+    kfree_tc(state_ptr->world_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
+    kfree_tc(state_ptr->ui_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
 
     // Завершение работы рендерера.
     state_ptr->backend.shutdown(&state_ptr->backend);
@@ -263,7 +291,6 @@ void renderer_on_resize(i32 width, i32 height)
     state_ptr->resizing = true;
     state_ptr->framebuffer_width = width;
     state_ptr->framebuffer_height = height;
-    state_ptr->frames_since_resize = 0;
 }
 
 bool renderer_draw_frame(render_packet* packet)
@@ -275,33 +302,21 @@ bool renderer_draw_frame(render_packet* packet)
 
     if(state_ptr->resizing)
     {
-        state_ptr->frames_since_resize++;
+        f32 width = state_ptr->framebuffer_width;
+        f32 height = state_ptr->framebuffer_height;
 
-        if(state_ptr->frames_since_resize >= 30)
-        {
-            f32 width = state_ptr->framebuffer_width;
-            f32 height = state_ptr->framebuffer_height;
+        state_ptr->projection = mat4_perspective(state_ptr->fov_radians, width / height, state_ptr->near_clip, state_ptr->far_clip);
+        state_ptr->ui_projection = mat4_orthographic(0, width, height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
+        state_ptr->backend.resized(&state_ptr->backend, width, height);
 
-            state_ptr->projection = mat4_perspective(state_ptr->fov_radians, width / height, state_ptr->near_clip, state_ptr->far_clip);
-            state_ptr->ui_projection = mat4_orthographic(0, width, height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
-            state_ptr->backend.resized(&state_ptr->backend, width, height);
+        // TODO: Представление.
+        state_ptr->world_renderpass->render_area.width = state_ptr->framebuffer_width;
+        state_ptr->world_renderpass->render_area.height = state_ptr->framebuffer_height;
+        state_ptr->ui_renderpass->render_area.width = state_ptr->framebuffer_width;
+        state_ptr->ui_renderpass->render_area.height = state_ptr->framebuffer_height;
 
-            state_ptr->frames_since_resize = 0;
-            state_ptr->resizing = false;
-        }
-        else
-        {
-            // Пропуск кадров.
-            return true;
-        }
+        state_ptr->resizing = false;
     }
-
-    // TODO: Представление.
-    state_ptr->world_renderpass->render_area.width = state_ptr->framebuffer_width;
-    state_ptr->world_renderpass->render_area.height = state_ptr->framebuffer_height;
-
-    state_ptr->ui_renderpass->render_area.width = state_ptr->framebuffer_width;
-    state_ptr->ui_renderpass->render_area.height = state_ptr->framebuffer_height;
 
     if(state_ptr->backend.frame_begin(&state_ptr->backend, packet->delta_time))
     {
@@ -567,37 +582,4 @@ void renderer_renderpass_create(renderpass* out_renderpass, f32 depth, u32 stenc
 void renderer_renderpass_destroy(renderpass* pass)
 {
     state_ptr->backend.renderpass_destroy(pass);
-}
-
-void regenerate_render_targets()
-{
-    static bool first_start = true;
-
-    // TODO: Должно настраиваться.
-    for(u8 i = 0; i < state_ptr->window_render_target_count; ++i)
-    {
-        if(!first_start)
-        {
-            state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], false);
-            state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], false);
-            first_start = false;
-        }
-
-        texture* window_target_texture = state_ptr->backend.window_attachment_get(i);
-        texture* depth_target_texture = state_ptr->backend.depth_attachment_get();
-
-        // World.
-        texture* attachments[2] = { window_target_texture, depth_target_texture };
-        state_ptr->backend.render_target_create(
-            2, attachments, state_ptr->world_renderpass, state_ptr->framebuffer_width, state_ptr->framebuffer_height,
-            &state_ptr->world_renderpass->targets[i]
-        );
-
-        // UI.
-        texture* ui_attachments[1] = { window_target_texture };
-        state_ptr->backend.render_target_create(
-            1, ui_attachments, state_ptr->ui_renderpass, state_ptr->framebuffer_width, state_ptr->framebuffer_height,
-            &state_ptr->ui_renderpass->targets[i]
-        );
-    }
 }

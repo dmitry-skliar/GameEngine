@@ -84,8 +84,6 @@ typedef struct vulkan_swapchain {
     texture** render_textures;
     // @brief Текстура буфера глубины (цель визуализации).
     texture* depth_texture;
-    // @brief Цели используемые для визуализации на экран, одна на кадр.
-    render_target render_targets[5];    // TODO: image_count == 5!
 } vulkan_swapchain;
 
 typedef enum vulkan_command_buffer_state {
@@ -350,11 +348,7 @@ typedef struct vulkan_context {
     // TODO: Сделать динамическим размер.
     vulkan_geometry_data geometries[VULKAN_SHADER_MAX_GEOMETRY_COUNT];
 
-    // @brief Цели используемые для визуализации мира на экран, одна на кадр.
-    render_target world_render_targets[5];    // TODO: image_count == 5!
-
     i32 (*find_memory_index)(u32 type_filter, u32 property_flags);
-
     void (*on_rendertarget_refresh_required)();
 
 } vulkan_context;
