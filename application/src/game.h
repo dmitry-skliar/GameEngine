@@ -3,13 +3,12 @@
 #include <entry.h>
 #include <application.h>
 #include <math/kmath.h>
+#include <renderer/camera.h>
+#include <renderer/renderer_frontend.h>
 
 typedef struct game_state {
     f32 delta_time;
-    mat4 view;
-    vec3 camera_position;
-    vec3 camera_euler;
-    bool camera_view_dirty;
+    camera* world_camera;
 } game_state;
 
 bool game_initialize(game* inst);

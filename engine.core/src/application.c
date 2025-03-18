@@ -17,6 +17,7 @@
 #include "systems/geometry_system.h"
 #include "systems/resource_system.h"
 #include "systems/shader_system.h"
+#include "systems/camera_system.h"
 
 // TODO: Временный тестовый код: начало.
 #include "kstring.h"
@@ -60,6 +61,9 @@ typedef struct application_state {
 
     u64 geometry_system_memory_requirement;
     void* geometry_system_state;
+
+    u64 camera_system_memory_requirement;
+    void* camera_system_state;
 
     // TODO: Временный тестовый код: начало.
     u32 mesh_count;
@@ -252,6 +256,17 @@ bool application_create(game* game_inst)
         return false;
     }
     kinfor("Geometry system started.");
+
+    camera_system_config camera_sys_config;
+    camera_sys_config.max_camera_count = 61;
+    camera_system_initialize(&app_state->camera_system_memory_requirement, null, &camera_sys_config);
+    app_state->camera_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->camera_system_memory_requirement);
+    if(!camera_system_initialize(&app_state->camera_system_memory_requirement, app_state->camera_system_state, &camera_sys_config))
+    {
+        kerror("Failed to initialize camera system. Aborted!");
+        return false;
+    }
+    kinfor("Camera system started.");
 
     // TODO: Временный тестовый код: начало.
     app_state->mesh_count = 0;
@@ -524,6 +539,9 @@ bool application_run()
     // NOTE: Что бы исключить нежелательные эффекты управление остановить первым!
     input_system_shutdown();
     kinfor("Input system stopped.");
+
+    camera_system_shutdown();
+    kinfor("Camera system stopped.");
 
     geometry_system_shutdown();
     kinfor("Geometry system stopped.");

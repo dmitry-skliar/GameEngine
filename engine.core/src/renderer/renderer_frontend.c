@@ -12,12 +12,12 @@
 #include "systems/resource_system.h"
 #include "systems/material_system.h"
 #include "systems/shader_system.h"
+#include "systems/camera_system.h"
 
 typedef struct renderer_system_state {
     renderer_backend backend;
+    camera* active_world_camera;
     mat4 projection;
-    mat4 view;
-    vec3 view_position;
     vec4 ambient_color;
     mat4 ui_projection;
     mat4 ui_view;
@@ -245,9 +245,6 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     f32 aspect = window_state->width / (f32)window_state->height;
 
     state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
-    // TODO: Конфигурация стартовой позиции камеры.
-    state_ptr->view = mat4_translation((vec3){{0, 0, 30.0f}}); // game.c установка камеры!
-    state_ptr->view = mat4_inverse(state_ptr->view);
     // TODO: Получение из сцены.
     state_ptr->ambient_color = (vec4){{0.15f, 0.15f, 0.15f, 1.0f}};
 
@@ -305,6 +302,7 @@ bool renderer_draw_frame(render_packet* packet)
         f32 width = state_ptr->framebuffer_width;
         f32 height = state_ptr->framebuffer_height;
 
+        // TODO: FOV -> camera перенести!
         state_ptr->projection = mat4_perspective(state_ptr->fov_radians, width / height, state_ptr->near_clip, state_ptr->far_clip);
         state_ptr->ui_projection = mat4_orthographic(0, width, height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
         state_ptr->backend.resized(&state_ptr->backend, width, height);
@@ -317,6 +315,13 @@ bool renderer_draw_frame(render_packet* packet)
 
         state_ptr->resizing = false;
     }
+
+    if(!state_ptr->active_world_camera)
+    {
+        state_ptr->active_world_camera = camera_system_get_default();
+    }
+
+    mat4 view = camera_view_get(state_ptr->active_world_camera);
 
     if(state_ptr->backend.frame_begin(&state_ptr->backend, packet->delta_time))
     {
@@ -336,7 +341,7 @@ bool renderer_draw_frame(render_packet* packet)
         }
 
         if(!material_system_apply_global(
-                state_ptr->material_shader_id, &state_ptr->projection, &state_ptr->view, &state_ptr->view_position,
+                state_ptr->material_shader_id, &state_ptr->projection, &view, &state_ptr->active_world_camera->position,
                 &state_ptr->ambient_color, state_ptr->render_mode
         ))
         {
@@ -448,12 +453,6 @@ bool renderer_draw_frame(render_packet* packet)
         }
     }
     return true;
-}
-
-void renderer_set_view(mat4 view, vec3 view_position)
-{
-    state_ptr->view = view;
-    state_ptr->view_position = view_position;
 }
 
 void renderer_texture_create(texture* texture, const void* pixels)

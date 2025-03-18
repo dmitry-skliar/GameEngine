@@ -182,10 +182,7 @@ bool material_system_initialize(u64* memory_requirement, void* memory, material_
 
 void material_system_shutdown()
 {
-    if(!material_system_status_valid(__FUNCTION__))
-    {
-        return;
-    }
+    if(!material_system_status_valid(__FUNCTION__)) return;
 
     // Уничтожение хэш-таблицы.
     hashtable_destroy(state_ptr->material_references_table);
