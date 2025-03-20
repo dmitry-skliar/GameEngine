@@ -75,7 +75,7 @@ i32 find_memory_index(u32 type_filter, u32 property_flags)
     return -1;
 }
 
-void command_buffers_create(renderer_backend* backend)
+void command_buffers_create()
 {
     if(!context->graphics_command_buffers)
     {
@@ -94,7 +94,7 @@ void command_buffers_create(renderer_backend* backend)
     }
 }
 
-bool swapchain_recreate(renderer_backend* backend)
+bool swapchain_recreate()
 {
     // Если уже начато воссоздание, ничего не делать.
     if(context->recreating_swapchain)
@@ -133,7 +133,7 @@ bool swapchain_recreate(renderer_backend* backend)
         context->on_rendertarget_refresh_required();
     }
 
-    command_buffers_create(backend);
+    command_buffers_create();
 
     // Сброс флага пересборки цепочки обмена.
     context->recreating_swapchain = false;
@@ -546,7 +546,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
     ktrace("Vulkan renderpasses created.");
 
     // Создание буферов команд.
-    command_buffers_create(backend);
+    command_buffers_create();
     ktrace("Vulkan command buffers created (Now only graphics!).");
 
     // Создание объектов синхронизации.
@@ -722,7 +722,7 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     }
 }
 
-void vulkan_renderer_backend_on_resized(renderer_backend* backend, i32 width, i32 height)
+void vulkan_renderer_backend_on_resized(i32 width, i32 height)
 {
     // Обновление размер, и генерации, который позволит увидеть изменения размеров!
     context->framebuffer_width = width;
@@ -732,7 +732,7 @@ void vulkan_renderer_backend_on_resized(renderer_backend* backend, i32 width, i3
     kdebug("Vulkan renderer resized (w/h/gen): %d / %d / %lld", width, height, context->framebuffer_size_generation);
 }
 
-bool vulkan_renderer_backend_frame_begin(renderer_backend* backend, f32 delta_time)
+bool vulkan_renderer_backend_frame_begin(f32 delta_time)
 {
     context->frame_delta_time = delta_time;
     
@@ -764,7 +764,7 @@ bool vulkan_renderer_backend_frame_begin(renderer_backend* backend, f32 delta_ti
 
         // Если воссоздание цепочки обмена не удалось (например, из-за того, что окно было свернуто),
         // загрузитесь, прежде чем снимать флаг.
-        if(!swapchain_recreate(backend))
+        if(!swapchain_recreate())
         {
             return false;
         }
@@ -818,7 +818,7 @@ bool vulkan_renderer_backend_frame_begin(renderer_backend* backend, f32 delta_ti
     return true;
 }
 
-bool vulkan_renderer_backend_frame_end(renderer_backend* backend, f32 delta_time)
+bool vulkan_renderer_backend_frame_end(f32 delta_time)
 {
     VkResult result = VK_ERROR_UNKNOWN;
     vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
@@ -1001,7 +1001,7 @@ void vulkan_renderer_renderpass_destroy(renderpass* pass)
     pass->internal_data = null;
 }
 
-bool vulkan_renderer_renderpass_begin(renderer_backend* backend, renderpass* pass, render_target* target)
+bool vulkan_renderer_renderpass_begin(renderpass* pass, render_target* target)
 {
     vulkan_renderpass* vk_renderpass = pass->internal_data;
     vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
@@ -1041,7 +1041,7 @@ bool vulkan_renderer_renderpass_begin(renderer_backend* backend, renderpass* pas
     return true;
 }
 
-bool vulkan_renderer_renderpass_end(renderer_backend* backend, renderpass* pass)
+bool vulkan_renderer_renderpass_end(renderpass* pass)
 {
     vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
     vkCmdEndRenderPass(command_buffer->handle);
@@ -1369,15 +1369,15 @@ void vulkan_renderer_geometry_destroy(geometry* geometry)
     internal_data->generation = INVALID_ID;
 }
 
-void vulkan_renderer_geometry_draw(geometry_render_data data)
+void vulkan_renderer_geometry_draw(geometry_render_data* data)
 {
     // Игнорирование не загруженных геометрий.
-    if(!data.geometry || data.geometry->internal_id == INVALID_ID)
+    if(!data->geometry || data->geometry->internal_id == INVALID_ID)
     {
         return;
     }
 
-    vulkan_geometry_data* buffer_data = &context->geometries[data.geometry->internal_id];
+    vulkan_geometry_data* buffer_data = &context->geometries[data->geometry->internal_id];
     vulkan_command_buffer* command_buffer = &context->graphics_command_buffers[context->image_index];
 
     // Привязка буфера вершин co смещением.

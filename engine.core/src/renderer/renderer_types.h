@@ -5,8 +5,8 @@
 #include <math/math_types.h>
 #include <resources/resource_types.h>
 
-#define BUILTIN_SHADER_NAME_MATERIAL "Builtin.MaterialShader"
-#define BUILTIN_SHADER_NAME_UI "Builtin.UIShader"
+#define BUILTIN_SHADER_NAME_WORLD "Builtin.MaterialShader"
+#define BUILTIN_SHADER_NAME_UI    "Builtin.UIShader"
 
 // TODO: Подчистить заголовочные файлы данным способом!
 struct shader;
@@ -124,11 +124,10 @@ typedef struct renderer_backend {
 
     /*
         @brief Изменяет размер области рендеринга, обычно вызывается на событие изменение размера окна.
-        @param backend Указатель на интерфейс визуализатора.
         @param width Новая ширина области рендеринга.
         @param height Новая высота области рендеринга.
     */
-    void (*resized)(struct renderer_backend* backend, i32 width, i32 height);
+    void (*resized)(i32 width, i32 height);
 
     /*
         @brief Выполняет необходимые настройки в начале кадра.
@@ -138,7 +137,7 @@ typedef struct renderer_backend {
         @param delta_time Время в секундах с момента последнего кадра.
         @return True операция завершена успешно, false в случае ошибок.
     */
-    bool (*frame_begin)(struct renderer_backend* backend, f32 delta_time);
+    bool (*frame_begin)(f32 delta_time);
 
     /*
         @brief Выполняет необходимые настройки в конце кадра и его отрисовку.
@@ -147,7 +146,7 @@ typedef struct renderer_backend {
         @param delta_time Время в секундах с момента последнего кадра.
         @return True операция завершена успешно, false в случае ошибок.
     */
-    bool (*frame_end)(struct renderer_backend* backend, f32 delta_time);
+    bool (*frame_end)(f32 delta_time);
 
     /*
         @brief Создает новый проходчик визуализации.
@@ -168,21 +167,19 @@ typedef struct renderer_backend {
     /*
         @brief Начинает проход визуализатора с указанными параметрами.
         NOTE: Следует вызывать после функции начала кадра begin_frame, после чего вызываются функции отрисовки.
-        @param backend Указатель на интерфейс визуализатора.
         @param pass Указатель на проходчик визуализатора для выполнения начала прохода.
         @param target Указатель на цель прохода визуализации.
         @return True операция завершена успешно, false в случае ошибок.
     */
-    bool (*renderpass_begin)(struct renderer_backend* backend, renderpass* pass, render_target* target);
+    bool (*renderpass_begin)(renderpass* pass, render_target* target);
 
     /*
         @brief Завершает проход визуализатора с указанными параметрами.
         NOTE: Следует вызывать только после успешного выполнения begin_renderpass и функций отрисовки. 
-        @param backend Указатель на интерфейс визуализатора.
         @param pass Указатель на проходчик визуализатора для выполнения завершения прохода.
         @return True операция завершена успешно, false в случае ошибок.
     */
-    bool (*renderpass_end)(struct renderer_backend* backend, renderpass* pass);
+    bool (*renderpass_end)(renderpass* pass);
 
     /*
         @brief Получение указателя на проходчик визуадизатора используя предоставленное имя.
@@ -266,9 +263,9 @@ typedef struct renderer_backend {
 
     /*
         @brief Рисует предоставленные геометрические данные.
-        @param data Геометрические раднные для визуализации.
+        @param data Указатель на геометрические данные для визуализации.
     */
-    void (*geometry_draw)(geometry_render_data data);
+    void (*geometry_draw)(geometry_render_data* data);
 
     /*
         @brief Создает внутренние ресурсы шейдера, используя предоставленные параметры.
@@ -394,13 +391,78 @@ typedef struct renderer_backend {
 
 } renderer_backend;
 
-// TODO: Провести рефактор render_packet.
-typedef struct render_packet {
-    f32 delta_time;
+// @brief Известные типы визуализации.
+typedef enum render_view_known_type {
+    RENDERER_VIEW_KNOWN_TYPE_WORLD = 0x01,
+    RENDERER_VIEW_KNOWN_TYPE_UI    = 0x02
+} render_view_known_type;
 
+typedef enum render_view_matrix_source {
+    RENDER_VIEW_MATRIX_SOURCE_SCENE_CAMERA = 0x01,
+    RENDER_VIEW_MATRIX_SOURCE_UI_CAMERA    = 0x02,
+    RENDER_VIEW_MATRIX_SOURCE_LIGHT_CAMERA = 0x03,
+} render_view_matrix_source;
+
+typedef enum render_view_projection_matrix_source {
+    RENDER_VIEW_PROJECTION_MATRIX_SOURCE_DEFAULT_PERSPECTIVE  = 0x01,
+    RENDER_VIEW_PROJECTION_MATRIX_SOURCE_DEFAULT_ORTHOGRAPHIC = 0x02,
+} render_view_projection_matrix_source;
+
+typedef struct render_view_pass_config {
+    const char* name;
+} render_view_pass_config;
+
+typedef struct render_view_config {
+    const char* name;
+    const char* custom_shader_name; // Если не используется то установить null.
+    u16 width;                      // Установить в 0 для 100% ширины.
+    u16 height;                     // Установить в 0 для 100% высоты.
+    render_view_known_type type;
+    render_view_matrix_source view_matrix_source;
+    render_view_projection_matrix_source projection_matrix_source;
+    u8 pass_count;
+    render_view_pass_config* passes;
+} render_view_config;
+
+struct render_view_packet;
+
+typedef struct render_view {
+    u16 id;
+    const char* name;
+    u16 width;
+    u16 height;
+    render_view_known_type type;
+    u8 renderpass_count;
+    renderpass** passes;
+    const char* custom_shader_name;
+    void* internal_data; // Данные визуализатора.
+
+    bool (*on_create)(struct render_view* self);
+    void (*on_destroy)(struct render_view* self);
+    void (*on_resize)(struct render_view* self, u32 width, u32 height);
+    bool (*on_build_packet)(struct render_view* self, void* data, struct render_view_packet* out_packet);
+    bool (*on_render)(struct render_view* self, const struct render_view_packet* packet, u64 frame_number, u64 render_target_index);
+} render_view;
+
+typedef struct render_view_packet {
+    render_view* view;
+    mat4 view_matrix;
+    mat4 projection_matrix;
+    vec3 view_position;
+    vec4 ambient_color;
     u32 geometry_count;
     geometry_render_data* geometries;
+    const char* custom_shader_name;
+    void* extended_data;
+} render_view_packet;
 
-    u32 ui_geometry_count;
-    geometry_render_data* ui_geometries;
+typedef struct mesh_packet_data {
+    u32 mesh_count;
+    mesh* meshes;
+} mesh_packet_data;
+
+typedef struct render_packet {
+    f32 delta_time;
+    u16 view_count;
+    render_view_packet* views;
 } render_packet;

@@ -18,6 +18,7 @@
 #include "systems/resource_system.h"
 #include "systems/shader_system.h"
 #include "systems/camera_system.h"
+#include "systems/render_view_system.h"
 
 // TODO: Временный тестовый код: начало.
 #include "kstring.h"
@@ -53,6 +54,9 @@ typedef struct application_state {
     u64 renderer_system_memory_requirement;
     void* renderer_system_state;
 
+    u64 render_view_system_memory_requirement;
+    void* render_view_system_state;
+
     u64 texture_system_memory_requirement;
     void* textute_system_state;
 
@@ -66,9 +70,11 @@ typedef struct application_state {
     void* camera_system_state;
 
     // TODO: Временный тестовый код: начало.
-    u32 mesh_count;
-    mesh meshes[10];
-    geometry* test_ui_geometry;
+    u32 world_mesh_count;
+    mesh world_meshes[10];
+
+    u32 ui_mesh_count;
+    mesh ui_meshes[10];
     // TODO: Временный тестовый код: конец.
 
 } application_state;
@@ -94,7 +100,7 @@ bool event_on_debug_event(event_code code, void* sender, void* listener_inst, ev
     choice++;
     choice %= 3;
 
-    geometry* g = app_state->meshes[0].geometries[0];
+    geometry* g = app_state->world_meshes[0].geometries[0];
 
     if(g)
     {
@@ -268,21 +274,65 @@ bool application_create(game* game_inst)
     }
     kinfor("Camera system started.");
 
+    render_view_system_config render_view_sys_config;
+    render_view_sys_config.max_view_count = 251;
+    render_view_system_initialize(&app_state->render_view_system_memory_requirement, null, &render_view_sys_config);
+    app_state->render_view_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->render_view_system_memory_requirement);
+    if(!render_view_system_initialize(&app_state->renderer_system_memory_requirement, app_state->render_view_system_state, &render_view_sys_config))
+    {
+        kerror("Failed to initialize render view system. Aborted!");
+        return false;
+    }
+    kinfor("Render view system started.");
+
+    render_view_config opaque_world_config = {};
+    opaque_world_config.type = RENDERER_VIEW_KNOWN_TYPE_WORLD;
+    opaque_world_config.width = 0;
+    opaque_world_config.height = 0;
+    opaque_world_config.name = "world_opaque";
+    opaque_world_config.pass_count = 1;
+    render_view_pass_config passes[1];
+    passes[0].name = "Builtin.RenderpassWorld";
+    opaque_world_config.passes = passes;
+    opaque_world_config.view_matrix_source = RENDER_VIEW_MATRIX_SOURCE_SCENE_CAMERA;
+    if(!render_view_system_create(&opaque_world_config))
+    {
+        kerror("Failed to create view. Aborted!");
+        return false;
+    }
+
+    render_view_config ui_view_config = {};
+    ui_view_config.type = RENDERER_VIEW_KNOWN_TYPE_UI;
+    ui_view_config.width = 0;
+    ui_view_config.height = 0;
+    ui_view_config.name = "ui";
+    ui_view_config.pass_count = 1;
+    render_view_pass_config ui_passes[1];
+    ui_passes[0].name = "Builtin.RenderpassUI";
+    ui_view_config.passes = ui_passes;
+    ui_view_config.view_matrix_source = RENDER_VIEW_MATRIX_SOURCE_SCENE_CAMERA;
+    if(!render_view_system_create(&ui_view_config))
+    {
+        kerror("Failed to create view. Aborted!");
+        return false;
+    }
+
     // TODO: Временный тестовый код: начало.
-    app_state->mesh_count = 0;
+    app_state->world_mesh_count = 0;
+    app_state->ui_mesh_count = 0;
 
     // Первый куб.
-    mesh* cube_mesh = &app_state->meshes[app_state->mesh_count];
+    mesh* cube_mesh = &app_state->world_meshes[app_state->world_mesh_count];
     cube_mesh->geometry_count = 1;
     cube_mesh->geometries = kallocate_tc(geometry*, cube_mesh->geometry_count, MEMORY_TAG_ARRAY);
     geometry_config g_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "test_cube", "test_material");
     cube_mesh->geometries[0] = geometry_system_acquire_from_config(&g_config, true);
     cube_mesh->transform = transform_create();
     geometry_system_config_dispose(&g_config);
-    app_state->mesh_count++;
+    app_state->world_mesh_count++;
 
     // Машина.
-    mesh* car_mesh = &app_state->meshes[app_state->mesh_count];
+    mesh* car_mesh = &app_state->world_meshes[app_state->world_mesh_count];
     resource car_mesh_resource = {};
     if(!resource_system_load("falcon", RESOURCE_TYPE_MESH, &car_mesh_resource))
     {
@@ -304,11 +354,11 @@ bool application_create(game* game_inst)
 
         // NOTE: Очистка конфигурации происходит в загрузчике.
         resource_system_unload(&car_mesh_resource);
-        app_state->mesh_count++;
+        app_state->world_mesh_count++;
     }
 
     // Sponza.
-    mesh* sponza_mesh = &app_state->meshes[app_state->mesh_count];
+    mesh* sponza_mesh = &app_state->world_meshes[app_state->world_mesh_count];
     resource sponza_mesh_resource = {};
     if(!resource_system_load("sponza", RESOURCE_TYPE_MESH, &sponza_mesh_resource))
     {
@@ -330,7 +380,7 @@ bool application_create(game* game_inst)
 
         // NOTE: Очистка конфигурации происходит в загрузчике.
         resource_system_unload(&sponza_mesh_resource);
-        app_state->mesh_count++;
+        app_state->world_mesh_count++;
     }
 
     // UI геометрия.
@@ -370,7 +420,15 @@ bool application_create(game* game_inst)
     u32 uiindices[6] = {2, 1, 0, 3, 0, 1};
     ui_config.indices = uiindices;
 
-    app_state->test_ui_geometry = geometry_system_acquire_from_config(&ui_config, true);
+    mesh* ui_mesh = &app_state->ui_meshes[app_state->ui_mesh_count];
+    ui_mesh->geometry_count = 1;
+    ui_mesh->geometries = kallocate_tc(geometry*, ui_mesh->geometry_count, MEMORY_TAG_ARRAY);
+    for(u32 i = 0; i < ui_mesh->geometry_count; ++i)
+    {
+        ui_mesh->geometries[i] = geometry_system_acquire_from_config(&ui_config, true);
+    }
+    ui_mesh->transform = transform_create();
+    app_state->ui_mesh_count++;
 
     event_register(EVENT_CODE_DEBUG_0, null, event_on_debug_event);
     // TODO: Временный тестовый код: конец.
@@ -411,8 +469,7 @@ bool application_run()
     f64 frame_limit_time = 1.0f / 60; // TODO: сделать настраиваемым!
 
     // TODO: Временный тестовый код: начало.
-    render_packet packet;
-    packet.geometries = darray_create(geometry_render_data);
+    render_view_packet views[2];
     // TODO: Временный тестовый код: конец.
 
     while(app_state->is_running)
@@ -446,34 +503,38 @@ bool application_run()
             }
 
             // TODO: Временный тестовый код: начало.
-            packet.delta_time = (f32)delta;
-            packet.geometry_count = 0;
-
-            if(app_state->mesh_count > 0)
+            if(app_state->world_mesh_count > 0)
             {
                 quat rotation = quat_from_axis_angle(vec3_up(), 0.5f * delta, false);
-                transform_rotate(&app_state->meshes[0].transform, rotation);
-
-                for(u32 i = 0; i < app_state->mesh_count; ++i)
-                {
-                    mesh* m = &app_state->meshes[i];
-                    for(u32 j = 0; j < m->geometry_count; ++j)
-                    {
-                        geometry_render_data render_data;
-                        render_data.geometry = m->geometries[j];
-                        render_data.model = transform_get_world(&m->transform);
-                        darray_push(packet.geometries, render_data);
-                        packet.geometry_count++;
-                    }
-                }
+                transform_rotate(&app_state->world_meshes[0].transform, rotation);
             }
 
-            geometry_render_data test_ui_render;
-            test_ui_render.geometry = app_state->test_ui_geometry;
-            test_ui_render.model = mat4_translation(vec3_zero());
+            // TODO: Реарганизовать.
+            render_packet packet = {};
+            packet.delta_time = (f32)delta;
+            packet.view_count = 2;
+            kzero_tc(views, render_view_packet, packet.view_count);
+            packet.views = views;
 
-            packet.ui_geometry_count = 1;
-            packet.ui_geometries = &test_ui_render;
+            // World.
+            mesh_packet_data world_mesh_data = {};
+            world_mesh_data.mesh_count = app_state->world_mesh_count;
+            world_mesh_data.meshes = app_state->world_meshes;
+            if(!render_view_system_build_packet(render_view_system_get("world_opaque"), &world_mesh_data, &packet.views[0]))
+            {
+                kerror("Failed to build packet for view 'world_opaque'.");
+                return false;
+            }
+
+            // UI.
+            mesh_packet_data ui_mesh_data = {};
+            ui_mesh_data.mesh_count = app_state->ui_mesh_count;
+            ui_mesh_data.meshes = app_state->ui_meshes;
+            if(!render_view_system_build_packet(render_view_system_get("ui"), &ui_mesh_data, &packet.views[1]))
+            {
+                kerror("Failed to build packet for view 'ui'.");
+                return false;
+            }
             // TODO: Временный тестовый код: конец.
 
             if(!renderer_draw_frame(&packet))
@@ -484,7 +545,11 @@ bool application_run()
             }
 
             // TODO: Временный тестовый код: начало.
-            darray_clear(packet.geometries);
+            // TODO: Знаю решение не очень, но пока без идей...
+            darray_destroy(views[0].geometries);
+            darray_destroy(views[1].geometries);
+            views[0].geometries = null;
+            views[1].geometries = null;
             // TODO: Временный тестовый код: конец.
 
             // Расчет времени кадра.
@@ -506,7 +571,6 @@ bool application_run()
                 }
 
                 frame_count++;
-
             }
 
             // NOTE: Устройства ввода последнее что должно обновляться в кадре!
@@ -516,29 +580,31 @@ bool application_run()
         }
     }
 
-    // TODO: Временный тестовый код: начало.
-    if(packet.geometries)
-    {
-        darray_destroy(packet.geometries);
-        packet.geometries = null;
-    }
-    // TODO: Временный тестовый код: конецы.
-
     kfree(app_state->game_inst->state, app_state->game_inst->state_memory_requirement, MEMORY_TAG_GAME);
     kinfor("Game stopped.");
 
     // TODO: Временный тестовый код: начало.
-    kdebug("Meshes count: %u", app_state->mesh_count);
-    for(u32 i = 0; i < app_state->mesh_count; ++i)
+    kdebug("World meshes count: %u", app_state->world_mesh_count);
+    for(u32 i = 0; i < app_state->world_mesh_count; ++i)
     {
-        kdebug("Mesh[%u]: get geometries is %u", i, app_state->meshes[i].geometry_count);
-        kfree_tc(app_state->meshes[i].geometries, geometry*, app_state->meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+        kdebug("Mesh[%u]: get geometries is %u", i, app_state->world_meshes[i].geometry_count);
+        kfree_tc(app_state->world_meshes[i].geometries, geometry*, app_state->world_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+    }
+
+    kdebug("UI meshes count: %u", app_state->ui_mesh_count);
+    for(u32 i = 0; i < app_state->ui_mesh_count; ++i)
+    {
+        kdebug("Mesh[%u]: get geometries is %u", i, app_state->ui_meshes[i].geometry_count);
+        kfree_tc(app_state->ui_meshes[i].geometries, geometry*, app_state->ui_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
     }
     // TODO: Временный тестовый код: конецы.
 
     // NOTE: Что бы исключить нежелательные эффекты управление остановить первым!
     input_system_shutdown();
     kinfor("Input system stopped.");
+
+    render_view_system_shutdown();
+    kinfor("Render view system stopped.");
 
     camera_system_shutdown();
     kinfor("Camera system stopped.");

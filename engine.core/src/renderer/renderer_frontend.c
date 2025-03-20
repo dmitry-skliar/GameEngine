@@ -5,30 +5,16 @@
 
 // Внутренние подключения.
 #include "logger.h"
-#include "event.h"
 #include "memory/memory.h"
-#include "math/kmath.h"
 #include "resources/resource_types.h"
 #include "systems/resource_system.h"
-#include "systems/material_system.h"
 #include "systems/shader_system.h"
-#include "systems/camera_system.h"
+#include "systems/render_view_system.h"
 
 typedef struct renderer_system_state {
     renderer_backend backend;
-    camera* active_world_camera;
-    mat4 projection;
-    vec4 ambient_color;
-    mat4 ui_projection;
-    mat4 ui_view;
-    f32 fov_radians;
-    f32 near_clip;
-    f32 far_clip;
-    f32 ui_near_clip;
-    f32 ui_far_clip;
-    u32 material_shader_id;
+    u32 world_shader_id;
     u32 ui_shader_id;
-    u32 render_mode;
     // Количество целей визуализации (количество кадров цепочки обмена).
     u8 window_render_target_count;
     u32 framebuffer_width;
@@ -77,35 +63,7 @@ void regenerate_render_targets()
     }
 }
 
-bool renderer_on_event(event_code code, void* sender, void* listener, event_context* context)
-{
-    if(code == EVENT_CODE_SET_RENDER_MODE)
-    {
-        switch(context->i32[0])
-        {
-            case RENDERER_VIEW_MODE_DEFAULT:
-                kdebug("Renderer mode set to default.");
-                state_ptr->render_mode = RENDERER_VIEW_MODE_DEFAULT;
-                break;
-            case RENDERER_VIEW_MODE_LIGHTING:
-                kdebug("Renderer mode set to lighting.");
-                state_ptr->render_mode = RENDERER_VIEW_MODE_LIGHTING;
-                break;
-            case RENDERER_VIEW_MODE_NORMALS:
-                kdebug("Renderer mode set to normals.");
-                state_ptr->render_mode = RENDERER_VIEW_MODE_NORMALS;
-                break;
-        }
-        return true;
-    }
-
-    return false;
-}
-
-// TODO: Создать отдельный макрос, который будет использовать функцию в отладночной редакции только!
-// TODO: Вынести во вспомогательную функцию! для всех систем!
-// Используется для проверки статуса системы.
-bool renderer_system_status_valid(const char* func_name)
+bool system_status_valid(const char* func_name)
 {
     if(!state_ptr)
     {
@@ -150,7 +108,6 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     renderer_backend_create(RENDERER_BACKEND_TYPE_VULKAN, &state_ptr->backend);
     state_ptr->backend.window_state = window_state; // TODO: Убрать!
     state_ptr->backend.frame_number = 0;
-    state_ptr->render_mode = RENDERER_VIEW_MODE_DEFAULT;
 
     // Проходчики визуализатора.
     // TODO: Чтение из конфигурации.
@@ -210,7 +167,7 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     shader_config* sconfig = null;
 
     CRITICAL_INIT(
-        resource_system_load(BUILTIN_SHADER_NAME_MATERIAL, RESOURCE_TYPE_SHADER, &config_resource),
+        resource_system_load(BUILTIN_SHADER_NAME_WORLD, RESOURCE_TYPE_SHADER, &config_resource),
         "Failed to load builtin material shader."
     );
 
@@ -221,7 +178,7 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     );
 
     resource_system_unload(&config_resource);
-    state_ptr->material_shader_id = shader_system_get_id(BUILTIN_SHADER_NAME_MATERIAL);
+    state_ptr->world_shader_id = shader_system_get_id(BUILTIN_SHADER_NAME_WORLD);
 
     CRITICAL_INIT(
         resource_system_load(BUILTIN_SHADER_NAME_UI, RESOURCE_TYPE_SHADER, &config_resource),
@@ -237,31 +194,12 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     resource_system_unload(&config_resource);
     state_ptr->ui_shader_id = shader_system_get_id(BUILTIN_SHADER_NAME_UI);
 
-    // Создание матриц проекции и вида (world).
-    // TODO: Сделать настраиваемыми!
-    state_ptr->fov_radians = deg_to_rad(60.0f);
-    state_ptr->near_clip = 0.1f;
-    state_ptr->far_clip = 500.0f;
-    f32 aspect = window_state->width / (f32)window_state->height;
-
-    state_ptr->projection = mat4_perspective(state_ptr->fov_radians, aspect, state_ptr->near_clip, state_ptr->far_clip);
-    // TODO: Получение из сцены.
-    state_ptr->ambient_color = (vec4){{0.15f, 0.15f, 0.15f, 1.0f}};
-
-    // Создание матриц проекции и вида (ui).
-    state_ptr->ui_near_clip = -100.0f;
-    state_ptr->ui_far_clip = 100.0f;
-    state_ptr->ui_projection = mat4_orthographic(0, window_state->width, window_state->height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
-    state_ptr->ui_view = mat4_inverse(mat4_identity());
-
-    event_register(EVENT_CODE_SET_RENDER_MODE, state_ptr, renderer_on_event);
-
     return true;
 }
 
 void renderer_system_shutdown()
 {
-    if(!renderer_system_status_valid(__FUNCTION__)) return;
+    if(!system_status_valid(__FUNCTION__)) return;
 
     // NOTE: Уничтожение шейдеров сделает система шейдеров автоматически.
 
@@ -283,7 +221,7 @@ void renderer_system_shutdown()
 
 void renderer_on_resize(i32 width, i32 height)
 {
-    if(!renderer_system_status_valid(__FUNCTION__)) return;
+    if(!system_status_valid(__FUNCTION__)) return;
 
     state_ptr->resizing = true;
     state_ptr->framebuffer_width = width;
@@ -292,7 +230,7 @@ void renderer_on_resize(i32 width, i32 height)
 
 bool renderer_draw_frame(render_packet* packet)
 {
-    if(!renderer_system_status_valid(__FUNCTION__)) return false;
+    if(!system_status_valid(__FUNCTION__)) return false;
 
     // Производить генерацию кадров даже, если исход плохой!
     state_ptr->backend.frame_number++;
@@ -301,152 +239,25 @@ bool renderer_draw_frame(render_packet* packet)
     {
         f32 width = state_ptr->framebuffer_width;
         f32 height = state_ptr->framebuffer_height;
-
-        // TODO: FOV -> camera перенести!
-        state_ptr->projection = mat4_perspective(state_ptr->fov_radians, width / height, state_ptr->near_clip, state_ptr->far_clip);
-        state_ptr->ui_projection = mat4_orthographic(0, width, height, 0, state_ptr->ui_near_clip, state_ptr->ui_far_clip);
-        state_ptr->backend.resized(&state_ptr->backend, width, height);
-
-        // TODO: Представление.
-        state_ptr->world_renderpass->render_area.width = state_ptr->framebuffer_width;
-        state_ptr->world_renderpass->render_area.height = state_ptr->framebuffer_height;
-        state_ptr->ui_renderpass->render_area.width = state_ptr->framebuffer_width;
-        state_ptr->ui_renderpass->render_area.height = state_ptr->framebuffer_height;
-
+        render_view_system_on_window_resize(width, height);
+        state_ptr->backend.resized(width, height);
         state_ptr->resizing = false;
     }
 
-    if(!state_ptr->active_world_camera)
-    {
-        state_ptr->active_world_camera = camera_system_get_default();
-    }
-
-    mat4 view = camera_view_get(state_ptr->active_world_camera);
-
-    if(state_ptr->backend.frame_begin(&state_ptr->backend, packet->delta_time))
+    if(state_ptr->backend.frame_begin(packet->delta_time))
     {
         u8 attachment_index = state_ptr->backend.window_attachment_index_get();
-        
-        // Проход (world).
-        if(!state_ptr->backend.renderpass_begin(&state_ptr->backend, state_ptr->world_renderpass, &state_ptr->world_renderpass->targets[attachment_index]))
-        {
-            kerror("Begin renderpass -> BUILTIN_RENDERPASS_WORLD failed.");
-            return false;
-        }
 
-        if(!shader_system_use_by_id(state_ptr->material_shader_id))
+        for(u32 i = 0; i < packet->view_count; ++i)
         {
-            kerror("Failed to use material shader. Render frame failed.");
-            return false;
-        }
-
-        if(!material_system_apply_global(
-                state_ptr->material_shader_id, &state_ptr->projection, &view, &state_ptr->active_world_camera->position,
-                &state_ptr->ambient_color, state_ptr->render_mode
-        ))
-        {
-            kerror("Failed to use apply globals for material shader. Render frame failed.");
-            return false;
-        }
-
-        // Рисование World.
-        u32 count = packet->geometry_count;
-        for(u32 i = 0; i < count; ++i)
-        {
-            material* m = null;
-            if(packet->geometries[i].geometry->material)
+            if(!render_view_system_on_render(packet->views[i].view, &packet->views[i], state_ptr->backend.frame_number, attachment_index))
             {
-                m = packet->geometries[i].geometry->material;
+                kerror("Error rendering view index %i.", i);
+                return false;
             }
-            else
-            {
-                m = material_system_get_default();
-            }
-
-            // Применение материала.
-            bool needs_update = m->render_frame_number != state_ptr->backend.frame_number;
-            if(!material_system_apply_instance(m, needs_update))
-            {
-                kwarng("Failed to apply material '%s'. Skipping draw.", m->name);
-                continue;
-            }
-            else
-            {
-                m->render_frame_number = state_ptr->backend.frame_number;
-            }
-
-            // Применение локальной позиции объекта.
-            material_system_apply_local(m, &packet->geometries[i].model);
-
-            // Нарисовать!
-            state_ptr->backend.geometry_draw(packet->geometries[i]);
         }
 
-        if(!state_ptr->backend.renderpass_end(&state_ptr->backend, state_ptr->world_renderpass))
-        {
-            kerror("End renderpass -> BUILTIN_RENDERPASS_WORLD failed.");
-            return false;
-        }
-
-        // Проход (UI).
-        if(!state_ptr->backend.renderpass_begin(&state_ptr->backend, state_ptr->ui_renderpass, &state_ptr->ui_renderpass->targets[attachment_index]))
-        {
-            kerror("Begin renderpass -> BUILTIN_RENDERPASS_UI failed.");
-            return false;
-        }
-
-        if(!shader_system_use_by_id(state_ptr->ui_shader_id))
-        {
-            kerror("Failed to use UI shader. Render frame failed.");
-            return false;
-        }
-
-        if(!material_system_apply_global(state_ptr->ui_shader_id, &state_ptr->ui_projection, &state_ptr->ui_view, null, null, 0))
-        {
-            kerror("Failed to use apply globals for material shader. Render frame failed.");
-            return false;
-        }
-
-        // Рисование UI.
-        count = packet->ui_geometry_count;
-        for(u32 i = 0; i < count; ++i)
-        {
-            material* m = null;
-            if(packet->ui_geometries[i].geometry->material)
-            {
-                m = packet->ui_geometries[i].geometry->material;
-            }
-            else
-            {
-                m = material_system_get_default();
-            }
-
-            // Применение материала.
-            bool needs_update = m->render_frame_number != state_ptr->backend.frame_number;
-            if(!material_system_apply_instance(m, needs_update))
-            {
-                kwarng("Failed to apply UI material '%s'. Skipping draw.", m->name);
-                continue;
-            }
-            else
-            {
-                m->render_frame_number = state_ptr->backend.frame_number;
-            }
-
-            // Применение локальной позиции объекта.
-            material_system_apply_local(m, &packet->ui_geometries[i].model);
-
-            // Нарисовать!
-            state_ptr->backend.geometry_draw(packet->ui_geometries[i]);
-        }
-
-        if(!state_ptr->backend.renderpass_end(&state_ptr->backend, state_ptr->ui_renderpass))
-        {
-            kerror("End renderpass -> BUILTIN_RENDERPASS_UI failed.");
-            return false;
-        }
-
-        if(!state_ptr->backend.frame_end(&state_ptr->backend, packet->delta_time))
+        if(!state_ptr->backend.frame_end(packet->delta_time))
         {
             kerror("Failed to complete function 'renderer_end_frame'. Shutting down.");
             return false;
@@ -503,9 +314,9 @@ void renderer_geometry_destroy(geometry* geometry)
     state_ptr->backend.geometry_destroy(geometry);
 }
 
-renderpass* renderer_renderpass_get(const char* name)
+void renderer_geometry_draw(geometry_render_data* data)
 {
-    return state_ptr->backend.renderpass_get(name);
+    state_ptr->backend.geometry_draw(data);
 }
 
 bool renderer_shader_create(shader* s, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages)
@@ -581,4 +392,19 @@ void renderer_renderpass_create(renderpass* out_renderpass, f32 depth, u32 stenc
 void renderer_renderpass_destroy(renderpass* pass)
 {
     state_ptr->backend.renderpass_destroy(pass);
+}
+
+bool renderer_renderpass_begin(renderpass* pass, render_target* target)
+{
+    return state_ptr->backend.renderpass_begin(pass, target);    
+}
+
+bool renderer_renderpass_end(renderpass* pass)
+{
+    return state_ptr->backend.renderpass_end(pass);
+}
+
+renderpass* renderer_renderpass_get(const char* name)
+{
+    return state_ptr->backend.renderpass_get(name);
 }

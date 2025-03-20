@@ -292,7 +292,7 @@ material* material_system_acquire_from_config(material_config* config)
         shader* s = shader_system_get_by_id(m->shader_id);
 
         // Сохранение местоположения известных типов для быстрого поиска.
-        if(state_ptr->material_shader_id == INVALID_ID && string_equal(config->shader_name, BUILTIN_SHADER_NAME_MATERIAL))
+        if(state_ptr->material_shader_id == INVALID_ID && string_equal(config->shader_name, BUILTIN_SHADER_NAME_WORLD))
         {
             state_ptr->material_shader_id = s->id;
             state_ptr->material_locations.projection = shader_system_uniform_index(s, "projection");
@@ -516,7 +516,7 @@ bool default_materials_create()
     state_ptr->default_material.normal_map.texture = texture_system_get_default_normal_texture();
 
     texture_map* maps[3] = { &state_ptr->default_material.diffuse_map, &state_ptr->default_material.specular_map, &state_ptr->default_material.normal_map };
-    shader* s = shader_system_get(BUILTIN_SHADER_NAME_MATERIAL);
+    shader* s = shader_system_get(BUILTIN_SHADER_NAME_WORLD);
     if(!renderer_shader_acquire_instance_resources(s, maps, &state_ptr->default_material.internal_id))
     {
         kerror("Function '%s': Failed to acquire renderer resource for default material.", __FUNCTION__);
@@ -531,7 +531,7 @@ bool default_materials_create()
 
 void default_materials_destroy()
 {
-    shader* s = shader_system_get(BUILTIN_SHADER_NAME_MATERIAL);
+    shader* s = shader_system_get(BUILTIN_SHADER_NAME_WORLD);
     renderer_shader_release_instance_resources(s, state_ptr->default_material.internal_id);
 }
 

@@ -9,19 +9,19 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
 
 void vulkan_renderer_backend_shutdown(renderer_backend* backend);
 
-void vulkan_renderer_backend_on_resized(renderer_backend* backend, i32 width, i32 height);
+void vulkan_renderer_backend_on_resized(i32 width, i32 height);
 
-bool vulkan_renderer_backend_frame_begin(renderer_backend* backend, f32 delta_time);
+bool vulkan_renderer_backend_frame_begin(f32 delta_time);
 
-bool vulkan_renderer_backend_frame_end(renderer_backend* backend, f32 delta_time);
+bool vulkan_renderer_backend_frame_end(f32 delta_time);
 
 void vulkan_renderer_renderpass_create(renderpass* out_renderpass, f32 depth, u32 stencil, bool has_prev_pass, bool has_next_pass);
 
 void vulkan_renderer_renderpass_destroy(renderpass* pass);
 
-bool vulkan_renderer_renderpass_begin(renderer_backend* backend, renderpass* pass, render_target* target);
+bool vulkan_renderer_renderpass_begin(renderpass* pass, render_target* target);
 
-bool vulkan_renderer_renderpass_end(renderer_backend* backend, renderpass* pass);
+bool vulkan_renderer_renderpass_end(renderpass* pass);
 
 renderpass* vulkan_renderer_renderpass_get(const char* name);
 
@@ -43,7 +43,7 @@ bool vulkan_renderer_geometry_create(geometry* geometry, u32 vertex_size, u32 ve
 
 void vulkan_renderer_geometry_destroy(geometry* geometry);
 
-void vulkan_renderer_geometry_draw(geometry_render_data data);
+void vulkan_renderer_geometry_draw(geometry_render_data* data);
 
 bool vulkan_renderer_shader_create(struct shader* shader, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages);
 

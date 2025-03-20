@@ -111,11 +111,11 @@ bool renderer_geometry_create(
 void renderer_geometry_destroy(geometry* geometry);
 
 /*
-    @brief Получает проходчик визуализатора с указанным именем.
-    @param name Имя проходчика визуализатора.
-    @return Указатель на проходчик визуализатора, null если не удалось найти.
+    @brief Рисует предоставленные геометрические данные.
+    NOTE: Должно вызываться между началом и концом прохода визуализатора.
+    @param data Указатель на геометрические данные для визуализации.
 */
-renderpass* renderer_renderpass_get(const char* name);
+void renderer_geometry_draw(geometry_render_data* data);
 
 /*
     @brief Создает внутренние ресурсы шейдера, используя предоставленные параметры.
@@ -238,3 +238,28 @@ void renderer_renderpass_create(renderpass* out_renderpass, f32 depth, u32 stenc
     @param pass Указатель на проходчик визуализации для уничтожения.
 */
 void renderer_renderpass_destroy(renderpass* pass);
+
+/*
+    @brief Начинает проход визуализатора с указанными параметрами.
+    NOTE: Следует вызывать после функции начала кадра begin_frame, после чего вызываются функции отрисовки.
+    @param pass Указатель на проходчик визуализатора для выполнения начала прохода.
+    @param target Указатель на цель прохода визуализации.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_renderpass_begin(renderpass* pass, render_target* target);
+
+/*
+    @brief Завершает проход визуализатора с указанными параметрами.
+    NOTE: Следует вызывать только после успешного выполнения begin_renderpass и функций отрисовки. 
+    @param pass Указатель на проходчик визуализатора для выполнения завершения прохода.
+    @return True операция завершена успешно, false в случае ошибок.
+*/
+bool renderer_renderpass_end(renderpass* pass);
+
+
+/*
+    @brief Получает проходчик визуализатора с указанным именем.
+    @param name Имя проходчика визуализатора.
+    @return Указатель на проходчик визуализатора, null если не удалось найти.
+*/
+renderpass* renderer_renderpass_get(const char* name);

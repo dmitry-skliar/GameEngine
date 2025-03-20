@@ -27,7 +27,7 @@ typedef struct camera_system_state {
 
 static camera_system_state* state_ptr = null;
 
-bool system_status_valid(const char* func_name)
+static bool system_status_valid(const char* func_name)
 {
     if(!state_ptr)
     {
@@ -129,7 +129,7 @@ camera* camera_system_acquire(const char* name)
         // Поиск свободного слота памяти.
         for(u16 i = 0; i < state_ptr->config.max_camera_count; ++i)
         {
-            if(i == INVALID_ID_U16)
+            if(state_ptr->cameras[i].id == INVALID_ID_U16)
             {
                 id = i;
                 break;

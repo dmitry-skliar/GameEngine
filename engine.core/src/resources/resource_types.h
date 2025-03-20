@@ -129,7 +129,7 @@ typedef struct geometry {
 typedef struct mesh {
     // @brief Количество внутренних геометрий.
     u16 geometry_count;
-    // @brief Массив указателей на геометрии (используется darray).
+    // @brief Массив указателей на геометрии.
     geometry** geometries;
     // @brief Массив преобразований над сеткой геометрий из локальных в мировые.
     transform transform;
