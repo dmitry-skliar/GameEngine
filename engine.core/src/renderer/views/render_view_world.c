@@ -24,6 +24,11 @@ typedef struct render_view_world_internal_data {
     u32 render_mode;
 } render_view_world_internal_data;
 
+typedef struct geometry_distance {
+    geometry_render_data g;
+    f32 distance;            // Дистанция относительно камеры.
+} geometry_distance;
+
 static bool view_state_valid(render_view* self, const char* func_name)
 {
     if(!self || !self->internal_data)
@@ -32,6 +37,60 @@ static bool view_state_valid(render_view* self, const char* func_name)
         return false;
     }
     return true;
+}
+
+static void swap(geometry_distance* a, geometry_distance* b)
+{
+    geometry_distance t  = *a;
+    *a = *b;
+    *b = t;
+}
+
+static i32 partition(geometry_distance* arr, i32 low_index, i32 high_index, bool ascending)
+{
+    geometry_distance pivot = arr[high_index];
+    i32 i = (low_index - 1);
+
+    for(i32 j = low_index; j <= high_index - 1; ++j)
+    {
+        if(ascending)
+        {
+            if(arr[j].distance < pivot.distance)
+            {
+                ++i;
+                swap(&arr[i], &arr[j]);
+            }
+        }
+        else
+        {
+            if(arr[j].distance > pivot.distance)
+            {
+                ++i;
+                swap(&arr[i], &arr[j]);
+            }
+        }
+    }
+
+    swap(&arr[i + 1], &arr[high_index]);
+    return i + 1;
+}
+
+/*
+    @brief Функция сортировки геометрий.
+    @param arr Массив геометрий с дистанцией до камеры для сортировки.
+    @param low_index Начальный индекс с которого нужно выполнять сортировку (обычно с 0).
+    @param high_index Конечноый индекс до которого нужно выполнять сортировку (для всего массива -1).
+    @param ascending True сортировка в порядке возрастания, false в порядке убывания.
+*/
+static void quick_sort(geometry_distance* arr, i32 low_index, i32 high_index, bool ascending)
+{
+    if(low_index < high_index)
+    {
+        i32 partition_index = partition(arr, low_index, high_index, ascending);
+
+        quick_sort(arr, low_index, partition_index - 1, ascending);
+        quick_sort(arr, partition_index + 1, high_index, ascending);
+    }
 }
 
 bool render_view_world_on_event(event_code code, void* sender, void* listener, event_context* context)
@@ -76,7 +135,7 @@ bool render_view_world_on_create(render_view* self)
     // TODO: Установка из конфигурации.
     data->fov = deg_to_rad(60.0f);
     data->near_clip = 0.1f;
-    data->far_clip = 500.0f;
+    data->far_clip = 1000.0f;
     data->projection_matrix = mat4_perspective(data->fov, 1280.0f / 720.0f, data->near_clip, data->far_clip);
     data->world_camera = camera_system_get_default();
     // TODO: Получение из сцены.
@@ -136,24 +195,51 @@ bool render_view_world_on_build_packet(render_view* self, void* data, render_vie
     out_packet->view_position = camera_position_get(internal_data->world_camera);
     out_packet->ambient_color = internal_data->ambient_color;
 
+    geometry_distance* geometry_distances = darray_create(geometry_distance);
+
     for(u32 i = 0; i < mesh_data->mesh_count; ++i)
     {
         mesh* m = &mesh_data->meshes[i];
+        mat4 model = transform_get_world(&m->transform);
 
         for(u32 j = 0; j < m->geometry_count; ++j)
         {
-            // TODO: В материалы добавить проверку прозрачности.
+            geometry_render_data render_data;
+            render_data.geometry = m->geometries[j];
+            render_data.model = model;
+
+            // Добавление сеток без прозрачности.
             if((m->geometries[j]->material->diffuse_map.texture->flags & TEXTURE_FLAG_HAS_TRANSPARENCY) == 0)
             {
-                geometry_render_data render_data;
-                render_data.geometry = m->geometries[j];
-                render_data.model = transform_get_world(&m->transform);
-
                 darray_push(out_packet->geometries, render_data);
                 out_packet->geometry_count++;
             }
+            // Добавление сеток с прозрачностью.
+            else
+            {
+                vec3 center = vec3_transform(render_data.geometry->center, 1.0f, model);
+                f32 distance = vec3_distance(center, internal_data->world_camera->position);
+
+                geometry_distance gdist;
+                gdist.distance = kabs(distance);
+                gdist.g = render_data;
+
+                darray_push(geometry_distances, gdist);
+            }
         }
     }
+
+    // Сортировка дистанций.
+    u32 geometry_count = darray_length(geometry_distances);
+    quick_sort(geometry_distances, 0, geometry_count - 1, false);
+
+    for(u32 i = 0; i < geometry_count; ++i)
+    {
+        darray_push(out_packet->geometries, geometry_distances[i].g);
+        out_packet->geometry_count++;
+    }
+
+    darray_destroy(geometry_distances);
 
     return true;
 }
@@ -182,8 +268,8 @@ bool render_view_world_on_render(render_view* self, const render_view_packet* pa
         }
 
         if(!material_system_apply_global(
-            shader_id, &packet->projection_matrix, &packet->view_matrix, &packet->view_position, &packet->ambient_color,
-            data->render_mode
+            shader_id, frame_number, &packet->projection_matrix, &packet->view_matrix, &packet->view_position,
+            &packet->ambient_color, data->render_mode
         ))
         {
             kerror("Function '%s': Failed to use apply globals WORLD shader.", __FUNCTION__);

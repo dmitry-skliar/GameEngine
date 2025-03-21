@@ -91,6 +91,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define I32_MIN (-I32_MAX - 1)
 #define I64_MIN (-I64_MAX - 1)
 
+#define INVALID_ID_U64 U64_MAX
 #define INVALID_ID     U32_MAX
 #define INVALID_ID_U16 U16_MAX
 #define INVALID_ID_U8  U8_MAX

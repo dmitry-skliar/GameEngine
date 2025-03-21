@@ -118,10 +118,19 @@ typedef struct material {
 } material;
 
 typedef struct geometry {
+    // @brief Идентификатор геометрии.
     u32 id;
+    // @brief Внутренний идентификатор визуализатора.
     u32 internal_id;
-    u32 generation;
+    // @brief Генератор изменений, используется для обновления геометрии.
+    u16 generation;
+    // @brief Центр геометрии (локальные).
+    vec3 center;
+    // @brief Крайние точки геометрии (локальные).
+    extents_3d extents;
+    // @brief Имя геометрии.
     char name[GEOMETRY_NAME_MAX_LENGTH];
+    // @brief Используемый материал геометрии.
     material* material;
 } geometry;
 

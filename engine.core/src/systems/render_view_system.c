@@ -3,6 +3,7 @@
 
 // Внутренние подключения.
 #include "logger.h"
+#include "kstring.h"
 #include "memory/memory.h"
 #include "containers/hashtable.h"
 #include "renderer/renderer_frontend.h"
@@ -104,6 +105,7 @@ void render_view_system_shutdown()
     {
         if(state_ptr->views[i].id != INVALID_ID_U16)
         {
+            string_free(state_ptr->views[i].name);
             kfree_tc(state_ptr->views[i].passes, renderpass*, state_ptr->views[i].renderpass_count, MEMORY_TAG_ARRAY);
             state_ptr->views[i].on_destroy(&state_ptr->views[i]);
         }
@@ -116,9 +118,9 @@ bool render_view_system_create(render_view_config* config)
 {
     if(!system_status_valid(__FUNCTION__)) return false;
 
-    if(!config)
+    if(!config || !config->name || !string_length(config->name))
     {
-        kerror("Function '%s' requires a valid pointer to a config.", __FUNCTION__);
+        kerror("Function '%s' requires a valid pointer to a config and a view name.", __FUNCTION__);
         return false;
     }
 
@@ -150,6 +152,7 @@ bool render_view_system_create(render_view_config* config)
         render_view* view = &state_ptr->views[id];
         view->id = id;
         view->type = config->type;
+        view->name = string_duplicate(config->name);
         view->custom_shader_name = config->custom_shader_name;
         view->renderpass_count = config->pass_count;
         view->passes = kallocate_tc(renderpass*, view->renderpass_count, MEMORY_TAG_ARRAY);

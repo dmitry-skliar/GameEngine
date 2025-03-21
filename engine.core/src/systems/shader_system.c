@@ -107,6 +107,7 @@ bool shader_system_initialize(u64* memory_requirement, void* memory, shader_syst
     for(u32 i = 0; i < state_ptr->config.max_shader_count; ++i)
     {
         state_ptr->shaders[i].id = INVALID_ID;
+        state_ptr->shaders[i].render_frame_number = INVALID_ID_U64;
     }
 
     return true;

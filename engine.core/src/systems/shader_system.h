@@ -111,6 +111,8 @@ typedef struct shader {
     range push_constant_ranges[32];
     // @brief Размер всех атрибутов вместе взятых (размер вершины).
     u16 attribute_stride;
+    // @brief Номер кадра для синхронизации (исключает повторный вызов в текущем кадре). 
+    u64 render_frame_number;
     // @brief Внутренние данные специфичные для API рендера (Не трогать). // TODO: Спрятать!
     void* internal_data;
 } shader;

@@ -61,6 +61,7 @@ material* material_system_get_default();
 /*
     @brief Применяет глобальные данные для указаного идентификатора шейдера.
     @param shader_id Идентификатор шейдера, для которого необходимо применить глобальные данные.
+    @param renderer_frame_number Текущий номер кадра визуализатора.
     @param projection Указатель на матрицу проекции.
     @param view Указатель на матрицу вида.
     @param view_position Указатель на позицию камеры.
@@ -68,7 +69,10 @@ material* material_system_get_default();
     @param render_mode Режим отображения.
     @return True в случае успеха, false если есть ошибки.
 */
-bool material_system_apply_global(u32 shader_id, const mat4* projection, const mat4* view, const vec3* view_position, const vec4* ambient_color, u32 render_mode);
+bool material_system_apply_global(
+    u32 shader_id, u64 renderer_frame_number, const mat4* projection, const mat4* view, const vec3* view_position,
+    const vec4* ambient_color, u32 render_mode
+);
 
 /*
     @brief Применяет данные материала на уровне экземпляра для предоставленного материала.

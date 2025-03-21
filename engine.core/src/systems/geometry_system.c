@@ -81,7 +81,7 @@ bool geometry_system_initialize(u64* memory_requirement, void* memory, geometry_
     for(u32 i = 0; i < state_ptr->config.max_geometry_count; ++i)
     {
         state_ptr->geometries[i].geometry.id = INVALID_ID;
-        state_ptr->geometries[i].geometry.generation = INVALID_ID;
+        state_ptr->geometries[i].geometry.generation = INVALID_ID_U16;
         state_ptr->geometries[i].geometry.internal_id = INVALID_ID;
     }
 
@@ -343,14 +343,14 @@ bool geometry_create(geometry_config* config, geometry* g)
         state_ptr->geometries[g->id].auto_release = false;
         g->id = INVALID_ID;
         g->internal_id = INVALID_ID;
-        g->generation = INVALID_ID;
+        g->generation = INVALID_ID_U16;
 
         return false;
     }
 
-    // TODO: В системах не хватает проверок ввода пользователя!
-    //       Проверку строкуи внесит в систему материалов! Вообще работа со строками медленная!!!
-    //       Работу со строками заменить на что-то универсальное!
+    g->center = config->center;
+    g->extents = config->extents;
+
     if(string_length(config->material_name) > 0)
     {
         g->material = material_system_acquire(config->material_name);
@@ -371,7 +371,7 @@ void geometry_destroy(geometry* g)
 
     g->id = INVALID_ID;
     g->internal_id = INVALID_ID;
-    g->generation = INVALID_ID;
+    g->generation = INVALID_ID_U16;
 
     string_empty(g->name);
 
@@ -567,6 +567,14 @@ geometry_config geometry_system_generate_cube_config(
     f32 min_uvy     =  0.0f;
     f32 max_uvx     =  tile_x;
     f32 max_uvy     =  tile_y;
+
+    config.extents.min.x = min_x;
+    config.extents.min.y = min_y;
+    config.extents.min.z = min_z;
+    config.extents.max.x = max_x;
+    config.extents.max.y = max_y;
+    config.extents.max.z = max_z;
+    config.center.x = config.center.y = config.center.z = 0;
 
     vertex_3d verts[24];
     // Вид спереди.

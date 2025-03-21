@@ -139,7 +139,7 @@ bool render_view_ui_on_render(render_view* self, const render_view_packet* packe
             return false;
         }
 
-        if(!material_system_apply_global(shader_id, &packet->projection_matrix, &packet->view_matrix, null, null, 0))
+        if(!material_system_apply_global(shader_id, frame_number, &packet->projection_matrix, &packet->view_matrix, null, null, 0))
         {
             kerror("Function '%s': Failed to use apply globals UI shader.", __FUNCTION__);
             return false;
