@@ -27,8 +27,6 @@ static vulkan_context* context = null;
 // Константы для шейдеров.
 const u32 DESC_SET_INDEX_GLOBAL   = 0;
 const u32 DESC_SET_INDEX_INSTANCE = 1;
-const u32 BINDING_INDEX_UBO       = 0;
-const u32 BINDING_INDEX_SAMPLER   = 1;
 
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
@@ -193,7 +191,7 @@ bool shader_status_valid(shader* shader, const char* func_name)
 bool shader_create_module(vulkan_shader* shader, vulkan_shader_stage_config config, vulkan_shader_stage* shader_stage)
 {
     resource binary_resource;
-    if (!resource_system_load(config.file_name, RESOURCE_TYPE_BINARY, &binary_resource))
+    if (!resource_system_load(config.file_name, RESOURCE_TYPE_BINARY, null, &binary_resource))
     {
         kerror("Function '%s': Unable to read shader module '%s'.", __FUNCTION__, config.file_name);
         return false;
@@ -932,7 +930,16 @@ void vulkan_renderer_renderpass_create(renderpass* out_renderpass, f32 depth, u3
         VkAttachmentDescription* depth_attachment = &attachment_descriptions[attachment_description_count];
         depth_attachment->format = context->device.depth_format;
         depth_attachment->samples = VK_SAMPLE_COUNT_1_BIT;
-        depth_attachment->loadOp = vk_renderpass->do_clear_depth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+
+        if(has_prev_pass)
+        {
+            depth_attachment->loadOp = vk_renderpass->do_clear_depth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+        }
+        else
+        {
+            depth_attachment->loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        }
+
         depth_attachment->storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         depth_attachment->stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         depth_attachment->stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1025,6 +1032,10 @@ bool vulkan_renderer_renderpass_begin(renderpass* pass, render_target* target)
         kcopy(clear_values[begininfo.clearValueCount].color.float32, pass->clear_color.elements, sizeof(f32) * 4);
         begininfo.clearValueCount++;
     }
+    else
+    {
+        begininfo.clearValueCount++; // TODO: Можно оптимизировать!
+    }
 
     if(vk_renderpass->do_clear_depth)
     {
@@ -1073,9 +1084,9 @@ void vulkan_renderer_texture_create(texture* t, const void* pixels)
     vulkan_image* image = t->internal_data;
     VkFormat image_format = VK_FORMAT_R8G8B8A8_UNORM;
 
-    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
+    // NOTE: Разные типы текстур потребуют разных параметров.
     vulkan_image_create(
-        context, VK_IMAGE_TYPE_2D, t->width, t->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        context, t->type, t->width, t->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
         image
@@ -1094,9 +1105,9 @@ void vulkan_renderer_texture_create_writable(texture* t)
     vulkan_image* image = t->internal_data;
     VkFormat image_format = channel_count_to_format(t->channel_count, VK_FORMAT_R8G8B8A8_UNORM);
 
-    // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
+    // NOTE: Разные типы текстур потребуют разных параметров.
     vulkan_image_create(
-        context, VK_IMAGE_TYPE_2D, t->width, t->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        context, t->type, t->width, t->height, image_format, VK_IMAGE_TILING_OPTIMAL, 
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
         image
@@ -1133,7 +1144,7 @@ void vulkan_renderer_texture_resize(texture* t, u32 new_width, u32 new_height)
 
     // NOTE: Здесь много предположений, разные типы текстур потребуют разных параметров.
     vulkan_image_create(
-        context, VK_IMAGE_TYPE_2D, new_width, new_height, image_format, VK_IMAGE_TILING_OPTIMAL, 
+        context, t->type, new_width, new_height, image_format, VK_IMAGE_TILING_OPTIMAL, 
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true, VK_IMAGE_ASPECT_COLOR_BIT,
         image
@@ -1152,7 +1163,7 @@ void vulkan_renderer_texture_write_data(texture* t, u32 offset, u32 size, const 
 
     vulkan_image* image = t->internal_data;
     VkFormat image_format = channel_count_to_format(t->channel_count, VK_FORMAT_R8G8B8A8_UNORM);
-    VkDeviceSize image_size = t->width * t->height * t->channel_count;
+    VkDeviceSize image_size = t->width * t->height * t->channel_count * (t->type == TEXTURE_TYPE_CUBE ? 6 : 1);
 
     // Создание промежуточного буфера и загрузка данных в него.
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -1168,15 +1179,15 @@ void vulkan_renderer_texture_write_data(texture* t, u32 offset, u32 size, const 
 
     // Изменение текущий макета на оптимальный для приема данных.
     vulkan_image_transition_layout(
-        context, &command_buffer, image, &image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        context, t->type, &command_buffer, image, &image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
     );
 
     // Копирование данных из буфера.
-    vulkan_image_copy_from_buffer(context, image, staging.handle, &command_buffer);
+    vulkan_image_copy_from_buffer(context, t->type, image, staging.handle, &command_buffer);
 
     // Переход от оптимальной компоновки для получения данных к оптимальной компоновке только для чтения шейдеров.
     vulkan_image_transition_layout(
-        context, &command_buffer, image, &image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        context, t->type, &command_buffer, image, &image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     );
 
@@ -1402,7 +1413,7 @@ void vulkan_renderer_geometry_draw(geometry_render_data* data)
     }
 }
 
-bool vulkan_renderer_shader_create(struct shader* s, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages)
+bool vulkan_renderer_shader_create(struct shader* s, const shader_config* config, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages)
 {
     if(!s || !stage_filenames || !stages)
     {
@@ -1479,29 +1490,101 @@ bool vulkan_renderer_shader_create(struct shader* s, renderpass* pass, u8 stage_
         vk_shader->config.stage_count++;
     }
 
+    vk_shader->config.descriptor_sets[0].sampler_binding_index = INVALID_ID_U8;
+    vk_shader->config.descriptor_sets[1].sampler_binding_index = INVALID_ID_U8;
+
+    // Получение количества uniform-переменных.
+    u32 uniform_count = darray_length(config->uniforms);
+    for(u32 i = 0; i < uniform_count; ++i)
+    {
+        switch(config->uniforms[i].scope)
+        {
+            case SHADER_SCOPE_GLOBAL:
+                if(config->uniforms[i].type == SHADER_UNIFORM_TYPE_SAMPLER)
+                {
+                    vk_shader->global_uniform_sampler_count++;
+                }
+                else
+                {
+                    vk_shader->global_uniform_count++;
+                }
+                break;
+            case SHADER_SCOPE_INSTANCE:
+                if(config->uniforms[i].type == SHADER_UNIFORM_TYPE_SAMPLER)
+                {
+                    vk_shader->instance_uniform_sampler_count++;
+                }
+                else
+                {
+                    vk_shader->instance_uniform_count++;
+                }
+                break;
+            case SHADER_SCOPE_LOCAL:
+                vk_shader->local_uniform_count++;
+                break;
+        }
+    }
+
     // HACK: Максимальное число ubo дескрипторных наборов.
     vk_shader->config.pool_sizes[0] = (VkDescriptorPoolSize){VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024};
     // HACK: Максимальное число image sampler дескрипторных наборов.
     vk_shader->config.pool_sizes[1] = (VkDescriptorPoolSize){VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4096};
 
     // Глобальный набор дескрипторов (UBO).
-    vulkan_descriptor_set_config* global_descriptor_set_config = &vk_shader->config.descriptor_sets[DESC_SET_INDEX_GLOBAL];
-    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].binding = BINDING_INDEX_UBO;
-    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorCount = 1;
-    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    global_descriptor_set_config->bindings[BINDING_INDEX_UBO].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    global_descriptor_set_config->binding_count++;
-    vk_shader->config.descriptor_set_count++;
+    if(vk_shader->global_uniform_count > 0 || vk_shader->global_uniform_sampler_count > 0)
+    {
+        vulkan_descriptor_set_config* set_config = &vk_shader->config.descriptor_sets[vk_shader->config.descriptor_set_count];
+
+        if(vk_shader->global_uniform_count > 0)
+        {
+            u8 binding_index = set_config->binding_count;
+            set_config->bindings[binding_index].binding = binding_index;
+            set_config->bindings[binding_index].descriptorCount = 1;
+            set_config->bindings[binding_index].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            set_config->bindings[binding_index].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            set_config->binding_count++;
+        }
+
+        if(vk_shader->global_uniform_sampler_count > 0)
+        {
+            u8 binding_index = set_config->binding_count;
+            set_config->bindings[binding_index].binding = binding_index;
+            set_config->bindings[binding_index].descriptorCount = vk_shader->global_uniform_sampler_count;    // Один дискриптор на сэмллер.
+            set_config->bindings[binding_index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            set_config->bindings[binding_index].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            set_config->sampler_binding_index = binding_index;
+            set_config->binding_count++;
+        }
+
+        vk_shader->config.descriptor_set_count++;
+    }
 
     // При изпользовании экземпляров, добавляется второй набор дескрипторов (UBO).
-    if(s->use_instances)
+    if(vk_shader->instance_uniform_count > 0 || vk_shader->instance_uniform_sampler_count > 0)
     {
-        vulkan_descriptor_set_config* instance_descriptor_set_config = &vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE];
-        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].binding = BINDING_INDEX_UBO;
-        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorCount = 1;
-        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        instance_descriptor_set_config->bindings[BINDING_INDEX_UBO].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        instance_descriptor_set_config->binding_count++;
+        vulkan_descriptor_set_config* set_config = &vk_shader->config.descriptor_sets[vk_shader->config.descriptor_set_count];
+
+        if(vk_shader->instance_uniform_count > 0)
+        {
+            u8 binding_index = set_config->binding_count;
+            set_config->bindings[binding_index].binding = binding_index;
+            set_config->bindings[binding_index].descriptorCount = 1;
+            set_config->bindings[binding_index].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            set_config->bindings[binding_index].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            set_config->binding_count++;
+        }
+
+        if(vk_shader->instance_uniform_sampler_count > 0)
+        {
+            u8 binding_index = set_config->binding_count;
+            set_config->bindings[binding_index].binding = binding_index;
+            set_config->bindings[binding_index].descriptorCount = vk_shader->instance_uniform_sampler_count;    // Один дискриптор на сэмллер.
+            set_config->bindings[binding_index].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            set_config->bindings[binding_index].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            set_config->sampler_binding_index = binding_index;
+            set_config->binding_count++;
+        }
+
         vk_shader->config.descriptor_set_count++;
     }
 
@@ -1511,6 +1594,8 @@ bool vulkan_renderer_shader_create(struct shader* s, renderpass* pass, u8 stage_
     {
         vk_shader->instance_states[i].id = INVALID_ID;
     }
+
+    vk_shader->config.cull_mode = config->cull_mode;
 
     return true;
 }
@@ -1601,33 +1686,6 @@ bool vulkan_renderer_shader_initialize(shader* shader)
         attribute_offset += shader->attributes[i].size;
     }
 
-    // Получение uniform переменных.
-    u32 uniform_count = darray_length(shader->uniforms);
-    for(u32 i = 0; i < uniform_count; ++i)
-    {
-        // Обновление привязки дескрипторов для сэмлеров!
-        if(shader->uniforms[i].type == SHADER_UNIFORM_TYPE_SAMPLER)
-        {
-            const u32 set_index = shader->uniforms[i].scope == SHADER_SCOPE_GLOBAL ? DESC_SET_INDEX_GLOBAL : DESC_SET_INDEX_INSTANCE;
-            vulkan_descriptor_set_config* set_config = &vk_shader->config.descriptor_sets[set_index];
-
-            if(set_config->binding_count < 2)
-            {
-                // Привязка для первого сэмплера.
-                set_config->bindings[BINDING_INDEX_SAMPLER].binding = BINDING_INDEX_SAMPLER;
-                set_config->bindings[BINDING_INDEX_SAMPLER].descriptorCount = 1;
-                set_config->bindings[BINDING_INDEX_SAMPLER].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                set_config->bindings[BINDING_INDEX_SAMPLER].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-                set_config->binding_count++;
-            }
-            else
-            {
-                // Для остальных сэмплеров просто увеличиваем индекс.
-                set_config->bindings[BINDING_INDEX_SAMPLER].descriptorCount++;
-            }
-        }
-    }
-
     // Пул дескрипторов.
     VkDescriptorPoolCreateInfo pool_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     pool_info.poolSizeCount = 2;
@@ -1682,7 +1740,7 @@ bool vulkan_renderer_shader_initialize(shader* shader)
     bool pipeline_result = vulkan_graphics_pipeline_create(
         context, vk_shader->renderpass, shader->attribute_stride, attribute_count, vk_shader->config.attributes,
         vk_shader->config.descriptor_set_count, vk_shader->descriptor_set_layouts, vk_shader->config.stage_count,
-        stage_create_infos, viewport, scissor, false, true, shader->push_constant_range_count,
+        stage_create_infos, viewport, scissor, vk_shader->config.cull_mode, false, true, shader->push_constant_range_count,
         shader->push_constant_ranges, &vk_shader->pipeline
     );
 
@@ -1828,14 +1886,14 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
 {
     if(!shader_status_valid(shader, __FUNCTION__)) return false;
 
-    if(!shader->use_instances)
+    vulkan_shader* vk_shader = shader->internal_data;
+    if(!vk_shader->instance_uniform_count && !vk_shader->instance_uniform_sampler_count)
     {
         kerror("Function '%s': This shader does not use instances.", __FUNCTION__);
         return false;
     }
 
     u32 image_index = context->image_index;
-    vulkan_shader* vk_shader = shader->internal_data;
     VkCommandBuffer command_buffer = context->graphics_command_buffers[image_index].handle;
 
     // Получение данных экземпляра.
@@ -1850,34 +1908,38 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
         u32 descriptor_index = 0;
 
         // Дескриптор 0 - Uniform буфер.
-        // Выполнять только если это дескриптор еще не был обновлен.
-        u8* instance_ubo_generation = &object_state->descriptor_set_state.descriptor_states[descriptor_index].generations[image_index];
-        if(*instance_ubo_generation == INVALID_ID_U8 /* || *global_ubo_generation != material->generation */)
+        if(vk_shader->instance_uniform_count > 0)
         {
-            VkDescriptorBufferInfo buffer_info;
-            buffer_info.buffer = vk_shader->uniform_buffer.handle;
-            buffer_info.offset = object_state->offset;
-            buffer_info.range = shader->ubo_stride;
+            // Выполнять только если это дескриптор еще не был обновлен.
+            u8* instance_ubo_generation = &object_state->descriptor_set_state.descriptor_states[descriptor_index].generations[image_index];
+            if(*instance_ubo_generation == INVALID_ID_U8 /* || *global_ubo_generation != material->generation */)
+            {
+                VkDescriptorBufferInfo buffer_info;
+                buffer_info.buffer = vk_shader->uniform_buffer.handle;
+                buffer_info.offset = object_state->offset;
+                buffer_info.range = shader->ubo_stride;
 
-            VkWriteDescriptorSet ubo_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-            ubo_descriptor.dstSet = object_descriptor_set;
-            ubo_descriptor.dstBinding = descriptor_index;
-            ubo_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            ubo_descriptor.descriptorCount = 1;
-            ubo_descriptor.pBufferInfo = &buffer_info;
+                VkWriteDescriptorSet ubo_descriptor = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+                ubo_descriptor.dstSet = object_descriptor_set;
+                ubo_descriptor.dstBinding = descriptor_index;
+                ubo_descriptor.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                ubo_descriptor.descriptorCount = 1;
+                ubo_descriptor.pBufferInfo = &buffer_info;
 
-            descriptor_writes[descriptor_count] = ubo_descriptor;
-            descriptor_count++;
+                descriptor_writes[descriptor_count] = ubo_descriptor;
+                descriptor_count++;
 
-            // Обновление генерации.
-            *instance_ubo_generation = 1;
+                // Обновление генерации.
+                *instance_ubo_generation = 1;
+            }
+            descriptor_index++;
         }
-        descriptor_index++;
 
-        // Сэмплеры всегда будут в привязке. Если количество привязок меньше 2, то сэмплеров нет.
-        if(vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].binding_count > 1)
+        // Перебор сэмплеров.
+        if(vk_shader->instance_uniform_sampler_count > 0)
         {
-            u32 total_sampler_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
+            u8 sampler_binding_index = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].sampler_binding_index;
+            u32 total_sampler_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[sampler_binding_index].descriptorCount;
             u32 update_sampler_count = 0;
             VkDescriptorImageInfo image_infos[VULKAN_SHADER_MAX_GLOBAL_TEXTURES];
 
@@ -1951,7 +2013,8 @@ bool vulkan_renderer_shader_acquire_instance_resources(shader* s, texture_map** 
     }
 
     vulkan_shader_instance_state* instance_state = &vk_shader->instance_states[*out_instance_id];
-    u32 instance_texture_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[BINDING_INDEX_SAMPLER].descriptorCount;
+    u8 sampler_binding_index = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].sampler_binding_index;
+    u32 instance_texture_count = vk_shader->config.descriptor_sets[DESC_SET_INDEX_INSTANCE].bindings[sampler_binding_index].descriptorCount;
     instance_state->instance_texture_maps = kallocate_tc(texture_map*, s->instance_texture_count, MEMORY_TAG_ARRAY);
     kcopy_tc(instance_state->instance_texture_maps, maps, texture_map*, s->instance_texture_count);
 
@@ -1967,10 +2030,13 @@ bool vulkan_renderer_shader_acquire_instance_resources(shader* s, texture_map** 
 
     // Выделение места в UBO по шагу, а не по размеру.
     u64 size = s->ubo_stride;
-    if(!vulkan_buffer_allocate(&vk_shader->uniform_buffer, size, &instance_state->offset))
+    if(size > 0)
     {
-        kerror("Function '%': Failed t oacuire ubo space.", __FUNCTION__);
-        return false;
+        if(!vulkan_buffer_allocate(&vk_shader->uniform_buffer, size, &instance_state->offset))
+        {
+            kerror("Function '%': Failed t oacuire ubo space.", __FUNCTION__);
+            return false;
+        }
     }
 
     vulkan_shader_descriptor_set_state* set_state = &instance_state->descriptor_set_state;

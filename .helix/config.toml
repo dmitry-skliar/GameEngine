@@ -1,2 +1,8 @@
-[keys.normal]
-b = { b = ":sh make build", r = ":sh make rebuild", c = ":sh make clean", g = { s = ":sh git status", l = ":sh git log"}}
+[keys.normal.b]
+b = ":sh make build"
+r = ":sh make rebuild"
+c = ":sh make clean"
+
+[keys.normal.b.g]
+s = ":sh git status"
+l = ":sh git log"

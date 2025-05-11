@@ -10,7 +10,7 @@
 #include "systems/resource_system.h"
 #include "platform/file.h"
 
-bool binary_loader_load(resource_loader* self, const char* name, resource* out_resource)
+bool binary_loader_load(resource_loader* self, const char* name, void* params, resource* out_resource)
 {
     char* format_str = "%s/%s";
     char full_file_path[512];

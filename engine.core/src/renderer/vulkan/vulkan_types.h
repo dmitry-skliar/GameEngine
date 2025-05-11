@@ -220,6 +220,8 @@ typedef struct vulkan_descriptor_set_config {
     u8 binding_count;
     // @brief Прикрепления.
     VkDescriptorSetLayoutBinding bindings[VULKAN_SHADER_MAX_BINDINGS];
+    // @brief Индекс прикрепленного сэмплера.
+    u8 sampler_binding_index;
 } vulkan_descriptor_set_config;
 
 // @brief Конфигурация шейдера (перед этапом инициализации).
@@ -238,6 +240,8 @@ typedef struct vulkan_shader_config {
     vulkan_descriptor_set_config descriptor_sets[2];
     // @brief Массив атрибутов шейдерного модуля.
     VkVertexInputAttributeDescription attributes[VULKAN_SHADER_MAX_ATTRIBUTES];
+    // @brief Режим отбраковки граней.
+    face_cull_mode cull_mode;
 } vulkan_shader_config;
 
 // @brief Состояние дескриптора на кадре.
@@ -300,6 +304,16 @@ typedef struct vulkan_shader {
     vulkan_pipeline pipeline;
     // @brief Проходчик визуализации.
     vulkan_renderpass* renderpass;
+    // @brief Количество обычных uniform-переменных глобального уровня.
+    u8 global_uniform_count;
+    // @brief Количество сэмплер uniform-переменных глобального уровня.
+    u8 global_uniform_sampler_count;
+    // @brief Количество обычных uniform-переменных уровня экземпляра.
+    u8 instance_uniform_count;
+    // @brief Количество сэмплер uniform-переменных уровня экземпляра.
+    u8 instance_uniform_sampler_count;
+    // @brief Количество обычных uniform-переменных локального уровня.
+    u8 local_uniform_count;
 } vulkan_shader;
 
 #define VULKAN_MAX_REGISTERED_RENDERPASSES 31

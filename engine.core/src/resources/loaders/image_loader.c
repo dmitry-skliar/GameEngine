@@ -14,11 +14,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "vendor/stb_image.h"
 
-bool image_loader_load(resource_loader* self, const char* name, resource* out_resource)
+bool image_loader_load(resource_loader* self, const char* name, void* params, resource* out_resource)
 {
+
+    image_resouce_params* typed_params = params;
+
     char* format_str = "%s/%s/%s%s";
     const i32 required_channel_count = 4;
-    stbi_set_flip_vertically_on_load(true);
+    stbi_set_flip_vertically_on_load(typed_params->flip_y);
     char full_file_path[512];
 
     #define IMAGE_EXTENSION_COUNT 4
@@ -50,22 +53,6 @@ bool image_loader_load(resource_loader* self, const char* name, resource* out_re
     // TODO: конфигурируемым.
     u8* data = stbi_load(full_file_path, &width, &height, &channel_count, required_channel_count);
 
-    // const char* fail_reason = stbi_failure_reason();
-    // if(fail_reason)
-    // {
-    //     kerror("Function '%s': Failed to load file '%s': %s.", __FUNCTION__, full_file_path, fail_reason);
-
-    //     // Очистка ошибок stbi, что бы следующая текстура могла загрузиться.
-    //     stbi__err(0, 0);
-
-    //     if(data)
-    //     {
-    //         stbi_image_free(data);
-    //     }
-
-    //     return false;
-    // }
-
     if(!data)
     {
         kerror("Function '%s': Failed to load file '%s'.", __FUNCTION__, full_file_path);
@@ -91,6 +78,7 @@ bool image_loader_load(resource_loader* self, const char* name, resource* out_re
 
 void image_loader_unload(resource_loader* self, resource* resource)
 {
+    stbi_image_free(((image_resouce_data*)resource->data)->pixels);
     resource_unload(self, resource, MEMORY_TAG_TEXTURE, __FUNCTION__);
 }
 

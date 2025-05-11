@@ -7,9 +7,9 @@
 #include "memory/memory.h"
 
 void vulkan_image_create(
-    vulkan_context* context, VkImageType imagetype, u32 width, u32 height, VkFormat imageformat,
-    VkImageTiling imagetiling, VkImageUsageFlags imageusage, VkMemoryPropertyFlags memoryflags, bool createview,
-    VkImageAspectFlags viewaspectflags, vulkan_image* out_image
+    vulkan_context* context, texture_type type, u32 width, u32 height, VkFormat imageformat, VkImageTiling imagetiling,
+    VkImageUsageFlags imageusage, VkMemoryPropertyFlags memoryflags, bool createview, VkImageAspectFlags viewaspectflags,
+    vulkan_image* out_image
 )
 {
     // Копирование параметров.
@@ -17,18 +17,31 @@ void vulkan_image_create(
     out_image->height = height;
 
     VkImageCreateInfo imageinfo = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-    imageinfo.imageType = VK_IMAGE_TYPE_2D;
+
+    switch(type)
+    {
+        default:
+        case TEXTURE_TYPE_2D:
+        case TEXTURE_TYPE_CUBE:
+            imageinfo.imageType = VK_IMAGE_TYPE_2D;
+    }
+
     imageinfo.extent.width = width;
     imageinfo.extent.height = height;
-    imageinfo.extent.depth = 1; // TODO: Сделать поддержку конфигурации глубины.
-    imageinfo.mipLevels = 1;    // TODO: Сделать поддержку конфигурации уровня дитализации изображения (индекс текстуры!).
-    imageinfo.arrayLayers = 1;  // TODO: Сделать поддержку конфигурации количества слоев изображения.
+    imageinfo.extent.depth = 1;                                 // TODO: Сделать поддержку конфигурации глубины.
+    imageinfo.mipLevels = 1;                                    // TODO: Сделать поддержку конфигурации уровня дитализации изображения (индекс текстуры!).
+    imageinfo.arrayLayers = type == TEXTURE_TYPE_CUBE ? 6 : 1;  // TODO: Сделать поддержку конфигурации количества слоев изображения.
     imageinfo.format = imageformat;
     imageinfo.tiling = imagetiling;
     imageinfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageinfo.usage = imageusage;
     imageinfo.samples = VK_SAMPLE_COUNT_1_BIT;            // TODO: Сделать поддержку конфигурации количества образцов.
     imageinfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;    // TODO: Сделать поддержку конфигурации режима совместного использования.
+
+    if(type == TEXTURE_TYPE_CUBE)
+    {
+        imageinfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT; 
+    }
 
     /*
         NOTE: В спецификации Vulkan указано: mipLevels должен быть меньше или равен количеству уровней в
@@ -69,17 +82,28 @@ void vulkan_image_create(
     if(createview)
     {
         out_image->view = null;
-        vulkan_image_view_create(context, imageformat, out_image, viewaspectflags);
+        vulkan_image_view_create(context, type, imageformat, out_image, viewaspectflags);
     }
 }
 
 void vulkan_image_view_create(
-    vulkan_context* context, VkFormat format, vulkan_image* image, VkImageAspectFlags aspectflags
+    vulkan_context* context, texture_type type, VkFormat format, vulkan_image* image, VkImageAspectFlags aspectflags
 )
 {
     VkImageViewCreateInfo viewinfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
     viewinfo.image = image->handle;
-    viewinfo.viewType = VK_IMAGE_VIEW_TYPE_2D;    // TODO: Сделать поддержку конфигурирования.
+
+    switch(type)
+    {
+        case TEXTURE_TYPE_CUBE:
+            viewinfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+            break;
+
+        default:
+        case TEXTURE_TYPE_2D:
+            viewinfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    }
+
     viewinfo.format = format;
     viewinfo.subresourceRange.aspectMask = aspectflags;
 
@@ -87,7 +111,7 @@ void vulkan_image_view_create(
     viewinfo.subresourceRange.baseMipLevel = 0;
     viewinfo.subresourceRange.levelCount = 1;
     viewinfo.subresourceRange.baseArrayLayer = 0;
-    viewinfo.subresourceRange.layerCount = 1;
+    viewinfo.subresourceRange.layerCount = type == TEXTURE_TYPE_CUBE ? 6 : 1;
 
     VkResult result = vkCreateImageView(context->device.logical, &viewinfo, context->allocator, &image->view);
     if(!vulkan_result_is_success(result))
@@ -97,8 +121,8 @@ void vulkan_image_view_create(
 }
 
 void vulkan_image_transition_layout(
-    vulkan_context* context, vulkan_command_buffer* command_buffer, vulkan_image* image, VkFormat* format, 
-    VkImageLayout old_layout, VkImageLayout new_layout
+    vulkan_context* context, texture_type type, vulkan_command_buffer* command_buffer, vulkan_image* image,
+    VkFormat* format, VkImageLayout old_layout, VkImageLayout new_layout
 )
 {
     VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
@@ -111,7 +135,7 @@ void vulkan_image_transition_layout(
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.layerCount = type == TEXTURE_TYPE_CUBE ? 6 : 1;
 
     VkPipelineStageFlags src_stage;
     VkPipelineStageFlags dst_stage;
@@ -152,7 +176,7 @@ void vulkan_image_transition_layout(
 }
 
 void vulkan_image_copy_from_buffer(
-    vulkan_context* context, vulkan_image* image, VkBuffer buffer, vulkan_command_buffer* command_buffer
+    vulkan_context* context, texture_type type, vulkan_image* image, VkBuffer buffer, vulkan_command_buffer* command_buffer
 )
 {
     // Регион копирования.
@@ -165,7 +189,7 @@ void vulkan_image_copy_from_buffer(
     region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     region.imageSubresource.mipLevel = 0;
     region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
+    region.imageSubresource.layerCount = type == TEXTURE_TYPE_CUBE ? 6 : 1;
 
     region.imageExtent.width = image->width;
     region.imageExtent.height = image->height;

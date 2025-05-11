@@ -25,6 +25,7 @@ typedef struct texture_system_state {
 
 // TODO: Умную выгрузку текстур. Например вугружать те материалы которые можно выгружать
 //       и только при достижении определенной границы памяти для загрузки новых.
+//       Или сделать несколько режимов работы выгрузки текстур.
 typedef struct texture_reference {
     // Индекс текстуры в массиве текстур.
     u32 id;
@@ -55,9 +56,10 @@ bool texture_system_status_valid(const char* func_name)
 
 bool default_textures_create();
 void default_textures_destroy();
-bool texture_load(const char* texture_name, texture* t);
+bool texture_load(const char* texture_name, texture* t); // TODO: Объединить ...load и ...load_cube в одну!
+bool texture_load_cube(const char* base_name, const char texture_names[6][TEXTURE_NAME_MAX_LENGTH], texture* t);
 void texture_destroy(texture* t);
-bool texture_process_acquire(const char* name, bool auto_release, bool skip_load, u32* out_texture_id);
+bool texture_process_acquire(const char* name, texture_type type, bool auto_release, bool skip_load, u32* out_texture_id);
 bool texture_process_release(const char* name);
 
 bool texture_system_initialize(u64* memory_requirement, void* memory, texture_system_config* config)
@@ -183,7 +185,45 @@ texture* texture_system_acquire(const char* name, bool auto_release)
     }
 
     u32 id = INVALID_ID;
-    if(!texture_process_acquire(name, auto_release, false, &id))
+    if(!texture_process_acquire(name, TEXTURE_TYPE_2D, auto_release, false, &id))
+    {
+        kerror("Function '%s': Failed to obtain a new texture id.", __FUNCTION__);
+        return null;
+    }
+
+    return &state_ptr->textures[id];
+}
+
+texture* texture_system_acquire_cube(const char* name, bool auto_release)
+{
+    if(!texture_system_status_valid(__FUNCTION__)) return null;
+
+    if(string_equali(name, DEFAULT_TEXTURE_NAME))
+    {
+        kwarng("Function '%s' called for default texture. Call 'texture_system_get_default_texture'!", __FUNCTION__);
+        return &state_ptr->default_texture;
+    }
+    
+    if(string_equali(name, DEFAULT_DIFFUSE_TEXTURE_NAME))
+    {
+        kwarng("Function '%s' called for default diffuse texture. Call 'texture_system_get_default_diffuse_texture'!", __FUNCTION__);
+        return &state_ptr->default_diffuse_texture;
+    }
+
+    if(string_equali(name, DEFAULT_SPECULAR_TEXTURE_NAME))
+    {
+        kwarng("Function '%s' called for default specular texture. Call 'texture_system_get_default_speculat_texture'!", __FUNCTION__);
+        return &state_ptr->default_specular_texture;
+    }
+
+    if(string_equali(name, DEFAULT_NORMAL_TEXTURE_NAME))
+    {
+        kwarng("Function '%s' called for default normal texture. Call 'texture_system_get_default_normal_texture'!", __FUNCTION__);
+        return &state_ptr->default_normal_texture;
+    }
+
+    u32 id = INVALID_ID;
+    if(!texture_process_acquire(name, TEXTURE_TYPE_CUBE, auto_release, false, &id))
     {
         kerror("Function '%s': Failed to obtain a new texture id.", __FUNCTION__);
         return null;
@@ -197,7 +237,7 @@ texture* texture_system_acquire_writable(const char* name, u32 width, u32 height
     if(!texture_system_status_valid(__FUNCTION__)) return null;
 
     u32 id = INVALID_ID;
-    if(!texture_process_acquire(name, false, true, &id))
+    if(!texture_process_acquire(name, TEXTURE_TYPE_2D, false, true, &id))
     {
         kerror("Function '%s': Failed to obtain a new texture id.", __FUNCTION__);
         return null;
@@ -208,6 +248,7 @@ texture* texture_system_acquire_writable(const char* name, u32 width, u32 height
     t->width = width;
     t->height = height;
     t->channel_count = channel_count;
+    t->type = TEXTURE_TYPE_2D;
     t->generation = INVALID_ID;
     t->flags |= has_transparency ? TEXTURE_FLAG_HAS_TRANSPARENCY : 0;
     t->flags |= TEXTURE_FLAG_IS_WRITABLE;
@@ -247,7 +288,7 @@ texture* texture_system_wrap_internal(
 
     if(register_texture)
     {
-        if(!texture_process_acquire(name, false, true, &id))
+        if(!texture_process_acquire(name, TEXTURE_TYPE_2D, false, true, &id))
         {
             kwarng("Function '%s': Failed to obtain a new texture id.", __FUNCTION__);
             return null;
@@ -268,6 +309,7 @@ texture* texture_system_wrap_internal(
     t->width = width;
     t->height = height;
     t->channel_count = channel_count;
+    t->type = TEXTURE_TYPE_2D;
     t->generation = INVALID_ID;
     t->flags |= has_transparency ? TEXTURE_FLAG_HAS_TRANSPARENCY : 0;
     t->flags |= is_writable ? TEXTURE_FLAG_IS_WRITABLE : 0;
@@ -382,6 +424,7 @@ bool default_textures_create()
     state_ptr->default_texture.height = tex_dimension;
     state_ptr->default_texture.channel_count = bpp;
     state_ptr->default_texture.generation = INVALID_ID;
+    state_ptr->default_texture.type = TEXTURE_TYPE_2D;
     state_ptr->default_texture.flags = 0;
     renderer_texture_create(&state_ptr->default_texture, pixels);
     state_ptr->default_texture.generation = INVALID_ID;
@@ -394,6 +437,7 @@ bool default_textures_create()
     state_ptr->default_diffuse_texture.height = 16;
     state_ptr->default_diffuse_texture.channel_count = 4;
     state_ptr->default_diffuse_texture.generation = INVALID_ID;
+    state_ptr->default_diffuse_texture.type = TEXTURE_TYPE_2D;
     state_ptr->default_diffuse_texture.flags = 0;
     renderer_texture_create(&state_ptr->default_diffuse_texture, pixels);
     state_ptr->default_diffuse_texture.generation = INVALID_ID;
@@ -406,6 +450,7 @@ bool default_textures_create()
     state_ptr->default_specular_texture.height = 16;
     state_ptr->default_specular_texture.channel_count = 4;
     state_ptr->default_specular_texture.generation = INVALID_ID;
+    state_ptr->default_specular_texture.type = TEXTURE_TYPE_2D;
     state_ptr->default_specular_texture.flags = 0;
     renderer_texture_create(&state_ptr->default_specular_texture, spec_pixels);
     state_ptr->default_specular_texture.generation = INVALID_ID;
@@ -424,6 +469,7 @@ bool default_textures_create()
     state_ptr->default_normal_texture.height = 16;
     state_ptr->default_normal_texture.channel_count = 4;
     state_ptr->default_normal_texture.generation = INVALID_ID;
+    state_ptr->default_normal_texture.type = TEXTURE_TYPE_2D;
     state_ptr->default_normal_texture.flags = 0;
     renderer_texture_create(&state_ptr->default_normal_texture, norm_pixels);
     state_ptr->default_normal_texture.generation = INVALID_ID;
@@ -440,10 +486,65 @@ void default_textures_destroy()
     texture_destroy(&state_ptr->default_normal_texture);
 }
 
+bool texture_load_cube(const char* name, const char texture_names[6][TEXTURE_NAME_MAX_LENGTH], texture* t)
+{
+    u8* pixels = null;
+    u64 image_size = 0;
+
+    for(u8 i = 0; i < 6; ++i)
+    {
+        image_resouce_params params;
+        params.flip_y = false;
+
+        resource img_resource;
+        if(!resource_system_load(texture_names[i], RESOURCE_TYPE_IMAGE, &params, &img_resource))
+        {
+            kerror("Function '%s': Failed to load image resource for texture '%s'.", __FUNCTION__, texture_names[i]);
+            return false;
+        }
+
+        image_resouce_data* resource_data = img_resource.data;
+        if(!pixels)
+        {
+            t->width = resource_data->width;
+            t->height = resource_data->height;
+            t->channel_count = resource_data->channel_count;
+            t->flags = 0;
+            t->generation = 0;
+
+            image_size = t->width * t->height * t->channel_count;
+            pixels = kallocate_tc(u8, image_size * 6, MEMORY_TAG_ARRAY);
+            string_ncopy(t->name, name, TEXTURE_NAME_MAX_LENGTH);
+        }
+        else if(t->width != resource_data->width || t->height != resource_data->height || t->channel_count != resource_data->channel_count)
+        {
+            kerror("Function '%s': All textures must be the same resolution and bit depth.", __FUNCTION__);
+            kfree_tc(pixels, u8, image_size * 6, MEMORY_TAG_ARRAY);
+            pixels = null;
+            return false;
+        }
+
+        kcopy_tc(pixels + image_size * i, resource_data->pixels, u8, image_size);
+
+        resource_system_unload(&img_resource);
+    }
+
+    // Загрузка текстуры в видеопамять (текстура с несколькими слоями).
+    renderer_texture_create(t, pixels);
+
+    kfree_tc(pixels, u8, image_size * 6, MEMORY_TAG_ARRAY);
+    pixels = null;
+
+    return true;
+}
+
 bool texture_load(const char* texture_name, texture* t)
 {
+    image_resouce_params params;
+    params.flip_y = true;
+
     resource img_resource;
-    if(!resource_system_load(texture_name, RESOURCE_TYPE_IMAGE, &img_resource))
+    if(!resource_system_load(texture_name, RESOURCE_TYPE_IMAGE, &params, &img_resource))
     {
         kerror("Function '%s': Failed to load image resource for texture '%s'.", __FUNCTION__, texture_name);
         return false;
@@ -493,7 +594,7 @@ void texture_destroy(texture* t)
     t->generation = INVALID_ID;
 }
 
-bool texture_process_acquire(const char* name, bool auto_release, bool skip_load, u32* out_texture_id)
+bool texture_process_acquire(const char* name, texture_type type, bool auto_release, bool skip_load, u32* out_texture_id)
 {
     texture_reference ref;
 
@@ -520,17 +621,41 @@ bool texture_process_acquire(const char* name, bool auto_release, bool skip_load
                 "Function '%s': Texture system cannot hold anymore textures. Adjust configuration to allow more.",
                 __FUNCTION__
             );
+            *out_texture_id = INVALID_ID;
             return false;
         }
 
         texture* t = &state_ptr->textures[ref.id];
         t->id = ref.id;
+        t->type = type;
 
-        // Создание текстуры.
-        if(!skip_load && !texture_load(name, t))
+        if(type == TEXTURE_TYPE_CUBE)
         {
-            kerror("Function '%s': Failed to load texture '%s'.", __FUNCTION__, name);
-            return false;
+            // +X, -X, +Y, -Y, +Z, -Z.
+            char texture_names[6][TEXTURE_NAME_MAX_LENGTH];
+            string_format(texture_names[0], "%s_r", name); // Правая текстура.
+            string_format(texture_names[1], "%s_l", name); // Левая текстура.
+            string_format(texture_names[2], "%s_u", name); // Верхняя текстура.
+            string_format(texture_names[3], "%s_d", name); // Нижняя текстура.
+            string_format(texture_names[4], "%s_f", name); // Передняя текстура (Фронтовая).
+            string_format(texture_names[5], "%s_b", name); // Задняя текстура (Тыловая).
+
+            if(!skip_load && !texture_load_cube(name, texture_names, t))
+            {
+                kerror("Function '%s': Failed to load texture cube '%s'.", __FUNCTION__, name);
+                *out_texture_id = INVALID_ID;
+                return false;
+            }
+        }
+        else
+        {
+            // Создание текстуры.
+            if(!skip_load && !texture_load(name, t))
+            {
+                kerror("Function '%s': Failed to load texture '%s'.", __FUNCTION__, name);
+                *out_texture_id = INVALID_ID;
+                return false;
+            }
         }
 
         ktrace(
@@ -553,6 +678,7 @@ bool texture_process_acquire(const char* name, bool auto_release, bool skip_load
     if(!hashtable_set(state_ptr->texture_references_table, name, &ref, true))
     {
         kerror("Function '%s' Failed to update texture reference.", __FUNCTION__);
+        *out_texture_id = INVALID_ID;
         return false;
     }
 

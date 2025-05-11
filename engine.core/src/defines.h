@@ -30,8 +30,18 @@ typedef float f32;
 // @brief 64-битное число с плавающей точкой.
 typedef double f64;
 
-// @brief Логическое значение.
-typedef _Bool bool;
+#if defined __x86_64__ && !defined __ILP32__
+    // @brief Беззнаковое целое, для хранения адреса памяти.
+    typedef u64 ptr;
+#else
+    // @brief Беззнаковое целое, для хранения адреса памяти.
+    typedef u32 ptr;
+#endif
+
+#ifndef __cplusplus
+    // @brief Логическое значение.
+    typedef _Bool bool;
+#endif
 
 // @brief Диапазон памяти.
 typedef struct range {
@@ -70,8 +80,10 @@ STATIC_ASSERT(sizeof(f32) == 4, "Assertion 'sizeof(f32) == 4' failed.");
 STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 
 // Определение логических констант.
-#define false 0
-#define true  1
+#ifndef __cplusplus
+    #define false 0
+    #define true  1
+#endif
 
 #define U64_MAX 18446744073709551615UL
 #define U32_MAX 4294967295U
@@ -97,7 +109,17 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define INVALID_ID_U8  U8_MAX
 
 // Определение нулевого указателя.
-#define null  ((void*)0)
+#ifndef __cplusplus
+    #define null    ((void*)0)
+    #define nullptr ((void*)0)
+#endif
+
+// Модификатор экспорта функий С для С++.
+#if defined(__cplusplus)
+    #define EXTERN_C extern "C"
+#else
+    #define EXTERN_C
+#endif
 
 // Проверка поддерживаемых платформ и их требований (На уровне makefile и библиотеки).
 #if KPLATFORM_LINUX_FLAG
@@ -226,6 +248,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     @brief Получает значение поля структуры заданного типом и указателем.
     @param type Тип структуры.
     @param ptr Указатель на структуру.
+    @param member Поле структуры значение которого нужно получить.
     @return Возращает значение поля структуры.
 */
 #define MEMBER_GET_VALUE(type, ptr, member) (((type*)(ptr))->member)
@@ -233,10 +256,10 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 /*
     @brief Получает смещение поля структуры заданного типом и указателем.
     @param type Тип структуры.
-    @param ptr Указатель на структуру.
+    @param member Поле структуры смещение которого нужно получить.
     @return Возращает смещение поля структуры.
 */
-#define MEMBER_GET_OFFSET(type, ptr, member) (((type*)null)->member)
+#define MEMBER_GET_OFFSET(type, member) ((ptr)(&((type*)null)->member))
 
 /*
 */

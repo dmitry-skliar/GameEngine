@@ -63,10 +63,6 @@ typedef struct shader {
     u32 id;
     // @brief Имя шейдера.
     char* name;
-    // @brief Указывает на использование uniform переменых уровня экземпляра.
-    bool use_instances;
-    // @brief Указывает на использование uniform переменых локального уровня.
-    bool use_locals;
     // @brief Запрашиваемое выравнивание в байтах объекта uniform-буфера.
     u64 required_ubo_alignment;
     // @brief Размер глобального объекта uniform-буфера.

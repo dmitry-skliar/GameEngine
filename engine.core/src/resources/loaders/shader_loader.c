@@ -11,7 +11,7 @@
 #include "systems/resource_system.h"
 #include "platform/file.h"
 
-bool shader_loader_load(resource_loader* self, const char* name, resource* out_resource)
+bool shader_loader_load(resource_loader* self, const char* name, void* params, resource* out_resource)
 {
     if(!resource_loader_load_valid(self, name, out_resource, __FUNCTION__))
     {
@@ -40,8 +40,7 @@ bool shader_loader_load(resource_loader* self, const char* name, resource* out_r
     resource_data->stages = darray_create(shader_stage);
     resource_data->stage_names = darray_create(char*);
     resource_data->stage_filenames = darray_create(char*);
-    resource_data->use_instances = false;
-    resource_data->use_local = false;
+    resource_data->cull_mode = FACE_CULL_MODE_BACK;
     resource_data->renderpass_name = null;
     resource_data->name = null;
 
@@ -156,13 +155,20 @@ bool shader_loader_load(resource_loader* self, const char* name, resource* out_r
                 );
             }
         }
-        else if(string_equali(trimmed_var_name, "use_instance"))
+        else if(string_equali(trimmed_var_name, "cull_mode"))
         {
-            string_to_bool(trimmed_value, &resource_data->use_instances);
-        }
-        else if(string_equali(trimmed_var_name, "use_local"))
-        {
-            string_to_bool(trimmed_value, &resource_data->use_local);
+            if(string_equali(trimmed_value, "front"))
+            {
+                resource_data->cull_mode = FACE_CULL_MODE_FRONT;
+            }
+            else if(string_equali(trimmed_value, "front_and_back"))
+            {
+                resource_data->cull_mode = FACE_CULL_MODE_FRONT_AND_BACK;
+            }
+            else if(string_equali(trimmed_value, "none"))
+            {
+                resource_data->cull_mode = FACE_CULL_MODE_NONE;
+            }
         }
         else if(string_equali(trimmed_var_name, "attribute"))
         {

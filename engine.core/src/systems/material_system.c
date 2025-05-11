@@ -212,7 +212,7 @@ material* material_system_acquire(const char* name)
 
     // Загрузка конфигурации материала.
     resource material_resource;
-    if(!resource_system_load(name, RESOURCE_TYPE_MATERIAL, &material_resource))
+    if(!resource_system_load(name, RESOURCE_TYPE_MATERIAL, null, &material_resource))
     {
         kerror("Function '%s': Failed to load material resource '%s'.", __FUNCTION__, name);
         return null;

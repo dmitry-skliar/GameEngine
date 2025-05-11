@@ -162,8 +162,6 @@ bool shader_system_create(const shader_config* config)
     shader->id = id;
     shader->state = SHADER_STATE_NOT_CREATED;
     shader->name = string_duplicate(config->name);
-    shader->use_instances = config->use_instances;
-    shader->use_locals = config->use_local;
     shader->bound_instance_id = INVALID_ID;
 
     // Создание динамаических массивов.
@@ -198,7 +196,7 @@ bool shader_system_create(const shader_config* config)
         return false;
     }
 
-    if(!renderer_shader_create(shader, pass, config->stage_count, (const char**)config->stage_filenames, config->stages))
+    if(!renderer_shader_create(shader, config, pass, config->stage_count, (const char**)config->stage_filenames, config->stages))
     {
         kerror("Function '%s': Failed to create shader '%s'", __FUNCTION__, shader->name);
         return false;
@@ -534,12 +532,6 @@ bool add_attribute(shader* shader, shader_attribute_config* config)
 
 bool add_sampler(shader* shader, shader_uniform_config* config)
 {
-    if(config->scope == SHADER_SCOPE_INSTANCE && !shader->use_instances)
-    {
-        kerror("Function '%s': Cannot add an instance sampler for a shader that does not use instances.", __FUNCTION__);
-        return false;
-    }
-
     // Сэмплеры нельзя использовать для констант push.
     if(config->scope == SHADER_SCOPE_LOCAL)
     {
@@ -664,15 +656,6 @@ bool uniform_add(shader* shader, const char* uniform_name, u32 size, shader_unif
     }
     else
     {
-        if(entry.scope == SHADER_SCOPE_LOCAL && !shader->use_locals)
-        {
-            kerror(
-                "Function '%s': Cannot add a locally-scoped uniform for a shader that does not support locals.",
-                __FUNCTION__
-            );
-            return false;
-        }
-
         entry.set_index = INVALID_ID_U8;
         range r = get_aligned_range(shader->push_constant_size, size, 4);
         entry.offset = r.offset;

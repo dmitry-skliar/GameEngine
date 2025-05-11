@@ -13,7 +13,7 @@ typedef struct resource_loader {
     resource_type type;
     const char* custom_type;
     const char* type_path;
-    bool (*load)(struct resource_loader* self, const char* name, resource* out_resource);
+    bool (*load)(struct resource_loader* self, const char* name, void* params, resource* out_resource);
     void (*unload)(struct resource_loader* self, resource* resource);
 } resource_loader;
 
@@ -32,11 +32,11 @@ KAPI bool resource_system_register_loader(resource_loader loader);
 /*
     NOTE: Не создает ресурс! Подается готовая структура!
 */
-KAPI bool resource_system_load(const char* name, resource_type type, resource* out_resource);
+KAPI bool resource_system_load(const char* name, resource_type type, void* params, resource* out_resource);
 
 /*
 */
-KAPI bool resource_system_load_custom(const char* name, const char* custom_type, resource* out_resource);
+KAPI bool resource_system_load_custom(const char* name, const char* custom_type, void* params, resource* out_resource);
 
 /*
 */

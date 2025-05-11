@@ -120,13 +120,14 @@ void renderer_geometry_draw(geometry_render_data* data);
 /*
     @brief Создает внутренние ресурсы шейдера, используя предоставленные параметры.
     @param s Указатель на шейдер для создания внутренних ресурсов.
+    @param config Указатель на конфигурацию шейдера.
     @param pass Указатель проходчика визуализатора, который будет связан с шейдером.
     @param stage_count Количество стадий шейдера.
     @param stage_filenames Массив имен файлов стадий шейдера, которые будут загружены. Должен соотвествовать массиву стадий шейдера.
     @param stages Массив стадий шейдера (вершина, фрагмент и т.д), указывающий какие стадии будут использоваться в этом шейдере.
     @return True операция завершена успешно, false в случае ошибок.
 */
-bool renderer_shader_create(shader* s, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages);
+bool renderer_shader_create(shader* s, const shader_config* config, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages);
 
 /*
     @brief Уничтожает предоставленный шейдер и освобождает ресурсы им удерживаемые.

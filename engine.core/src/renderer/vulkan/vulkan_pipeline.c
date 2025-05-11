@@ -6,11 +6,30 @@
 #include "logger.h"
 #include "memory/memory.h"
 
+KINLINE VkCullModeFlagBits cull_mode_translate(face_cull_mode mode)
+{
+    switch(mode)
+    {
+        case FACE_CULL_MODE_NONE:
+            return VK_CULL_MODE_NONE;
+
+        case FACE_CULL_MODE_FRONT:
+            return VK_CULL_MODE_FRONT_BIT;
+
+        case FACE_CULL_MODE_FRONT_AND_BACK:
+            return VK_CULL_MODE_FRONT_AND_BACK;
+
+        default:
+        case FACE_CULL_MODE_BACK:
+            return VK_CULL_MODE_BACK_BIT;
+    }
+}
+
 bool vulkan_graphics_pipeline_create(
     vulkan_context* context, vulkan_renderpass* renderpass, u32 stride, u32 attribute_count, 
     VkVertexInputAttributeDescription* attributes, u32 descriptor_set_layout_count, 
-    VkDescriptorSetLayout* descriptor_set_layouts, u32 stage_count,
-    VkPipelineShaderStageCreateInfo* stages, VkViewport viewport, VkRect2D scissor, bool is_wireframe,
+    VkDescriptorSetLayout* descriptor_set_layouts, u32 stage_count, VkPipelineShaderStageCreateInfo* stages,
+    VkViewport viewport, VkRect2D scissor, face_cull_mode cull_mode, bool is_wireframe,
     bool depth_test_enabled, u32 push_constant_range_count, range* push_constant_ranges, vulkan_pipeline* out_pipeline
 )
 {
@@ -27,7 +46,7 @@ bool vulkan_graphics_pipeline_create(
     rasterizer_info.rasterizerDiscardEnable = VK_FALSE; // Выполнять растерезацию и передавать во фреймбуфер.
     rasterizer_info.polygonMode = is_wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL; // Ребра полигона отрезки или полигон полностью заполняет фрагмент.
     rasterizer_info.lineWidth = 1.0f;
-    rasterizer_info.cullMode = VK_CULL_MODE_BACK_BIT; // Тип отсечения.
+    rasterizer_info.cullMode = cull_mode_translate(cull_mode); // Тип отсечения.
     rasterizer_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Порядок обхода вершин против часовой стрелки.
     rasterizer_info.depthBiasEnable = VK_FALSE; // Для изменения значения глубины.
     rasterizer_info.depthBiasConstantFactor = 0.0f;

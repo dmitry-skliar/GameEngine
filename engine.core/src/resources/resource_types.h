@@ -25,12 +25,30 @@ typedef struct resource {
     void* data;
 } resource;
 
+// @brief Данные необработанного изображения.
 typedef struct image_resouce_data {
+    // @brief Количество каналов изображения.
     u8 channel_count;
+    // @brief Ширина изображения.
     u32 width;
+    // @brief Высота изображения.
     u32 height;
+    // @brief Необработанные данные изображения.
     u8* pixels;
 } image_resouce_data;
+
+typedef struct image_resouce_params {
+    // @brief Указывает, следует ли переворачивать изображение по оси Y при загрузке.
+    bool flip_y;
+} image_resouce_params;
+
+// @brief Режим отрбаковки граней во время визуализации.
+typedef enum face_cull_mode {
+    FACE_CULL_MODE_NONE,
+    FACE_CULL_MODE_FRONT,
+    FACE_CULL_MODE_BACK,
+    FACE_CULL_MODE_FRONT_AND_BACK
+} face_cull_mode;
 
 typedef enum texture_flag_bits {
     // @brief Указывает, что текстура имеет прозрачность.
@@ -41,10 +59,19 @@ typedef enum texture_flag_bits {
     TEXTURE_FLAG_IS_WRAPPED       = 0x04
 } texture_flag_bits;
 
+typedef enum texture_type {
+    // @brief Обычная текстура 2d.
+    TEXTURE_TYPE_2D,
+    // @brief Кубическая текстураы
+    TEXTURE_TYPE_CUBE,
+} texture_type;
+
 // @brief Данные текстуры.
 typedef struct texture {
     // @brief Уникальный идентификатор текстуры.
     u32 id;
+    // @brief Тип текстуры.
+    texture_type type;
     // @brief Ширина текстуры в пикселях.
     u32 width;
     // @brief Высота текстуры в пикселях.
@@ -66,6 +93,7 @@ typedef enum texture_use {
     TEXTURE_USE_MAP_DIFFUSE,
     TEXTURE_USE_MAP_SPECULAR,
     TEXTURE_USE_MAP_NORMAL,
+    TEXTURE_USE_MAP_CUBEMAP
 } texture_use;
 
 typedef enum texture_filter {
@@ -143,6 +171,14 @@ typedef struct mesh {
     // @brief Массив преобразований над сеткой геометрий из локальных в мировые.
     transform transform;
 } mesh;
+
+typedef struct skybox {
+    texture_map cubemap;
+    geometry* g;
+    u32 instance_id;
+    // @brief Указывает кадр с которым произошла синхронизация.
+    u64 render_frame_number;
+} skybox;
 
 // @brief Стадия шейдера на конвейере (можно комбинировать).
 typedef enum shader_stage {
@@ -222,10 +258,8 @@ typedef struct shader_uniform_config {
 typedef struct shader_config {
     // @brief Имя создаваемого шейдера.
     char* name;
-    // @brief Указывает использует ли шейдер uniform-буферы уровня экземпляра.
-    bool use_instances;
-    // @brief Указывает использует ли шейдер uniform-буферы локльного уровня.
-    bool use_local;
+    // @brief Режим отбраковки граней (по умолчанию BACK).
+    face_cull_mode cull_mode;
     // @brief Количество используемых атрибутов в шейдере.
     u8 attribute_count;
     // @brief Массив атрибутов (используется darray).

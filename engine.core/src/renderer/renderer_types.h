@@ -5,8 +5,9 @@
 #include <math/math_types.h>
 #include <resources/resource_types.h>
 
-#define BUILTIN_SHADER_NAME_WORLD "Builtin.MaterialShader"
-#define BUILTIN_SHADER_NAME_UI    "Builtin.UIShader"
+#define BUILTIN_SHADER_NAME_WORLD  "Builtin.MaterialShader"
+#define BUILTIN_SHADER_NAME_UI     "Builtin.UIShader"
+#define BUILTIN_SHADER_NAME_SKYBOX "Builtin.SkyboxShader"
 
 // TODO: Подчистить заголовочные файлы данным способом!
 struct shader;
@@ -270,13 +271,14 @@ typedef struct renderer_backend {
     /*
         @brief Создает внутренние ресурсы шейдера, используя предоставленные параметры.
         @param s Указатель на шейдер для создания внутренних ресурсов.
+        @param config Указатель на конфигурацию шейдера.
         @param pass Указатель на проходчик визуализатора, который будет связан с шейдером.
         @param stage_count Количество стадий шейдера.
         @param stage_filenames Массив имен файлов стадий шейдера, которые будут загружены. Должен соотвествовать массиву стадий шейдера.
         @param stages Массив стадий шейдера (вершина, фрагмент и т.д), указывающий какие стадии будут использоваться в этом шейдере.
         @return True операция завершена успешно, false в случае ошибок.
     */
-    bool (*shader_create)(struct shader* s, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages);
+    bool (*shader_create)(struct shader* s, const shader_config* config, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages);
 
     /*
         @brief Уничтожает предоставленный шейдер и освобождает ресурсы им удерживаемые.
@@ -393,8 +395,9 @@ typedef struct renderer_backend {
 
 // @brief Известные типы визуализации.
 typedef enum render_view_known_type {
-    RENDERER_VIEW_KNOWN_TYPE_WORLD = 0x01,
-    RENDERER_VIEW_KNOWN_TYPE_UI    = 0x02
+    RENDERER_VIEW_KNOWN_TYPE_WORLD  = 0x01,
+    RENDERER_VIEW_KNOWN_TYPE_UI     = 0x02,
+    RENDERER_VIEW_KNOWN_TYPE_SKYBOX = 0x03
 } render_view_known_type;
 
 typedef enum render_view_matrix_source {
@@ -460,6 +463,10 @@ typedef struct mesh_packet_data {
     u32 mesh_count;
     mesh* meshes;
 } mesh_packet_data;
+
+typedef struct skybox_packet_data {
+    skybox* sb;
+} skybox_packet_data;
 
 typedef struct render_packet {
     f32 delta_time;

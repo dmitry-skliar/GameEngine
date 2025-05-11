@@ -85,6 +85,9 @@ void vulkan_swapchain_present(
     presentinfo.pImageIndices = &present_image_index;
     presentinfo.pResults = null;
 
+    vkDeviceWaitIdle(context->device.logical); // FIX: Проблема с синхронизацией семафоров (возникла после обновления версии vulkan).
+                                               // TODO: Использование vkDeviceWaitIdle плохое решение, следует решить проблему с симафорами.
+
     VkResult result = vkQueuePresentKHR(context->device.present_queue.handle, &presentinfo);
     if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
@@ -304,7 +307,7 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
     // Создание буфера глубины (изображение и его представление).
     vulkan_image* image = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE); // TODO: Можно оптимизировать, что бы не создавать часто!
     vulkan_image_create(
-        context, VK_IMAGE_TYPE_2D, swapchain_extent.width, swapchain_extent.height, context->device.depth_format,
+        context, TEXTURE_TYPE_2D, swapchain_extent.width, swapchain_extent.height, context->device.depth_format,
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         true, VK_IMAGE_ASPECT_DEPTH_BIT, image
     );

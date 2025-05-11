@@ -11,7 +11,7 @@
 #include "math/kmath.h"
 #include "platform/file.h"
 
-bool material_loader_load(resource_loader* self, const char* name, resource* out_resource)
+bool material_loader_load(resource_loader* self, const char* name, void* params, resource* out_resource)
 {
     char* format_str = "%s/%s/%s%s";
     char full_file_path[512];

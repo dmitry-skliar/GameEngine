@@ -11,6 +11,7 @@
 // TODO: Временно - сделать фабрику и регистрировать вместо этого.
 #include "renderer/views/render_view_world.h"
 #include "renderer/views/render_view_ui.h"
+#include "renderer/views/render_view_skybox.h"
 
 typedef struct render_view_system_state {
     render_view_system_config config;
@@ -183,6 +184,14 @@ bool render_view_system_create(render_view_config* config)
             view->on_create       = render_view_ui_on_create;
             view->on_destroy      = render_view_ui_on_destroy;
             view->on_resize       = render_view_ui_on_resize;
+        }
+        else if(config->type == RENDERER_VIEW_KNOWN_TYPE_SKYBOX)
+        {
+            view->on_build_packet = render_view_skybox_on_build_packet;
+            view->on_render       = render_view_skybox_on_render;
+            view->on_create       = render_view_skybox_on_create;
+            view->on_destroy      = render_view_skybox_on_destroy;
+            view->on_resize       = render_view_skybox_on_resize;
         }
 
         // Создание view и обновление записи в таблице.

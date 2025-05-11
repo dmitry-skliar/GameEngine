@@ -13,6 +13,7 @@
 
 typedef struct renderer_system_state {
     renderer_backend backend;
+    u32 skybox_shader_id;
     u32 world_shader_id;
     u32 ui_shader_id;
     // Количество целей визуализации (количество кадров цепочки обмена).
@@ -20,6 +21,7 @@ typedef struct renderer_system_state {
     u32 framebuffer_width;
     u32 framebuffer_height;
     // TODO: Сделаит настраиваемыми через показы.
+    renderpass* skybox_renderpass;
     renderpass* world_renderpass;
     renderpass* ui_renderpass;
     // Указывает что сейчас происходит изменение размера окна.
@@ -41,11 +43,19 @@ void regenerate_render_targets()
     for(u8 i = 0; i < state_ptr->window_render_target_count; ++i)
     {
         // TODO: При инициализации еще нечего уничтожать, а потому возникают ошибки, но они пока допустимые.
+        state_ptr->backend.render_target_destroy(&state_ptr->skybox_renderpass->targets[i], false);
         state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], false);
         state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], false);
 
         texture* window_target_texture = state_ptr->backend.window_attachment_get(i);
         texture* depth_target_texture = state_ptr->backend.depth_attachment_get();
+
+        // Skybox.
+        texture* skybox_attachments[1] = { window_target_texture };
+        state_ptr->backend.render_target_create(
+            1, skybox_attachments, state_ptr->skybox_renderpass, state_ptr->framebuffer_width, state_ptr->framebuffer_height,
+            &state_ptr->skybox_renderpass->targets[i]
+        );
 
         // World.
         texture* attachments[2] = { window_target_texture, depth_target_texture };
@@ -111,28 +121,36 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
 
     // Проходчики визуализатора.
     // TODO: Чтение из конфигурации.
+    const char* skybox_renderpass_name = "Builtin.RenderpassSkybox";
     const char* world_renderpass_name = "Builtin.RenderpassWorld";
     const char* ui_renderpass_name = "Builtin.RenderpassUI";
-    renderpass_config pass_config[2];
-    // World.
-    pass_config[0].name = world_renderpass_name;
+    renderpass_config pass_config[3];
+    // Skybox.
+    pass_config[0].name = skybox_renderpass_name;
     pass_config[0].prev_name = null;
-    pass_config[0].next_name = ui_renderpass_name;
+    pass_config[0].next_name = world_renderpass_name;
     pass_config[0].render_area = (vec4){{ 0, 0, state_ptr->framebuffer_width, state_ptr->framebuffer_height }};
     pass_config[0].clear_color = (vec4){{ 0.0f, 0.0f, 0.2f, 1.0f }};
-    pass_config[0].clear_flags = RENDERPASS_CLEAR_COLOR_BUFFER_FLAG | RENDERPASS_CLEAR_DEPTH_BUFFER_FLAG | RENDERPASS_CLEAR_STENCIL_BUFFER_FLAG;
-    // UI.
-    pass_config[1].name = ui_renderpass_name;
-    pass_config[1].prev_name = world_renderpass_name;
-    pass_config[1].next_name = null;
+    pass_config[0].clear_flags = RENDERPASS_CLEAR_COLOR_BUFFER_FLAG;
+    // World.
+    pass_config[1].name = world_renderpass_name;
+    pass_config[1].prev_name = skybox_renderpass_name;
+    pass_config[1].next_name = ui_renderpass_name;
     pass_config[1].render_area = (vec4){{ 0, 0, state_ptr->framebuffer_width, state_ptr->framebuffer_height }};
     pass_config[1].clear_color = (vec4){{ 0.0f, 0.0f, 0.2f, 1.0f }};
-    pass_config[1].clear_flags = RENDERPASS_CLEAR_NONE_FLAG;
+    pass_config[1].clear_flags = RENDERPASS_CLEAR_DEPTH_BUFFER_FLAG | RENDERPASS_CLEAR_STENCIL_BUFFER_FLAG;
+    // UI.
+    pass_config[2].name = ui_renderpass_name;
+    pass_config[2].prev_name = world_renderpass_name;
+    pass_config[2].next_name = null;
+    pass_config[2].render_area = (vec4){{ 0, 0, state_ptr->framebuffer_width, state_ptr->framebuffer_height }};
+    pass_config[2].clear_color = (vec4){{ 0.0f, 0.0f, 0.2f, 1.0f }};
+    pass_config[2].clear_flags = RENDERPASS_CLEAR_NONE_FLAG;
 
     renderer_backend_config renderer_config = {};
     renderer_config.application_name = window_state->title;
     renderer_config.on_rendertarget_refresh_required = regenerate_render_targets;
-    renderer_config.renderpass_count = 2;
+    renderer_config.renderpass_count = 3;
     renderer_config.pass_configs = pass_config;
 
     CRITICAL_INIT(
@@ -141,6 +159,11 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     );
 
     // TODO: Изменить способ получения.
+    state_ptr->skybox_renderpass = state_ptr->backend.renderpass_get(skybox_renderpass_name);
+    state_ptr->skybox_renderpass->render_target_count = state_ptr->window_render_target_count;
+    state_ptr->skybox_renderpass->targets = kallocate_tc(render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
+    kzero_tc(state_ptr->skybox_renderpass->targets, render_target, state_ptr->window_render_target_count);
+
     state_ptr->world_renderpass = state_ptr->backend.renderpass_get(world_renderpass_name);
     state_ptr->world_renderpass->render_target_count = state_ptr->window_render_target_count;
     state_ptr->world_renderpass->targets = kallocate_tc(render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
@@ -154,6 +177,10 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     regenerate_render_targets();
 
     // Обновление разрешения проходов визуализаторов.
+    state_ptr->skybox_renderpass->render_area.x = state_ptr->skybox_renderpass->render_area.y = 0;
+    state_ptr->skybox_renderpass->render_area.width = state_ptr->framebuffer_width;
+    state_ptr->skybox_renderpass->render_area.height = state_ptr->framebuffer_height;
+
     state_ptr->world_renderpass->render_area.x = state_ptr->world_renderpass->render_area.y = 0;
     state_ptr->world_renderpass->render_area.width = state_ptr->framebuffer_width;
     state_ptr->world_renderpass->render_area.height = state_ptr->framebuffer_height;
@@ -166,22 +193,36 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     resource config_resource;
     shader_config* sconfig = null;
 
+    // Шейдер: Skybox.
     CRITICAL_INIT(
-        resource_system_load(BUILTIN_SHADER_NAME_WORLD, RESOURCE_TYPE_SHADER, &config_resource),
-        "Failed to load builtin material shader."
+        resource_system_load(BUILTIN_SHADER_NAME_SKYBOX, RESOURCE_TYPE_SHADER, null, &config_resource),
+        "Failed to load builtin skybox shader."
+    );
+
+    sconfig = config_resource.data;
+    CRITICAL_INIT(shader_system_create(sconfig), "Failed to create builtin skybox shader.");
+
+    resource_system_unload(&config_resource);
+    state_ptr->skybox_shader_id = shader_system_get_id(BUILTIN_SHADER_NAME_SKYBOX);
+
+    // Шейдер: World.
+    CRITICAL_INIT(
+        resource_system_load(BUILTIN_SHADER_NAME_WORLD, RESOURCE_TYPE_SHADER, null, &config_resource),
+        "Failed to load builtin world shader."
     );
 
     sconfig = config_resource.data;
     CRITICAL_INIT(
         shader_system_create(sconfig),
-        "Failed to create builtin material shader."
+        "Failed to create builtin world shader."
     );
 
     resource_system_unload(&config_resource);
     state_ptr->world_shader_id = shader_system_get_id(BUILTIN_SHADER_NAME_WORLD);
 
+    // Шейдер: UI.
     CRITICAL_INIT(
-        resource_system_load(BUILTIN_SHADER_NAME_UI, RESOURCE_TYPE_SHADER, &config_resource),
+        resource_system_load(BUILTIN_SHADER_NAME_UI, RESOURCE_TYPE_SHADER, null, &config_resource),
         "Failed to load builtin UI shader."
     );
 
@@ -206,9 +247,11 @@ void renderer_system_shutdown()
     // Уничтожение целей визуализации.
     for(u8 i = 0; i < state_ptr->window_render_target_count; ++i)
     {
+        state_ptr->backend.render_target_destroy(&state_ptr->skybox_renderpass->targets[i], true);
         state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], true);
         state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], true);
     }
+    kfree_tc(state_ptr->skybox_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
     kfree_tc(state_ptr->world_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
     kfree_tc(state_ptr->ui_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
 
@@ -319,9 +362,9 @@ void renderer_geometry_draw(geometry_render_data* data)
     state_ptr->backend.geometry_draw(data);
 }
 
-bool renderer_shader_create(shader* s, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages)
+bool renderer_shader_create(shader* s, const shader_config* config, renderpass* pass, u8 stage_count, const char** stage_filenames, shader_stage* stages)
 {
-    return state_ptr->backend.shader_create(s, pass, stage_count, stage_filenames, stages);
+    return state_ptr->backend.shader_create(s, config, pass, stage_count, stage_filenames, stages);
 }
 
 void renderer_shader_destroy(shader* s)

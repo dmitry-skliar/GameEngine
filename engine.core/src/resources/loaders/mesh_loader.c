@@ -29,7 +29,7 @@ bool load_obj_file(file* obj_file, const char* name, geometry_config** out_geome
 bool load_ksm_file(file* ksm_file, geometry_config** out_geometries_darray);
 bool write_ksm_file(const char* name, geometry_config* geometries);
 
-bool mesh_loader_load(struct resource_loader* self, const char* name, resource* out_resource)
+bool mesh_loader_load(struct resource_loader* self, const char* name, void* params, resource* out_resource)
 {
     if(!resource_loader_load_valid(self, name, out_resource, __FUNCTION__))
     {
