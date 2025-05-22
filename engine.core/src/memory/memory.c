@@ -5,6 +5,7 @@
 // Внутренние подключения.
 #include "logger.h"
 #include "kstring.h"
+#include "kmutex.h"
 #include "platform/memory.h"
 
 // TODO: Сделать отдельную подсистему для профилировки памяти, таймкода, стека вызовов и др. И вынести это туда!
@@ -22,6 +23,8 @@ typedef struct memory_system_state {
     memory_stats stats;
     // Счетчик вызова функции выделения памяти.
     u64 allocation_count;
+    // Мьютекс распределителя памяти.
+    mutex allocation_mutex;
     // Указатель на динамический распределитель памяти.
     dynamic_allocator* allocator;
 } memory_system_state;
@@ -86,6 +89,14 @@ bool memory_system_initialize(memory_system_config* config)
         return false;
     }
 
+    // Создание мьютекса для распределителя памяти.
+    if(!kmutex_create(&state_ptr->allocation_mutex))
+    {
+        kfatal("Function '%s' unable to create allocation mutex!", __FUNCTION__);
+        return false;
+    }
+
+    // TODO: Написать функцию которая выводит сокращенную запись байт.
     ktrace("Function '%s': Memory system has %lu B of memory to use.", __FUNCTION__, memory_requirement);
     return true;
 }
@@ -106,6 +117,11 @@ void memory_system_shutdown()
         kwarng(meminfo);
         string_free(meminfo);
     }
+
+    // Уничтожение мьютекса.
+    // NOTE: только после memory_system_usage_str, т.к. она использует string_duplicate,
+    //       которая в свою очередь использует этот распределитель памяти.
+    kmutex_destroy(&state_ptr->allocation_mutex);
 
     // Уничтожение динамического распределителя памяти.
     dynamic_allocator_destroy(state_ptr->allocator);
@@ -136,6 +152,12 @@ void* memory_allocate(u64 size, memory_tag tag)
         kwarng("Memory allocation with MEMORY_TAG_UNKNOWN. Re-class this allocation.");
     }
 
+    if(!kmutex_lock(&state_ptr->allocation_mutex))
+    {
+        kfatal("Function '%s' unable obtaining mutex lock during allocation.", __FUNCTION__);
+        return null;
+    }
+
     void* block = null;
 
     // Выбирается способ выделения памяти в соответствии с состоянием системы памяти.
@@ -155,6 +177,8 @@ void* memory_allocate(u64 size, memory_tag tag)
         kwarng("Function '%s' called before the memory system is initialized.", __FUNCTION__);
         block = platform_memory_allocate(size);
     }
+
+    kmutex_unlock(&state_ptr->allocation_mutex);
 
     if(!block)
     {
@@ -184,6 +208,12 @@ void memory_free(void* block, u64 size, memory_tag tag)
         return;
     }
 
+    if(!kmutex_lock(&state_ptr->allocation_mutex))
+    {
+        kfatal("Function '%s' unable obtaining mutex lock for free operation.", __FUNCTION__);
+        return;
+    }
+
     // NOTE: Если по какой-либо причине не получится освободиться память
     //       динамическим распределителем памяти, то вероятно она была
     //       выделена до инициализации системы памяти. Тогда условие
@@ -197,6 +227,8 @@ void memory_free(void* block, u64 size, memory_tag tag)
     {
         platform_memory_free(block);
     }
+
+    kmutex_unlock(&state_ptr->allocation_mutex);
 }
 
 const char* memory_system_usage_str()

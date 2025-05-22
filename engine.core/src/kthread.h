@@ -1,27 +1,7 @@
 #pragma once
 
 #include <defines.h>
-
-// @brief Представляет поток процессора.
-typedef struct thread {
-    u64 thread_id;
-    void* internal_data;
-} thread;
-
-// @brief Указатель на функицю потока, которая будет вызвана при запуске потока.
-typedef u32 (*PFN_thread_entry)(void*);
-
-/*
-    @brief Приостанавливает работку потока в котором вызывается на заданное время.
-    @param time Время в миллисекундах на которое необходимо приостановить поток.
-*/
-KAPI void platform_thread_sleep(u64 time_ms);
-
-/*
-    @brief Возвращает количество логических ядер процессора.
-    @return Количество логических ядер процессора.
-*/
-KAPI i32 platform_thread_get_processor_count();
+#include <platform/thread.h>
 
 /*
     @brief Создает новый поток и немедленно запускает его на выполнение.
@@ -31,35 +11,40 @@ KAPI i32 platform_thread_get_processor_count();
     @param out_thread Указатель на память для сохранения созданного потока (только если auto_detach = false).
     @return True поток успешно создан, false если не удалось.
 */
-KAPI bool platform_thread_create(PFN_thread_entry* func, void* params, bool auto_detach, thread* out_thread);
+#define kthread_create(func, params, auto_detach, out_thread) platform_thread_create(func, params, auto_detach, out_thread)
 
 /*
     @brief Уничтожает указанный поток (принудительное завершение).
     @param thread Поток который будет уничтожен.
 */
-KAPI void platform_thread_destroy(thread* thread);
+#define kthread_destroy(thread) platform_thread_destroy(thread)
 
 /*
     @brief Отсоединяет поток, автоматически освобождая ресурсы по завершении работы.
     @param thread Поток который необходимо отсоеденить.
 */
-KAPI void platform_thread_detach(thread* thread);
+#define kthread_detach(thread) platform_thread_detach(thread)
 
 /*
     @brief Пытается завершить работу потока, и освободить ресурсы, если это возможно.
     @param thread Поток который необходимо попытаться завершить.
 */
-KAPI void platform_thread_cancel(thread* thread);
+#define kthread_cancel(thread) platform_thread_cancel(thread)
 
 /*
     @brief Проверяет активность потока в данный момент.
     @param thread Поток который необходимо проверить.
-    @return True если поток выполняется, false в противном случае.
 */
-KAPI bool platform_thread_is_active(thread* thread);
+#define kthread_is_active(thread) platform_thread_is_active(thread)
+
+/*
+    @brief Приостанавливает предоставленный поток на заданное время, должен вызываться из потока, требующего приостановки.
+    @param thread Поток который необходимо приостановить.
+    @param time_ms Время в миллисекундах на которое необходимо приостановить поток.
+*/
+#define kthread_sleep(thread, time_ms) platform_thread_sleep(time_ms)
 
 /*
     @brief Получает идентификатор потока.
-    @return Идентификатор потока.
 */
-KAPI u64 platform_thread_get_id();
+#define kthread_get_id() platform_thread_get_id()

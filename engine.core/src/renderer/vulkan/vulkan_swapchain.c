@@ -242,8 +242,8 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
         for(u32 i = 0; i < swapchain->image_count; ++i)
         {
             void* internal_data = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE);
-            char tex_name[38] = "__internal_vulkan_swapchain_image_0__";
-            tex_name[34] = '0' + (char)i;
+            char tex_name[27] = "__default_frame_texture_0__";
+            tex_name[24] = '0' + (char)i;
 
             swapchain->render_textures[i] = texture_system_wrap_internal(
                 tex_name, swapchain_extent.width, swapchain_extent.height, 4, false, true, false, internal_data

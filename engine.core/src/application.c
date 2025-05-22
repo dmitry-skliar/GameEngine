@@ -220,6 +220,23 @@ bool application_create(game* game_inst)
     }
     kinfor("Shader system started.");
 
+    // NOTE: Минус один, т.к. главный поток уже запущен и используется.
+    i32 thread_count = platform_thread_get_processor_count() - 1;
+    if(thread_count < 1)
+    {
+        kfatal("Error: Platform reported processor count (minus one for main thread) as %i. Need at least one additional thread for the job system.", thread_count);
+        return false;
+    }
+
+    const i32 max_thread_count = 15; // TODO: Сделать настраиваемым.
+    if(thread_count > max_thread_count)
+    {
+        ktrace("Available threads on the system is %i, but will be capped at %i.", thread_count, max_thread_count);
+        thread_count = max_thread_count;
+    }
+
+    kinfor("Available threads for job system: %i", thread_count);
+
     // Система визуализатора графики.
     renderer_system_initialize(&app_state->renderer_system_memory_requirement, null, null);
     app_state->renderer_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->renderer_system_memory_requirement);
@@ -510,7 +527,7 @@ bool application_run()
 
     f64 running_time     = 0;
     u16 frame_count      = 0;
-    f64 frame_limit_time = 1.0f / 60; // TODO: сделать настраиваемым!
+    f64 frame_limit_time = 1.0f / 120; // TODO: сделать настраиваемым!
 
     // TODO: Временный тестовый код: начало.
     render_view_packet views[3];
@@ -628,6 +645,7 @@ bool application_run()
                 frame_count++;
             }
 
+            // TODO: Перенести перед отрисовкой кадра
             // NOTE: Устройства ввода последнее что должно обновляться в кадре!
             input_system_update(delta);
 

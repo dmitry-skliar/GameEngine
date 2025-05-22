@@ -125,7 +125,9 @@ bool renderer_system_initialize(u64* memory_requirement, void* memory, window* w
     const char* world_renderpass_name = "Builtin.RenderpassWorld";
     const char* ui_renderpass_name = "Builtin.RenderpassUI";
     renderpass_config pass_config[3];
-    // Skybox.
+
+    // Skybox: стандартный рендер (хорошо работает с прозрачными объектами).
+    // TODO: Заменить на Deferred shading способ.
     pass_config[0].name = skybox_renderpass_name;
     pass_config[0].prev_name = null;
     pass_config[0].next_name = world_renderpass_name;

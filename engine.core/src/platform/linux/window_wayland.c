@@ -187,7 +187,7 @@
         }
 
         platform_window_state* state = (void*)((u8*)instance + sizeof(struct window));
-        return wl_display_roundtrip(state->wdisplay) != INVALID_ID;
+        return wl_display_dispatch_pending(state->wdisplay) != INVALID_ID;
     }
 
     void platform_window_set_on_close_handler(window* instance, PFN_window_handler_close handler)
@@ -579,6 +579,9 @@
     {
     }
 
+    // TODO: Рефактор, по принципу platform_window_enumerate_vulkan_extensions() куда будет передаваться при первом вызове
+    //       переменая для сохранения количества расщирений, а во второй раз эта переменная + заранее выделенный массив!
+    //       + в GLFW класно реализован интерфейс настройки движка!
     void platform_window_get_vulkan_extentions(window* instance, const char*** names)
     {
         if(!instance)
