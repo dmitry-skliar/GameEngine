@@ -2,7 +2,7 @@
 
 #include <defines.h>
 
-// @brief Представляет поток процессора.
+// @brief Представляет контекст потока процесса.
 typedef struct thread {
     u64 thread_id;
     void* internal_data;
@@ -31,7 +31,7 @@ KAPI i32 platform_thread_get_processor_count();
     @param out_thread Указатель на память для сохранения созданного потока (только если auto_detach = false).
     @return True поток успешно создан, false если не удалось.
 */
-KAPI bool platform_thread_create(PFN_thread_entry* func, void* params, bool auto_detach, thread* out_thread);
+KAPI bool platform_thread_create(PFN_thread_entry func, void* params, bool auto_detach, thread* out_thread);
 
 /*
     @brief Уничтожает указанный поток (принудительное завершение).

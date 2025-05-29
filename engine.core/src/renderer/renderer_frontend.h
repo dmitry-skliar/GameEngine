@@ -264,3 +264,9 @@ bool renderer_renderpass_end(renderpass* pass);
     @return Указатель на проходчик визуализатора, null если не удалось найти.
 */
 renderpass* renderer_renderpass_get(const char* name);
+
+/*
+    @brief Указывает поддерживает ли визуализатор многопоточную работу.
+    @return True многопоточность поддерживается, false не поддерживается.
+*/
+bool renderer_is_multithreaded();

@@ -242,7 +242,7 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
     @param offset Смещение в байтах.
     @return Новое значение указателя.
 */
-#define POINTER_GET_OFFSET(ptr, offset) (void*)((u8*)ptr + offset)
+#define POINTER_GET_OFFSET(ptr, offset) (void*)((u8*)ptr + (offset))
 
 /*
     @brief Получает значение поля структуры заданного типом и указателем.

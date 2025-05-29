@@ -391,6 +391,11 @@ typedef struct renderer_backend {
     */
     u8 (*window_attachment_index_get)();
 
+    /*
+        @brief Указывает поддерживает ли визуализатор многопоточную работу.
+    */
+    bool (*is_multithreaded)();
+
 } renderer_backend;
 
 // @brief Известные типы визуализации.

@@ -62,7 +62,7 @@ KAPI void camera_rotation_euler_set(camera* c, vec3 rotation);
     @param c Указатель на камеру для получения матрицы вида.
     @return Матрица вида камеры.
 */
-mat4 camera_view_get(camera* c);
+KAPI mat4 camera_view_get(camera* c);
 
 /*
     @brief Перемешает камеру вперед на заданное значение.

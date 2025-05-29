@@ -46,3 +46,5 @@ void vulkan_renderer_render_target_destroy(render_target* target, bool free_inte
 texture* vulkan_renderer_window_attachment_get(u8 index);
 texture* vulkan_renderer_depth_attachment_get();
 u8 vulkan_renderer_window_attachment_index_get();
+
+bool vulkan_renderer_is_multithreaded();

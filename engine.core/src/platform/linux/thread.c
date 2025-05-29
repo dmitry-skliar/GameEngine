@@ -29,7 +29,7 @@
         return processors_available;
     }
 
-    bool platform_thread_create(PFN_thread_entry* func, void* params, bool auto_detach, thread* out_thread)
+    bool platform_thread_create(PFN_thread_entry func, void* params, bool auto_detach, thread* out_thread)
     {
         if(!func)
         {

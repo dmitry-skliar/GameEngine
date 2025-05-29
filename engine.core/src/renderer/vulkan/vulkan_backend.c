@@ -425,6 +425,9 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
     }
     ktrace("Vulkan instance created.");
 
+    // TODO: Мультипоточность.
+    context->multithreading_enabled = false; // заглушка.
+
     // Очистка используемой памяти.
     darray_destroy(required_extentions);
     darray_destroy(avaulable_extensions);
@@ -442,8 +445,8 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
                             // | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
     msginfo.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
                             | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-                            | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
-                            | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+                            | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                            // | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
     msginfo.pfnUserCallback = vulkan_debug_message_handler;
 
     PFN_vkCreateDebugUtilsMessengerEXT messenger_create =
@@ -2227,4 +2230,9 @@ texture* vulkan_renderer_depth_attachment_get()
 u8 vulkan_renderer_window_attachment_index_get()
 {
     return (u8)context->image_index;
+}
+
+bool vulkan_renderer_is_multithreaded()
+{
+    return context->multithreading_enabled;
 }

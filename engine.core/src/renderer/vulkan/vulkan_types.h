@@ -334,6 +334,9 @@ typedef struct vulkan_context {
     vulkan_swapchain swapchain;
     bool recreating_swapchain;
 
+    // @brief Указывает на поддержку многопоточности устройством. 
+    bool multithreading_enabled;
+
     // @brief Графические коммандные буферы (используется darray).
     vulkan_command_buffer* graphics_command_buffers;
     // @brief Готовое для визуализации (используется darray).

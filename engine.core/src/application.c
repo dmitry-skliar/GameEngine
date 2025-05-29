@@ -19,6 +19,7 @@
 #include "systems/shader_system.h"
 #include "systems/camera_system.h"
 #include "systems/render_view_system.h"
+#include "systems/job_system.h"
 
 // TODO: Временный тестовый код: начало.
 #include "kstring.h"
@@ -38,6 +39,9 @@ typedef struct application_state {
 
     u64 event_system_memory_requirement;
     void* event_system_state;
+
+    u64 job_system_memory_requirement;
+    void* job_system_state;
 
     u64 input_system_memory_requirement;
     void* input_system_state;
@@ -220,6 +224,18 @@ bool application_create(game* game_inst)
     }
     kinfor("Shader system started.");
 
+    // Система визуализатора графики.
+    renderer_system_initialize(&app_state->renderer_system_memory_requirement, null, null);
+    app_state->renderer_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->renderer_system_memory_requirement);
+    if(!renderer_system_initialize(&app_state->renderer_system_memory_requirement, app_state->renderer_system_state, app_state->platform_window_state))
+    {
+        kerror("Failed to initialize renderer system. Aborted!");
+        return false;
+    }
+    kinfor("Renderer system started.");
+
+    bool renderer_multithreaded = renderer_is_multithreaded();
+
     // NOTE: Минус один, т.к. главный поток уже запущен и используется.
     i32 thread_count = platform_thread_get_processor_count() - 1;
     if(thread_count < 1)
@@ -234,18 +250,42 @@ bool application_create(game* game_inst)
         ktrace("Available threads on the system is %i, but will be capped at %i.", thread_count, max_thread_count);
         thread_count = max_thread_count;
     }
-
     kinfor("Available threads for job system: %i", thread_count);
 
-    // Система визуализатора графики.
-    renderer_system_initialize(&app_state->renderer_system_memory_requirement, null, null);
-    app_state->renderer_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->renderer_system_memory_requirement);
-    if(!renderer_system_initialize(&app_state->renderer_system_memory_requirement, app_state->renderer_system_state, app_state->platform_window_state))
+    // Назначение всем очередям, выполнять обычные задания.
+    u32 job_thread_types[15];
+    for(u32 i = 0; i < 15; ++i)
     {
-        kerror("Failed to initialize renderer system. Aborted!");
+        job_thread_types[i] = JOB_TYPE_GENERAL;
+    }
+
+    if(max_thread_count == 1 || !renderer_multithreaded)
+    {
+        job_thread_types[0] |= (JOB_TYPE_GPU_RESOURCE | JOB_TYPE_RESOURCE_LOAD);
+    }
+    else if(max_thread_count == 2)
+    {
+        job_thread_types[0] |= JOB_TYPE_GPU_RESOURCE;
+        job_thread_types[1] |= JOB_TYPE_RESOURCE_LOAD;
+    }
+    else
+    {
+        job_thread_types[0] |= JOB_TYPE_GPU_RESOURCE;
+        job_thread_types[1] |= JOB_TYPE_RESOURCE_LOAD;
+    }
+
+    job_system_config job_sys_config;
+    job_sys_config.max_job_thread_count = thread_count;
+    job_sys_config.type_masks = job_thread_types;
+
+    job_system_initialize(&app_state->job_system_memory_requirement, null, &job_sys_config);
+    app_state->job_system_state = linear_allocator_allocate(app_state->systems_allocator, app_state->job_system_memory_requirement);
+    if(!job_system_initialize(&app_state->job_system_memory_requirement, app_state->job_system_state, &job_sys_config))
+    {
+        kerror("Failed to initialize job system. Aborted!");
         return false;
     }
-    kinfor("Renderer system started.");
+    kinfor("Job system started.");
 
     // Система упавления текстурами.
     texture_system_config texture_sys_config;
@@ -507,6 +547,7 @@ bool application_create(game* game_inst)
 
     // Принудительное обновление размера окна.
     game_inst->on_resize(game_inst, game_inst->window_width, game_inst->window_height);
+    renderer_on_resize(game_inst->window_width, game_inst->window_height);
 
     return true;
 }
@@ -547,7 +588,10 @@ bool application_run()
             f64 current_time = app_state->clock.elapsed;
             f64 delta = current_time - app_state->last_time;
             f64 frame_start_time = platform_time_absolute();
-            
+
+            // Update the job system.
+            job_system_update();
+
             if(!app_state->game_inst->update(app_state->game_inst, (f32)delta))
             {
                 kerror("Game update failed, shutting down!");
@@ -703,6 +747,9 @@ bool application_run()
 
     resource_system_shutdown();
     kinfor("Resource system stopped.");
+
+    job_system_shutdown();
+    kinfor("Job system stopped.");
 
     platform_window_destroy(app_state->platform_window_state);
     kinfor("Platform window destroyed.");

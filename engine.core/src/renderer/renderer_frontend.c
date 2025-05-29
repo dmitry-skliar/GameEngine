@@ -5,6 +5,7 @@
 
 // Внутренние подключения.
 #include "logger.h"
+#include "debug/assert.h"
 #include "memory/memory.h"
 #include "resources/resource_types.h"
 #include "systems/resource_system.h"
@@ -452,4 +453,10 @@ bool renderer_renderpass_end(renderpass* pass)
 renderpass* renderer_renderpass_get(const char* name)
 {
     return state_ptr->backend.renderpass_get(name);
+}
+
+bool renderer_is_multithreaded()
+{
+    if(!system_status_valid(__FUNCTION__)) kdebug_break();
+    return state_ptr->backend.is_multithreaded();
 }

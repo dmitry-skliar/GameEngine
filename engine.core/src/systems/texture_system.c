@@ -658,17 +658,17 @@ bool texture_process_acquire(const char* name, texture_type type, bool auto_rele
             }
         }
 
-        ktrace(
-            "Function '%s': Texture '%s' does not exist. Created, and reference count is now %i.",
-            __FUNCTION__, name, ref.reference_count
-        );
+        // ktrace(
+        //     "Function '%s': Texture '%s' does not exist. Created, and reference count is now %i.",
+        //     __FUNCTION__, name, ref.reference_count
+        // );
     }
     else
     {
-        ktrace(
-            "Function '%s': Texture '%s' already exists, and reference count increased to %i.",
-            __FUNCTION__, name, ref.reference_count
-        );
+        // ktrace(
+        //     "Function '%s': Texture '%s' already exists, and reference count increased to %i.",
+        //     __FUNCTION__, name, ref.reference_count
+        // );
     }
 
     ref.reference_count++;

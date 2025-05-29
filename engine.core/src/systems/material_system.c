@@ -326,17 +326,17 @@ material* material_system_acquire_from_config(material_config* config)
             m->generation++;
         }
 
-        ktrace(
-            "Function '%s': Material '%s' does not exist. Created, and reference count is now %i.",
-            __FUNCTION__, config->name, ref.reference_count
-        );
+        // ktrace(
+        //     "Function '%s': Material '%s' does not exist. Created, and reference count is now %i.",
+        //     __FUNCTION__, config->name, ref.reference_count
+        // );
     }
     else
     {
-        ktrace(
-            "Function '%s': Material '%s' already exists, and reference count increased to %i.",
-            __FUNCTION__, config->name, ref.reference_count
-        );
+        // ktrace(
+        //     "Function '%s': Material '%s' already exists, and reference count increased to %i.",
+        //     __FUNCTION__, config->name, ref.reference_count
+        // );
     }
 
     // TODO: Для hastable сделать hashtable_update которая обновляет!
@@ -383,17 +383,17 @@ void material_system_release(const char* name)
         ref.index = INVALID_ID;
         ref.auto_release = false;
 
-        ktrace(
-            "Function '%s': Released material '%s', because reference count is 0 and auto release used.",
-            __FUNCTION__, name
-        );
+        // ktrace(
+        //     "Function '%s': Released material '%s', because reference count is 0 and auto release used.",
+        //     __FUNCTION__, name
+        // );
     }
     else
     {
-        ktrace(
-            "Function '%s': Released material '%s', now has a reference count is %u and auto release is %s.",
-            __FUNCTION__, name, ref.reference_count, ref.auto_release ? "used" : "unused"
-        );
+        // ktrace(
+        //     "Function '%s': Released material '%s', now has a reference count is %u and auto release is %s.",
+        //     __FUNCTION__, name, ref.reference_count, ref.auto_release ? "used" : "unused"
+        // );
     }
 
     // Обновление ссылки на материал.
