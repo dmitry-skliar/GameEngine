@@ -2125,5 +2125,5 @@ KINLINE bool vertex_3d_equal(vertex_3d lvert, vertex_3d rvert)
            vec3_compare(lvert.normal,   rvert.normal,   K_FLOAT_EPSILON) &&
            vec2_compare(lvert.texcoord, rvert.texcoord, K_FLOAT_EPSILON) &&
            vec4_compare(lvert.color,    rvert.color,    K_FLOAT_EPSILON) &&
-           vec4_compare(lvert.tangent,  rvert.tangent,  K_FLOAT_EPSILON);
+           vec3_compare(lvert.tangent,  rvert.tangent,  K_FLOAT_EPSILON);
 }

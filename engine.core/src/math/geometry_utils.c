@@ -60,10 +60,10 @@ void geometry_generate_tangent(u32 vertex_count, vertex_3d* vertices, u32 index_
         f32 sx = deltaU1, sy = deltaU2;
         f32 tx = deltaV1, ty = deltaV2;
         f32 handedness = ((tx * sy - ty * sx) < 0.0f) ? -1.0f : 1.0f;
-        vec4 t4 = vec4_from_vec3(tangent, handedness);
 
-        vertices[i0].tangent = t4;
-        vertices[i1].tangent = t4;
-        vertices[i2].tangent = t4;
+        vec3 t3 = vec3_mul_scalar(tangent, handedness);
+        vertices[i0].tangent = t3;
+        vertices[i1].tangent = t3;
+        vertices[i2].tangent = t3;
     }
 }

@@ -25,7 +25,7 @@ layout(location = 1) in struct dto {
     vec3 view_position;
     vec3 frag_position;
     vec4 color;
-    vec4 tangent;
+    vec3 tangent;
 } in_dto;
 
 // Общее освещение сцены.
@@ -79,9 +79,9 @@ vec4 calculate_point_light(point_light light, vec3 normal, vec3 frag_position, v
 void main()
 {
     vec3 normal = in_dto.normal;
-    vec3 tangent = in_dto.tangent.xyz;
+    vec3 tangent = in_dto.tangent;
     tangent = (tangent - dot(tangent, normal) * normal);
-    vec3 bitangent = cross(in_dto.normal, in_dto.tangent.xyz) * in_dto.tangent.w;
+    vec3 bitangent = cross(in_dto.normal, in_dto.tangent);
     TBN = mat3(tangent, bitangent, normal);
 
     // Обновление нормали для использования сэмплера для normal map.
