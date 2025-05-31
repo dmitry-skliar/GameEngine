@@ -1,6 +1,7 @@
 // Собственные подключения.
 #include "systems/texture_system.h"
 #include "systems/resource_system.h"
+#include "systems/job_system.h"
 
 // Внутренние подключения.
 #include "logger.h"
@@ -35,6 +36,14 @@ typedef struct texture_reference {
     bool auto_release;
 } texture_reference;
 
+typedef struct texture_load_params {
+    char* resource_name;
+    texture* out_texture;
+    // texture temp_texture;
+    u32 current_generation;
+    resource image_resource;
+} texture_load_params;
+
 static texture_system_state* state_ptr = null;
 
 bool texture_system_status_valid(const char* func_name)
@@ -59,6 +68,9 @@ void default_textures_destroy();
 bool texture_load(const char* texture_name, texture* t); // TODO: Объединить ...load и ...load_cube в одну!
 bool texture_load_cube(const char* base_name, const char texture_names[6][TEXTURE_NAME_MAX_LENGTH], texture* t);
 void texture_destroy(texture* t);
+
+// TODO: Отправтить старую текстуру сюда, и выдать новую. В момент пока текстура не загружена должно указывать на страрую,
+//       но после загрузки указывать на новую.
 bool texture_process_acquire(const char* name, texture_type type, bool auto_release, bool skip_load, u32* out_texture_id);
 bool texture_process_release(const char* name);
 
@@ -260,6 +272,12 @@ texture* texture_system_acquire_writable(const char* name, u32 width, u32 height
 void texture_system_release(const char* name)
 {
     if(!texture_system_status_valid(__FUNCTION__)) return;
+
+    if(!name || !string_length(name))
+    {
+        kerror("Function '%s': Failed to call function without texture name.", __FUNCTION__);
+        return;
+    }
 
     // Игнорирование удаления текстур по умолчанию.
     if(string_equali(name, DEFAULT_TEXTURE_NAME) || string_equali(name, DEFAULT_DIFFUSE_TEXTURE_NAME)
@@ -538,30 +556,23 @@ bool texture_load_cube(const char* name, const char texture_names[6][TEXTURE_NAM
     return true;
 }
 
-bool texture_load(const char* texture_name, texture* t)
+void texture_load_job_success(void* params)
 {
-    image_resouce_params params;
-    params.flip_y = true;
+    // TODO:
+    // NOTE: Контекст задачи для текстуры.
+    texture_load_params* texture_params = params;
+    image_resouce_data* resource_data = texture_params->image_resource.data;
 
-    resource img_resource;
-    if(!resource_system_load(texture_name, RESOURCE_TYPE_IMAGE, &params, &img_resource))
-    {
-        kerror("Function '%s': Failed to load image resource for texture '%s'.", __FUNCTION__, texture_name);
-        return false;
-    }
-
-    image_resouce_data* resource_data = img_resource.data;
-    t->width = resource_data->width;
-    t->height = resource_data->height;
-    t->channel_count = resource_data->channel_count;
+    // Копирование данных текстуры.
+    texture_params->out_texture->width = resource_data->width;
+    texture_params->out_texture->height = resource_data->height;
+    texture_params->out_texture->channel_count = resource_data->channel_count;
 
     // Проверка прозрачности.
-    u64 total_size = t->width * t->height * t->channel_count;
+    u64 total_size = resource_data->width * resource_data->height * resource_data->channel_count;
     bool has_transparency = false;
-    for(u64 i = 0; i < total_size; i += t->channel_count)
+    for(u64 i = 0; i < total_size; i += resource_data->channel_count)
     {
-        // RGB[A]
-        // NOTE: Не корректно, т.к. реальный размер канала может быть 3!
         u8 a = resource_data->pixels[i + 3];
         if(a < 255)
         {
@@ -570,16 +581,60 @@ bool texture_load(const char* texture_name, texture* t)
         }
     }
 
-    // Копирование имени текстуры.
-    string_ncopy(t->name, texture_name, TEXTURE_NAME_MAX_LENGTH);
-    t->generation = 0;
-    t->flags = has_transparency ? TEXTURE_FLAG_HAS_TRANSPARENCY : 0;
+    string_ncopy(texture_params->out_texture->name, texture_params->resource_name, TEXTURE_NAME_MAX_LENGTH);
+    texture_params->out_texture->generation = 0;
+    texture_params->out_texture->flags |= has_transparency ? TEXTURE_FLAG_HAS_TRANSPARENCY : 0;
 
-    // Загрузка в графический процессор.
-    renderer_texture_create(t, resource_data->pixels);
+    // Загрузка текстуры на GPU.
+    renderer_texture_create(texture_params->out_texture, resource_data->pixels);
 
-    // Очистка данных.
-    resource_system_unload(&img_resource);
+    // TODO: Только в этот момент разрешить смену текстуры!
+
+    // Очистка загруженных ресурсов.
+    resource_system_unload(&texture_params->image_resource);
+    if(texture_params->resource_name)
+    {
+        string_free(texture_params->resource_name);
+    }
+}
+
+void texture_load_job_fail(void* params)
+{
+    texture_load_params* texture_params = params;
+    kerror("Function '%s': Failed to load texture '%s'.", __FUNCTION__, texture_params->resource_name);
+
+    resource_system_unload(&texture_params->image_resource);
+    if(texture_params->resource_name)
+    {
+        string_free(texture_params->resource_name);
+    }
+}
+
+// TODO: Нет обновления имени в хэш таблице.
+bool texture_load_job(void* params, void* result_data)
+{
+    texture_load_params* load_params = params;
+    image_resouce_params resource_params;
+    resource_params.flip_y = true;
+
+    bool result = resource_system_load(load_params->resource_name, RESOURCE_TYPE_IMAGE, &resource_params, &load_params->image_resource);
+
+    // NOTE: Теже параметры используются и для результата.
+    kcopy_tc(result_data, load_params, struct texture_load_params, 1);
+
+    return result;
+}
+
+bool texture_load(const char* texture_name, texture* t)
+{
+    texture_load_params params;
+    params.resource_name = string_duplicate(texture_name); // TODO: Выглядит крайне плохо!
+    params.out_texture = t; // TODO: Проверить не теряется ли адрес текстуры?
+    params.image_resource = (resource){};
+    params.current_generation = t->generation;
+
+    job job = job_create_default(texture_load_job, texture_load_job_success, texture_load_job_fail, &params, sizeof(texture_load_params), sizeof(texture_load_params));
+    job_system_submit(&job);
     return true;
 }
 
@@ -708,17 +763,17 @@ bool texture_process_release(const char* name)
         ref.id = INVALID_ID;
         ref.auto_release = false;
 
-        ktrace(
-            "Function '%s': Released texture '%s', because reference count is 0 and auto release used.",
-            __FUNCTION__, name
-        );
+        // ktrace(
+        //     "Function '%s': Released texture '%s', because reference count is 0 and auto release used.",
+        //     __FUNCTION__, name
+        // );
     }
     else
     {
-        ktrace(
-            "Function '%s': Released texture '%s', now has a reference count is %i and auto release is %s.",
-            __FUNCTION__, name, ref.reference_count, ref.auto_release ? "used" : "unused"
-        );
+        // ktrace(
+        //     "Function '%s': Released texture '%s', now has a reference count is %i and auto release is %s.",
+        //     __FUNCTION__, name, ref.reference_count, ref.auto_release ? "used" : "unused"
+        // );
     }
 
     // TODO: hash таблица update function!

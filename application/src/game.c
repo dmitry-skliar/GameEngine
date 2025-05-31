@@ -53,6 +53,11 @@ bool game_update(game* inst, f32 delta_time)
         event_send(EVENT_CODE_DEBUG_0, inst, null);
     }
 
+    if(input_keyboard_key_press_detect('L'))
+    {
+        event_send(EVENT_CODE_DEBUG_1, inst, null);
+    }
+
     if(input_is_keyboard_key_down(KEY_LEFT))
     {
         camera_move_horizontal(state->world_camera, 1.0f * delta_time);

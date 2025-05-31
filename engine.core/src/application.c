@@ -26,6 +26,7 @@
 #include "math/kmath.h"
 #include "math/transform.h"
 #include "containers/darray.h"
+#include "resources/mesh.h"
 // TODO: Временный тестовый код: конец.
 
 typedef struct application_state {
@@ -76,10 +77,11 @@ typedef struct application_state {
     // TODO: Временный тестовый код: начало.
     skybox sb;
 
-    u32 world_mesh_count;
     mesh world_meshes[10];
+    mesh* car_mesh;
+    mesh* sponza_mesh;
+    bool models_loaded;
 
-    u32 ui_mesh_count;
     mesh ui_meshes[10];
     // TODO: Временный тестовый код: конец.
 
@@ -98,27 +100,53 @@ void application_on_close();
 // TODO: Временный тестовый код: начало.
 bool event_on_debug_event(event_code code, void* sender, void* listener_inst, event_context* context)
 {
-    const char* names[3] = { "cobblestone", "paving", "paving2" };
-
-    static i8 choice = 1;
-    const char* old_name = names[choice];
-
-    choice++;
-    choice %= 3;
-
-    geometry* g = app_state->world_meshes[0].geometries[0];
-
-    if(g)
+    if(code == EVENT_CODE_DEBUG_0)
     {
-        g->material = material_system_acquire(names[choice]);
+        const char* names[3] = { "cobblestone", "paving", "paving2" };
 
-        if(!g->material)
+        static i8 choice = 1;
+        const char* old_name = names[choice];
+
+        choice++;
+        choice %= 3;
+
+        geometry* g = app_state->world_meshes[0].geometries[0];
+
+        if(g)
         {
-            kwarng("Function '%s': Failed to load material %s. Using default! ", __FUNCTION__, names[choice]);
-            g->material = material_system_get_default();
-        }
+            // TODO: Текстура еще не загружена, а возникают артефакты (загрузка текстуры по умолчанию).
+            g->material = material_system_acquire(names[choice]);
 
-        material_system_release(old_name);
+            if(!g->material)
+            {
+                kwarng("Function '%s': Failed to load material %s. Using default! ", __FUNCTION__, names[choice]);
+                g->material = material_system_get_default();
+            }
+
+            material_system_release(old_name);
+        }
+    }
+    else if(code == EVENT_CODE_DEBUG_1)
+    {
+        if(!app_state->models_loaded)
+        {
+            kdebug("Loading models...");
+            app_state->models_loaded = true;
+
+            if(!mesh_load_from_resource("falcon", app_state->car_mesh))
+            {
+                kerror("Failed to load falcon mesh!");
+            }
+
+            if(!mesh_load_from_resource("sponza", app_state->sponza_mesh))
+            {
+                kerror("Failed to load sponza mesh!");
+            }
+        }
+    }
+    else
+    {
+        return false;
     }
 
     return true;
@@ -156,6 +184,9 @@ bool application_create(game* game_inst)
     kzero_tc(app_state, application_state, 1);
     app_state->game_inst = game_inst;
     game_inst->application_state = app_state;
+
+    // TODO: Временно для отладки!
+    app_state->models_loaded = false;
 
     // Создание системного линейного распределителя памяти.
     u64 systems_allocator_total_size = MEBIBYTES(64);
@@ -417,72 +448,37 @@ bool application_create(game* game_inst)
         kerror("Unable to acquire shader resources for skybox texture.");
         return false;
     }
+    geometry_system_config_dispose(&skybox_cube_config);
+
+    for(u32 i = 0; i < 10; ++i)
+    {
+        app_state->world_meshes[i].generation = INVALID_ID_U8;
+        app_state->ui_meshes[i].generation = INVALID_ID_U8;
+    }
 
     // World.
-    app_state->world_mesh_count = 0;
-    app_state->ui_mesh_count = 0;
+    u8 mesh_count = 0;
 
-    // Первый куб.
-    mesh* cube_mesh = &app_state->world_meshes[app_state->world_mesh_count];
+    // Тестовый куб.
+    mesh* cube_mesh = &app_state->world_meshes[mesh_count];
+    cube_mesh->generation = 0;
     cube_mesh->geometry_count = 1;
     cube_mesh->geometries = kallocate_tc(geometry*, cube_mesh->geometry_count, MEMORY_TAG_ARRAY);
     geometry_config g_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "test_cube", "test_material");
     cube_mesh->geometries[0] = geometry_system_acquire_from_config(&g_config, true);
     cube_mesh->transform = transform_create();
     geometry_system_config_dispose(&g_config);
-    app_state->world_mesh_count++;
+    mesh_count++;
 
     // Машина.
-    mesh* car_mesh = &app_state->world_meshes[app_state->world_mesh_count];
-    resource car_mesh_resource = {};
-    if(!resource_system_load("falcon", RESOURCE_TYPE_MESH, null, &car_mesh_resource))
-    {
-        kerror("Failed to load car test mesh.");
-    }
-    else
-    {
-        geometry_config* configs = car_mesh_resource.data;
-        car_mesh->geometry_count = car_mesh_resource.data_size; // Передается из mesh_loader.
-        car_mesh->geometries = kallocate_tc(geometry*, car_mesh->geometry_count, MEMORY_TAG_ARRAY);
+    app_state->car_mesh = &app_state->world_meshes[mesh_count];
+    app_state->car_mesh->transform = transform_from_position((vec3){{20.0f, 0.0f, 0.0f}});
+    mesh_count++;
 
-        for(u32 i = 0; i < car_mesh->geometry_count; ++i)
-        {
-            geometry_config* cfg = &configs[i];
-            car_mesh->geometries[i] = geometry_system_acquire_from_config(cfg, true);
-        }
-
-        car_mesh->transform = transform_from_position(vec3_create(20.0f, 0.0f, 0.0f));
-
-        // NOTE: Очистка конфигурации происходит в загрузчике.
-        resource_system_unload(&car_mesh_resource);
-        app_state->world_mesh_count++;
-    }
-
-    // Sponza.
-    mesh* sponza_mesh = &app_state->world_meshes[app_state->world_mesh_count];
-    resource sponza_mesh_resource = {};
-    if(!resource_system_load("sponza", RESOURCE_TYPE_MESH, null, &sponza_mesh_resource))
-    {
-        kerror("Failed to load sponza test mesh.");
-    }
-    else
-    {
-        geometry_config* configs = sponza_mesh_resource.data;
-        sponza_mesh->geometry_count = sponza_mesh_resource.data_size; // Передается из mesh_loader.
-        sponza_mesh->geometries = kallocate_tc(geometry*, sponza_mesh->geometry_count, MEMORY_TAG_ARRAY);
-
-        for(u32 i = 0; i < sponza_mesh->geometry_count; ++i)
-        {
-            geometry_config* cfg = &configs[i];
-            sponza_mesh->geometries[i] = geometry_system_acquire_from_config(cfg, true);
-        }
-
-        sponza_mesh->transform = transform_from_position(vec3_create(0.0f, 0.0f, 0.0f));
-
-        // NOTE: Очистка конфигурации происходит в загрузчике.
-        resource_system_unload(&sponza_mesh_resource);
-        app_state->world_mesh_count++;
-    }
+    // Спонза.
+    app_state->sponza_mesh = &app_state->world_meshes[mesh_count];
+    app_state->sponza_mesh->transform = transform_from_position((vec3){{0.0f, 0.0f, 0.0f}});
+    mesh_count++;
 
     // UI.
     geometry_config ui_config;
@@ -521,17 +517,15 @@ bool application_create(game* game_inst)
     u32 uiindices[6] = {2, 1, 0, 3, 0, 1};
     ui_config.indices = uiindices;
 
-    mesh* ui_mesh = &app_state->ui_meshes[app_state->ui_mesh_count];
+    mesh* ui_mesh = &app_state->ui_meshes[0];
+    ui_mesh->generation = 0;
     ui_mesh->geometry_count = 1;
     ui_mesh->geometries = kallocate_tc(geometry*, ui_mesh->geometry_count, MEMORY_TAG_ARRAY);
-    for(u32 i = 0; i < ui_mesh->geometry_count; ++i)
-    {
-        ui_mesh->geometries[i] = geometry_system_acquire_from_config(&ui_config, true);
-    }
+    ui_mesh->geometries[0] = geometry_system_acquire_from_config(&ui_config, true);
     ui_mesh->transform = transform_create();
-    app_state->ui_mesh_count++;
 
     event_register(EVENT_CODE_DEBUG_0, null, event_on_debug_event);
+    event_register(EVENT_CODE_DEBUG_1, null, event_on_debug_event);
     // TODO: Временный тестовый код: конец.
 
     // Выделение памяти под состояние игры.
@@ -608,11 +602,8 @@ bool application_run()
             }
 
             // TODO: Временный тестовый код: начало.
-            if(app_state->world_mesh_count > 0)
-            {
-                quat rotation = quat_from_axis_angle(vec3_up(), 0.5f * delta, false);
-                transform_rotate(&app_state->world_meshes[0].transform, rotation);
-            }
+            quat rotation = quat_from_axis_angle(vec3_up(), 0.5f * delta, false);
+            transform_rotate(&app_state->world_meshes[0].transform, rotation);
 
             // TODO: Реарганизовать.
             render_packet packet = {};
@@ -632,8 +623,22 @@ bool application_run()
 
             // World.
             mesh_packet_data world_mesh_data = {};
-            world_mesh_data.mesh_count = app_state->world_mesh_count;
-            world_mesh_data.meshes = app_state->world_meshes;
+
+            u32 mesh_count = 0;
+            mesh* meshes[10];
+            // TODO: Изменяемый массив.
+            for(u32 i = 0; i < 10; ++i)
+            {
+                if(app_state->world_meshes[i].generation != INVALID_ID_U8)
+                {
+                    meshes[mesh_count] = &app_state->world_meshes[i];
+                    mesh_count++;
+                }
+            }
+
+            world_mesh_data.mesh_count = mesh_count;
+            world_mesh_data.meshes = meshes;
+
             if(!render_view_system_build_packet(render_view_system_get("world_opaque"), &world_mesh_data, &packet.views[1]))
             {
                 kerror("Failed to build packet for view 'world_opaque'.");
@@ -642,8 +647,23 @@ bool application_run()
 
             // UI.
             mesh_packet_data ui_mesh_data = {};
-            ui_mesh_data.mesh_count = app_state->ui_mesh_count;
-            ui_mesh_data.meshes = app_state->ui_meshes;
+
+            u32 ui_mesh_count = 0;
+            mesh* ui_meshes[10];
+
+            // TODO: Изменяемый массив.
+            for(u32 i = 0; i < 10; ++i)
+            {
+                if(app_state->ui_meshes[i].generation != INVALID_ID_U8)
+                {
+                    ui_meshes[ui_mesh_count] = &app_state->ui_meshes[i];
+                    ui_mesh_count++;
+                }
+            }
+
+            ui_mesh_data.mesh_count = ui_mesh_count;
+            ui_mesh_data.meshes = ui_meshes;
+
             if(!render_view_system_build_packet(render_view_system_get("ui"), &ui_mesh_data, &packet.views[2]))
             {
                 kerror("Failed to build packet for view 'ui'.");
@@ -701,19 +721,27 @@ bool application_run()
     kinfor("Game stopped.");
 
     // TODO: Временный тестовый код: начало.
-    kdebug("World meshes count: %u", app_state->world_mesh_count);
-    for(u32 i = 0; i < app_state->world_mesh_count; ++i)
+    for(u32 i = 0; i < 10; ++i)
     {
-        kdebug("Mesh[%u]: get geometries is %u", i, app_state->world_meshes[i].geometry_count);
-        kfree_tc(app_state->world_meshes[i].geometries, geometry*, app_state->world_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+        if(app_state->world_meshes[i].generation != INVALID_ID_U8)
+        {
+            kdebug("World mesh[%u]: get geometries is %u", i, app_state->world_meshes[i].geometry_count);
+            kfree_tc(app_state->world_meshes[i].geometries, geometry*, app_state->world_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+        }
     }
 
-    kdebug("UI meshes count: %u", app_state->ui_mesh_count);
-    for(u32 i = 0; i < app_state->ui_mesh_count; ++i)
+    for(u32 i = 0; i < 10; ++i)
     {
-        kdebug("Mesh[%u]: get geometries is %u", i, app_state->ui_meshes[i].geometry_count);
-        kfree_tc(app_state->ui_meshes[i].geometries, geometry*, app_state->ui_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+        if(app_state->ui_meshes[i].generation != INVALID_ID_U8)
+        {
+            kdebug("UI mesh[%u]: get geometries is %u", i, app_state->ui_meshes[i].geometry_count);
+            kfree_tc(app_state->ui_meshes[i].geometries, geometry*, app_state->ui_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+        }
     }
+
+    // Удаление данных скайбокса.
+    shader* skybox_shader = shader_system_get(BUILTIN_SHADER_NAME_SKYBOX);
+    renderer_shader_release_instance_resources(skybox_shader, app_state->sb.instance_id);
     // TODO: Временный тестовый код: конецы.
 
     // NOTE: Что бы исключить нежелательные эффекты управление остановить первым!

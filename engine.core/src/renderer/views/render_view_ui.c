@@ -100,7 +100,7 @@ bool render_view_ui_on_build_packet(render_view* self, void* data, render_view_p
 
     for(u32 i = 0; i < mesh_data->mesh_count; ++i)
     {
-        mesh* m = &mesh_data->meshes[i];
+        mesh* m = mesh_data->meshes[i];
 
         for(u32 j = 0; j < m->geometry_count; ++j)
         {

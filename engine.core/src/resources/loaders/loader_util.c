@@ -14,7 +14,7 @@ void resource_unload(resource_loader* self, resource* resource, memory_tag tag, 
         return;
     }
     
-    if(string_length(resource->full_path) > 0)
+    if(resource->full_path)
     {
         string_free(resource->full_path);
     }

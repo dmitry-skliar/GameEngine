@@ -169,11 +169,13 @@ u32 job_thread_run(void* params)
             if(job.param_data)
             {
                 kfree(job.param_data, job.param_data_size, MEMORY_TAG_JOB);
+                job.param_data = null;
             }
 
             if(job.result_data)
             {
                 kfree(job.result_data, job.result_data_size, MEMORY_TAG_JOB);
+                job.result_data = null;
             }
 
             if(!kmutex_lock(&thread->job_mutex))
@@ -350,7 +352,7 @@ void process_queue(ring_queue* queue, mutex* queue_mutex)
                 }
 
                 thread->job = job;
-                ktrace("Assigning job to thread: %u", thread->index);
+                // ktrace("Assigning job to thread: %u", thread->index);
                 thread_fount = true;
             }
 
@@ -479,7 +481,7 @@ void job_system_submit(job* job)
         kerror("Failed to release lock on queue mutex!");
     }
 
-    ktrace("Job queued.");
+    // ktrace("Job queued.");
 }
 
 job job_create(

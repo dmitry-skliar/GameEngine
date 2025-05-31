@@ -125,7 +125,7 @@ bool ring_queue_dequeue(ring_queue* queue, void* out_value)
     }
 
     kcopy(out_value, POINTER_GET_OFFSET(queue->memory, queue->head * queue->stride), queue->stride);
-    queue->head = (queue->head + 1) & queue->capacity;
+    queue->head = (queue->head + 1) % queue->capacity;
     queue->length--;
 
     return true;

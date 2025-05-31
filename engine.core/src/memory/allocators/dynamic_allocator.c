@@ -234,7 +234,8 @@ bool dynamic_allocator_free(dynamic_allocator* allocator, void* block)
     // Проверка на коллизию границ.
     if((prev && block_offset_left > block) || (node && block_offset_right > (void*)node))
     {
-        kfatal("Function '%s': Memory collision detected on pointer %p. Stopped for debugging!", __FUNCTION__, block);
+        ktrace("Function '%s': Memory area from %p to %p", __FUNCTION__, allocator->memory, (u8*)allocator->memory + allocator->total_size);
+        kfatal("Function '%s': Memory collision detected at pointer %p. Stopped for debugging!", __FUNCTION__, block + sizeof(u64));
         return false;
     }
 

@@ -199,7 +199,7 @@ bool render_view_world_on_build_packet(render_view* self, void* data, render_vie
 
     for(u32 i = 0; i < mesh_data->mesh_count; ++i)
     {
-        mesh* m = &mesh_data->meshes[i];
+        mesh* m = mesh_data->meshes[i];
         mat4 model = transform_get_world(&m->transform);
 
         for(u32 j = 0; j < m->geometry_count; ++j)

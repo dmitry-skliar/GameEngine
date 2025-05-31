@@ -1950,8 +1950,29 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
             {
                 texture_map* map = vk_shader->instance_states[shader->bound_instance_id].instance_texture_maps[i];
                 texture* t = map->texture;
-                vulkan_image* image = t->internal_data;
 
+                // Переопределение недействительной текстуры.
+                if(t->generation == INVALID_ID)
+                {
+                    switch(map->use)
+                    {
+                        case TEXTURE_USE_MAP_DIFFUSE:
+                            t = texture_system_get_default_diffuse_texture();
+                            break;
+                        case TEXTURE_USE_MAP_SPECULAR:
+                            t = texture_system_get_default_specular_texture();
+                            break;
+                        case TEXTURE_USE_MAP_NORMAL:
+                            t = texture_system_get_default_normal_texture();
+                            break;
+                        default:
+                            kwarng("Function '%s': Undefined texture use %d", __FUNCTION__, map->use);
+                            t = texture_system_get_default_texture();
+                            break;
+                    }
+                }
+
+                vulkan_image* image = t->internal_data;
                 image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 image_infos[i].imageView = image->view;
                 image_infos[i].sampler = map->internal_data;

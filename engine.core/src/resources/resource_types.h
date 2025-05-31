@@ -164,6 +164,8 @@ typedef struct geometry {
 
 // @brief Объединяет в себе геометрии как единый объект.
 typedef struct mesh {
+    // @brief Число указывающее номер изменения.
+    u8 generation;
     // @brief Количество внутренних геометрий.
     u16 geometry_count;
     // @brief Массив указателей на геометрии.
