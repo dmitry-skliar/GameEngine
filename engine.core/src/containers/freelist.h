@@ -7,7 +7,7 @@
 #define NODE_START 128
 #define NODE_RESIZE_FACTOR 2
 
-// @brief Контекст списка свободной памяти.
+// @brief Контекст экземпляра списка свободной памяти.
 typedef struct freelist freelist;
 
 /*
@@ -19,7 +19,7 @@ typedef struct freelist freelist;
     @return Указатель на экземпляр списка свободной памяти или null при получении
             требований или ошибках.
 */
-KAPI freelist* freelist_create(u64 total_size, u64* memory_requirement, void* memory);
+KAPI freelist* freelist_create(ptr total_size, ptr* memory_requirement, void* memory);
 
 /*
     @brief Уничтожает список свободной памяти.
@@ -35,7 +35,18 @@ KAPI void freelist_destroy(freelist* list);
     @param out_offset Указатель для хранения смещения выделенной памяти.
     @return True если блок памяти был найден и выделен или false в противном случае.
 */
-KAPI bool freelist_allocate_block(freelist* list, u64 size, u64* out_offset);
+KAPI bool freelist_allocate_block(freelist* list, ptr size, ptr* out_offset);
+
+/*
+    @brief Пытается найти свободный блок памяти заданного размера с учетом заданного выравнивания.
+    @param list Указатель на экземпляр списка свободной памяти.
+    @param size Запрашиваемый размер памяти в байтах для выделения.
+    @param alignment Запрашиваемая кратность выравнивания памяти (число должно быть степенью двойки).
+    @param out_aligned_offset Указатель для сохранения выровненного смещения выделенной памяти.
+    @param out_alignment_size Указатель для сохранения размера выравнивания в байтах.
+    @return True если блок памяти был найден и выделен или false в противном случае.
+*/
+KAPI bool freelist_allocate_block_aligned(freelist* list, ptr size, u16 alignment, ptr* out_aligned_offset, u16* out_alignment_size);
 
 /*
     @brief Пытается освободить блок памяти по указанному смещению и размеру.
@@ -45,7 +56,18 @@ KAPI bool freelist_allocate_block(freelist* list, u64 size, u64* out_offset);
     @param offset Смещение, по которому необходимо освободить память.
     @return True если память освобождена успешно или false если не удалось.
 */
-KAPI bool freelist_free_block(freelist* list, u64 size, u64 offset);
+KAPI bool freelist_free_block(freelist* list, ptr size, ptr offset);
+
+/*
+    @brief Пытается освободить блок памяти по указанному смещению, размеру и заданным выравниванием.
+    NOTE: Может потерпеть неудачу, если переданы неверные данные.
+    @param list Указатель на экземпляр списка свободной памяти.
+    @param size Размер памяти в байтах, который необходимо совободить.
+    @param aligned_offset Смещение, по которому необходимо освободить память.
+    @param alignment_size Размер выравнивания в байтах, который был получен при выделении памяти.
+    @return True если память освобождена успешно или false если не удалось.
+*/
+KAPI bool freelist_free_block_aligned(freelist* list, ptr size, ptr aligned_offset, u16 alignment_size);
 
 /*
     @brief Пытается изменить размер списка свободной памяти до указанного размера.
@@ -53,7 +75,7 @@ KAPI bool freelist_free_block(freelist* list, u64 size, u64 offset);
     @param new_size Новый размер памяти в байтах, должен быть больше предыдущего.
     @return True если изменить размер удалось или false в противном случае.
 */
-KAPI bool freelist_resize(freelist* list, u64 new_size);
+KAPI bool freelist_resize(freelist* list, ptr new_size);
 
 /*
     @brief Возвращает все занятые блоки в список свободой памяти.
@@ -68,14 +90,14 @@ KAPI void freelist_clear(freelist* list);
     @param list Указатель на экземпляр списка свободной памяти.
     @return Объем доступной памяти в байтах или 0 при ошибках.
 */
-KAPI u64 freelist_free_space(freelist* list);
+KAPI ptr freelist_free_space(freelist* list);
 
 /*
     @brief Возвращает количество блоков свободной памяти в листе.
     @param list Указатель на экземпляр списка свободной памяти.
     @return Количество блоков свободной памяти в данный момент или 0 при ошибках.
 */
-KAPI u64 freelist_block_count(freelist* list);
+KAPI ptr freelist_block_count(freelist* list);
 
 /*
     @brief Возращает максимально возможное количество блоков свободной памяти
@@ -85,4 +107,4 @@ KAPI u64 freelist_block_count(freelist* list);
     @return Максимально возможное количество блоков свободной памяти в данный момент
             или 0 при ошибках.
 */
-KAPI u64 freelist_block_capacity(freelist* list);
+KAPI ptr freelist_block_capacity(freelist* list);

@@ -10,19 +10,19 @@
 
 // TODO: Сделать отдельную подсистему для профилировки памяти, таймкода, стека вызовов и др. И вынести это туда!
 typedef struct memory_stats {
-    u64 total_allocated;
-    u64 tagged_allocated[MEMORY_TAGS_MAX];
+    ptr total_allocated;
+    ptr tagged_allocated[MEMORY_TAGS_MAX];
 } memory_stats;
 
 typedef struct memory_system_state {
     // Конфигурация системы.
     memory_system_config config;
     // Требования системы памяти.
-    u64 system_requirement;
+    ptr system_requirement;
     // Статистика по используемой памяти.
     memory_stats stats;
     // Счетчик вызова функции выделения памяти.
-    u64 allocation_count;
+    ptr allocation_count;
     // Мьютекс распределителя памяти.
     mutex allocation_mutex;
     // Указатель на динамический распределитель памяти.
@@ -30,8 +30,20 @@ typedef struct memory_system_state {
 } memory_system_state;
 
 static memory_system_state* state_ptr = null;
-static const char* message_not_initialized =
-    "Function '%s' requires the memory system to be initialized. Call 'memory_system_initialize' first.";
+
+// Проверяет и указывает на статус истемы.
+bool is_memory_system_invalid(const char* func)
+{
+    if(!state_ptr)
+    {
+        if(func)
+        {
+            kerror("Function '%s' requires the memory system to be initialized. Call 'memory_system_initialize' first.", func);
+        }
+        return true;
+    }
+    return false;
+}
 
 bool memory_system_initialize(memory_system_config* config)
 {
@@ -51,14 +63,14 @@ bool memory_system_initialize(memory_system_config* config)
     }
 
     // Требования состояния системы.
-    u64 state_memory_requirement = sizeof(struct memory_system_state);
+    ptr state_memory_requirement = sizeof(struct memory_system_state);
 
     // Требования динамического распределителя памяти.
-    u64 allocator_memory_requirement = 0;
+    ptr allocator_memory_requirement = 0;
     dynamic_allocator_create(config->total_allocation_size, &allocator_memory_requirement, null);
 
     // Выделение требуемой памяти платформой.
-    u64 memory_requirement = state_memory_requirement + allocator_memory_requirement;
+    ptr memory_requirement = state_memory_requirement + allocator_memory_requirement;
     void* memory = platform_memory_allocate(memory_requirement);
 
     if(!memory)
@@ -103,9 +115,8 @@ bool memory_system_initialize(memory_system_config* config)
 
 void memory_system_shutdown()
 {
-    if(!state_ptr)
+    if(is_memory_system_invalid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return;
     }
 
@@ -132,12 +143,11 @@ void memory_system_shutdown()
     state_ptr = null;
 }
 
-// TODO: Выравнимание памяти.
-void* memory_allocate(u64 size, memory_tag tag)
+void* memory_allocate(ptr size, u16 alignment, memory_tag tag)
 {
-    if(!size)
+    if(!size || !alignment)
     {
-        kerror("Function '%s' requires a size greater than zero.", __FUNCTION__);
+        kerror("Function '%s' requires size and alignment greater than zero.", __FUNCTION__);
         return null;
     }
 
@@ -149,21 +159,21 @@ void* memory_allocate(u64 size, memory_tag tag)
 
     if(tag == MEMORY_TAG_UNKNOWN)
     {
-        kwarng("Memory allocation with MEMORY_TAG_UNKNOWN. Re-class this allocation.");
-    }
-
-    if(!kmutex_lock(&state_ptr->allocation_mutex))
-    {
-        kfatal("Function '%s' unable obtaining mutex lock during allocation.", __FUNCTION__);
-        return null;
+        kwarng("Function '%s': Allocation with MEMORY_TAG_UNKNOWN. Re-class this allocation.", __FUNCTION__);
     }
 
     void* block = null;
 
-    // Выбирается способ выделения памяти в соответствии с состоянием системы памяти.
+    // Выбор способа выделения памяти исходя от состояния системы.
     if(state_ptr)
     {
-        block = dynamic_allocator_allocate(state_ptr->allocator, size);
+        if(!kmutex_lock(&state_ptr->allocation_mutex))
+        {
+            kfatal("Function '%s': Unable obtaining mutex lock during allocation.", __FUNCTION__);
+            return null;
+        }
+        
+        block = dynamic_allocator_allocate(state_ptr->allocator, size, alignment);
 
         if(block)
         {
@@ -171,6 +181,8 @@ void* memory_allocate(u64 size, memory_tag tag)
             state_ptr->stats.total_allocated += size;
             state_ptr->allocation_count++;
         }
+
+        kmutex_unlock(&state_ptr->allocation_mutex);
     }
     else
     {
@@ -178,21 +190,34 @@ void* memory_allocate(u64 size, memory_tag tag)
         block = platform_memory_allocate(size);
     }
 
-    kmutex_unlock(&state_ptr->allocation_mutex);
-
     if(!block)
     {
-        kfatal("Function '%s' could not allocate memory and returned null.", __FUNCTION__);
+        kfatal("Function '%s' could not allocate memory. Stop for debugging.", __FUNCTION__);
     }
 
     return block;
 }
 
-void memory_free(void* block, u64 size, memory_tag tag)
+void memory_allocate_report(ptr size, memory_tag tag)
+{
+    if(!kmutex_lock(&state_ptr->allocation_mutex))
+    {
+        kfatal("Function '%s': Unable obtaining mutex lock during allocation.", __FUNCTION__);
+        return;
+    }
+
+    state_ptr->stats.tagged_allocated[tag] += size;
+    state_ptr->stats.total_allocated += size;
+    state_ptr->allocation_count++;
+
+    kmutex_unlock(&state_ptr->allocation_mutex);
+}
+
+void memory_free(void* block, ptr size, memory_tag tag)
 {
     if(!block)
     {
-        kerror("Function '%s' requires a non-null memory pointer.", __FUNCTION__);
+        kerror("Function '%s' requires a valid memory pointer.", __FUNCTION__);
         return;
     }
 
@@ -208,33 +233,59 @@ void memory_free(void* block, u64 size, memory_tag tag)
         return;
     }
 
-    if(!kmutex_lock(&state_ptr->allocation_mutex))
+    // Выбор способа освобождения памяти исходя от состояния системы.
+    if(state_ptr)
     {
-        kfatal("Function '%s' unable obtaining mutex lock for free operation.", __FUNCTION__);
-        return;
-    }
+        if(!kmutex_lock(&state_ptr->allocation_mutex))
+        {
+            kfatal("Function '%s': Unable obtaining mutex lock for free operation.", __FUNCTION__);
+            return;
+        }
 
-    // NOTE: Если по какой-либо причине не получится освободиться память динамическим распределителем
-    //       памяти, то вероятно она была выделена до инициализации системы памяти. Тогда условие станет
-    //       ожным и память будет освобождена платформой.
-    if(state_ptr && dynamic_allocator_free(state_ptr->allocator, block))
-    {
-        state_ptr->stats.tagged_allocated[tag] -= size;
-        state_ptr->stats.total_allocated -= size;
+        if(dynamic_allocator_free(state_ptr->allocator, block))
+        {
+            state_ptr->stats.tagged_allocated[tag] -= size;
+            state_ptr->stats.total_allocated -= size;
+            state_ptr->allocation_count--;
+        }
+
+        kmutex_unlock(&state_ptr->allocation_mutex);
     }
     else
     {
         platform_memory_free(block);
     }
+}
+
+void memory_free_report(ptr size, memory_tag tag)
+{
+    if(!kmutex_lock(&state_ptr->allocation_mutex))
+    {
+        kfatal("Function '%s': Unable obtaining mutex lock for free operation.", __FUNCTION__);
+        return;
+    }
+
+    state_ptr->stats.tagged_allocated[tag] -= size;
+    state_ptr->stats.total_allocated -= size;
+    state_ptr->allocation_count--;
 
     kmutex_unlock(&state_ptr->allocation_mutex);
 }
 
+bool memory_get_size(void* block, ptr* out_size)
+{
+    return dynamic_allocator_block_get_size(block, out_size);    
+}
+
+bool memory_get_alignment(void* block, u16* out_alignment)
+{
+    return dynamic_allocator_block_get_alignment(block, out_alignment);
+}
+
 const char* memory_system_usage_str()
 {
-    if(!state_ptr)
+    if(is_memory_system_invalid(__FUNCTION__))
     {
-        kerror(message_not_initialized, __FUNCTION__);
         return "";
     }
 
@@ -260,22 +311,25 @@ const char* memory_system_usage_str()
         "ENTITY         ",
         "ENTITY NODE    ",
         "NODE           ",
+        "VULKAN         ",
+        "VULKAN_EXT     ",
+        "GPU_LOCAL      ",
         "TOTAL          "
     };
 
-    const u64 gib = 1024 * 1024 * 1024;
-    const u64 mib = 1024 * 1024;
-    const u64 kib = 1024;
+    const ptr gib = 1024 * 1024 * 1024;
+    const ptr mib = 1024 * 1024;
+    const ptr kib = 1024;
 
     char buffer[8000] = "System memory use (tagged):\n";
     // TODO: Использовать обертку над функцией.
-    u64 offset = string_length(buffer);
+    ptr offset = string_length(buffer);
 
     for(u32 i = 0; i <= MEMORY_TAGS_MAX; ++i)
     {
         char unit[4] = "XiB";
         f32 amount = 1.0f;
-        u64 size = 0;
+        ptr size = 0;
 
         if(i < MEMORY_TAGS_MAX)
         {
@@ -315,9 +369,9 @@ const char* memory_system_usage_str()
     return string_duplicate(buffer);
 }
 
-u64 memory_system_allocation_count()
+ptr memory_system_allocation_count()
 {
-    if(!state_ptr)
+    if(is_memory_system_invalid(__FUNCTION__))
     {
         return 0;
     }

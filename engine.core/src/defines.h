@@ -31,10 +31,10 @@ typedef float f32;
 typedef double f64;
 
 #if defined __x86_64__ && !defined __ILP32__
-    // @brief Беззнаковое целое, для хранения адреса памяти.
+    // @brief Беззнаковое целое, для хранения адреса памяти для текущей платформы.
     typedef u64 ptr;
 #else
-    // @brief Беззнаковое целое, для хранения адреса памяти.
+    // @brief Беззнаковое целое, для хранения адреса памяти для текущей платформы.
     typedef u32 ptr;
 #endif
 
@@ -102,6 +102,12 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define I16_MIN (-I16_MAX - 1)
 #define I32_MIN (-I32_MAX - 1)
 #define I64_MIN (-I64_MAX - 1)
+
+#if defined __x86_64__ && !defined __ILP32__
+    #define PTR_MAX U64_MAX
+#else
+    #define PTR_MAX U32_MAX
+#endif
 
 #define INVALID_ID_U64 U64_MAX
 #define INVALID_ID     U32_MAX
@@ -262,6 +268,10 @@ STATIC_ASSERT(sizeof(f64) == 8, "Assertion 'sizeof(f64) == 8' failed.");
 #define MEMBER_GET_OFFSET(type, member) ((ptr)(&((type*)null)->member))
 
 /*
+    @brief Получает ближайшее кратное число с округлением в большую сторону.
+    @param operand Число, относительно которого необходимо получить ближайщее кратное (правое значение).
+    @param granularity Необходимая кратность числа, которую нужно получить (должно быть степенью двойки!).
+    @return Ближайшее кратное число, относительно заданного числа.
 */
 KINLINE u64 get_aligned(u64 operand, u64 granularity)
 {

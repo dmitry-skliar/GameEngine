@@ -95,11 +95,7 @@ VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context
                 present_must_share_graphics = true;
             }
         }
-        
-        // if(indices[i] == context->device.graphics_queue_index)
-        // {
-        //     queueinfo[i].queueCount = 2;
-        // }
+
         queueinfo[i].flags = 0;
         queueinfo[i].pNext = null;
         queueinfo[i].pQueuePriorities = queue_priorities;

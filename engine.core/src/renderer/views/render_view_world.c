@@ -29,7 +29,7 @@ typedef struct geometry_distance {
     f32 distance;            // Дистанция относительно камеры.
 } geometry_distance;
 
-static bool view_state_valid(render_view* self, const char* func_name)
+static bool view_state_valid(const render_view* self, const char* func_name)
 {
     if(!self || !self->internal_data)
     {
@@ -176,7 +176,7 @@ void render_view_world_on_resize(render_view* self, u32 width, u32 height)
     }
 }
 
-bool render_view_world_on_build_packet(render_view* self, void* data, render_view_packet* out_packet)
+bool render_view_world_on_build_packet(const render_view* self, void* data, render_view_packet* out_packet)
 {
     if(!view_state_valid(self, __FUNCTION__) || !data || !out_packet)
     {
@@ -188,7 +188,7 @@ bool render_view_world_on_build_packet(render_view* self, void* data, render_vie
     render_view_world_internal_data* internal_data = self->internal_data;
 
     out_packet->geometries = darray_create(geometry_render_data);
-    out_packet->view = self;
+    out_packet->view = (render_view*)self;
 
     out_packet->projection_matrix = internal_data->projection_matrix;
     out_packet->view_matrix = camera_view_get(internal_data->world_camera);
@@ -244,7 +244,13 @@ bool render_view_world_on_build_packet(render_view* self, void* data, render_vie
     return true;
 }
 
-bool render_view_world_on_render(render_view* self, const render_view_packet* packet, u64 frame_number, u64 render_target_index)
+void render_view_world_on_destroy_packet(const render_view* self, render_view_packet* packet)
+{
+    darray_destroy(packet->geometries);
+    packet->geometries = null;
+}
+
+bool render_view_world_on_render(const render_view* self, const render_view_packet* packet, u64 frame_number, u64 render_target_index)
 {
     if(!view_state_valid(self, __FUNCTION__)) return false;
 

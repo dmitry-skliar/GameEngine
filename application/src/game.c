@@ -4,6 +4,7 @@
 #include <event.h>
 #include <memory/memory.h>
 #include <systems/camera_system.h>
+#include <kstring.h>
 
 bool game_create(game* inst)
 {
@@ -40,12 +41,16 @@ bool game_update(game* inst, f32 delta_time)
 {
     game_state* state = inst->state;
 
+    static u64 alloc_count = 0;
+    u64 prev_alloc_count = alloc_count;
+    alloc_count = memory_system_allocation_count();
+
     if(input_keyboard_key_press_detect('M'))
     {
-        static u64 alloc_count = 0;
-        u64 prev_alloc_count = alloc_count;
-        alloc_count = memory_system_allocation_count();
-        kdebug("Allocations last: %llu, total %llu.", alloc_count - prev_alloc_count, alloc_count);
+        const char* usage = memory_system_usage_str();
+        kinfor(usage);
+        string_free(usage);
+        kdebug("Allocations: %llu (%llu this frame).", alloc_count, alloc_count - prev_alloc_count);
     }
 
     if(input_keyboard_key_press_detect('T'))

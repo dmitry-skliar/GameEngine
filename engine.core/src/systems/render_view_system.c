@@ -171,27 +171,30 @@ bool render_view_system_create(render_view_config* config)
         // TODO: Временно!
         if(config->type == RENDERER_VIEW_KNOWN_TYPE_WORLD)
         {
-            view->on_build_packet = render_view_world_on_build_packet;
-            view->on_render       = render_view_world_on_render;
-            view->on_create       = render_view_world_on_create;
-            view->on_destroy      = render_view_world_on_destroy;
-            view->on_resize       = render_view_world_on_resize;
+            view->on_build_packet   = render_view_world_on_build_packet;
+            view->on_destroy_packet = render_view_world_on_destroy_packet;
+            view->on_render         = render_view_world_on_render;
+            view->on_create         = render_view_world_on_create;
+            view->on_destroy        = render_view_world_on_destroy;
+            view->on_resize         = render_view_world_on_resize;
         }
         else if(config->type == RENDERER_VIEW_KNOWN_TYPE_UI)
         {
-            view->on_build_packet = render_view_ui_on_build_packet;
-            view->on_render       = render_view_ui_on_render;
-            view->on_create       = render_view_ui_on_create;
-            view->on_destroy      = render_view_ui_on_destroy;
-            view->on_resize       = render_view_ui_on_resize;
+            view->on_build_packet   = render_view_ui_on_build_packet;
+            view->on_destroy_packet = render_view_ui_on_destroy_packet;
+            view->on_render         = render_view_ui_on_render;
+            view->on_create         = render_view_ui_on_create;
+            view->on_destroy        = render_view_ui_on_destroy;
+            view->on_resize         = render_view_ui_on_resize;
         }
         else if(config->type == RENDERER_VIEW_KNOWN_TYPE_SKYBOX)
         {
-            view->on_build_packet = render_view_skybox_on_build_packet;
-            view->on_render       = render_view_skybox_on_render;
-            view->on_create       = render_view_skybox_on_create;
-            view->on_destroy      = render_view_skybox_on_destroy;
-            view->on_resize       = render_view_skybox_on_resize;
+            view->on_build_packet   = render_view_skybox_on_build_packet;
+            view->on_destroy_packet = render_view_skybox_on_destroy_packet;
+            view->on_render         = render_view_skybox_on_render;
+            view->on_create         = render_view_skybox_on_create;
+            view->on_destroy        = render_view_skybox_on_destroy;
+            view->on_resize         = render_view_skybox_on_resize;
         }
 
         // Создание view и обновление записи в таблице.
@@ -237,7 +240,7 @@ render_view* render_view_system_get(const char* name)
     return &state_ptr->views[id];
 }
 
-bool render_view_system_build_packet(render_view* view, void* data, render_view_packet* out_packet)
+bool render_view_system_build_packet(const render_view* view, void* data, render_view_packet* out_packet)
 {
     if(!system_status_valid(__FUNCTION__)) return false;
 
@@ -250,7 +253,7 @@ bool render_view_system_build_packet(render_view* view, void* data, render_view_
     return view->on_build_packet(view, data, out_packet);
 }
 
-bool render_view_system_on_render(render_view* view, render_view_packet* packet, u64 frame_number, u64 render_target_index)
+bool render_view_system_on_render(const render_view* view, render_view_packet* packet, u64 frame_number, u64 render_target_index)
 {
     if(!system_status_valid(__FUNCTION__)) return false;
 

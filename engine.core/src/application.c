@@ -25,7 +25,6 @@
 #include "kstring.h"
 #include "math/kmath.h"
 #include "math/transform.h"
-#include "containers/darray.h"
 #include "resources/mesh.h"
 // TODO: Временный тестовый код: конец.
 
@@ -171,7 +170,7 @@ bool application_create(game* game_inst)
     // TODO: Сделать менеджер систем и подсистем. Решит проблему правильной инициализации и завершения.
     // Система контроля памяти.
     memory_system_config memory_cfg;
-    memory_cfg.total_allocation_size = GIBIBYTES(1);
+    memory_cfg.total_allocation_size = MEBIBYTES(500); //GIBIBYTES(1);
     if(!memory_system_initialize(&memory_cfg))
     {
         kerror("Failed to initialize memory system. Aborted!");
@@ -560,8 +559,8 @@ bool application_run()
     clock_update(&app_state->clock);
     app_state->last_time = app_state->clock.elapsed;
 
-    f64 running_time     = 0;
-    u16 frame_count      = 0;
+    // f64 running_time     = 0;
+    // u16 frame_count      = 0;
     f64 frame_limit_time = 1.0f / 120; // TODO: сделать настраиваемым!
 
     // TODO: Временный тестовый код: начало.
@@ -679,19 +678,17 @@ bool application_run()
             }
 
             // TODO: Временный тестовый код: начало.
-            // TODO: Знаю решение не очень, но пока без идей...
-            // darray_destroy(views[0].geometries);
-            darray_destroy(views[1].geometries);
-            darray_destroy(views[2].geometries);
-            // views[0].geometries = null;
-            views[1].geometries = null;
-            views[2].geometries = null;
+            // Очистка данных пакетов.
+            for(u32 i = 0; i < packet.view_count; ++i)
+            {
+                packet.views[i].view->on_destroy_packet(packet.views[i].view, &packet.views[i]);
+            }
             // TODO: Временный тестовый код: конец.
 
             // Расчет времени кадра.
             f64 frame_end_time = platform_time_absolute();
             f64 frame_elapsed_time = frame_end_time - frame_start_time;
-            running_time += frame_elapsed_time;
+            // running_time += frame_elapsed_time;
             f64 remaining_secounds = frame_limit_time - frame_elapsed_time;
 
             if(remaining_secounds > 0)
@@ -706,7 +703,7 @@ bool application_run()
                     platform_thread_sleep(remaining_ms - 1);
                 }
 
-                frame_count++;
+                // frame_count++;
             }
 
             // TODO: Перенести перед отрисовкой кадра
@@ -824,13 +821,6 @@ void application_on_mouse_move(i32 x, i32 y)
 void application_on_keyboard_key(u32 keycode, bool pressed)
 {
     if(keycode == KEY_Q && pressed) app_state->is_running = false;
-    if(keycode == KEY_I && pressed)
-    {
-        const char* meminfo = memory_system_usage_str();
-        kinfor(meminfo);
-        string_free(meminfo);
-    }
-
     input_update_keyboard_key(keycode, pressed);
 }
 

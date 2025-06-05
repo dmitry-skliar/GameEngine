@@ -1909,6 +1909,7 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
         kzero_tc(descriptor_writes, VkWriteDescriptorSet, 2);
         u32 descriptor_count = 0;
         u32 descriptor_index = 0;
+        VkDescriptorBufferInfo buffer_info;
 
         // Дескриптор 0 - Uniform буфер.
         if(vk_shader->instance_uniform_count > 0)
@@ -1917,7 +1918,6 @@ bool vulkan_renderer_shader_apply_instance(struct shader* shader, bool needs_upd
             u8* instance_ubo_generation = &object_state->descriptor_set_state.descriptor_states[descriptor_index].generations[image_index];
             if(*instance_ubo_generation == INVALID_ID_U8 /* || *global_ubo_generation != material->generation */)
             {
-                VkDescriptorBufferInfo buffer_info;
                 buffer_info.buffer = vk_shader->uniform_buffer.handle;
                 buffer_info.offset = object_state->offset;
                 buffer_info.range = shader->ubo_stride;

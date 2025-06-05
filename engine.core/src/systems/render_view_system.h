@@ -18,6 +18,6 @@ void render_view_system_on_window_resize(u32 width, u32 height);
 
 render_view* render_view_system_get(const char* name);
 
-bool render_view_system_build_packet(render_view* view, void* data, render_view_packet* out_packet);
+bool render_view_system_build_packet(const render_view* view, void* data, render_view_packet* out_packet);
 
-bool render_view_system_on_render(render_view* view, render_view_packet* packet, u64 frame_number, u64 render_target_index);
+bool render_view_system_on_render(const render_view* view, render_view_packet* packet, u64 frame_number, u64 render_target_index);
