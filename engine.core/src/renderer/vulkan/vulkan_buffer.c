@@ -11,7 +11,7 @@
 void cleanup_freelist(vulkan_buffer* buffer)
 {
     freelist_destroy(buffer->buffer_freelist);
-    kfree(buffer->freelist_memory, buffer->freelist_memory_requirement, MEMORY_TAG_RENDERER);
+    kfree(buffer->freelist_memory, MEMORY_TAG_RENDERER);
     buffer->freelist_memory_requirement = 0;
     buffer->freelist_memory = null;
 }
@@ -186,7 +186,7 @@ bool vulkan_buffer_resize(vulkan_context* context, u64 new_size, vulkan_buffer* 
     return true;
 }
 
-void vulkan_buffer_bind(vulkan_context* context, vulkan_buffer* buffer, u64 offset)
+void vulkan_buffer_bind(vulkan_context* context, vulkan_buffer* buffer, ptr offset)
 {
     VkResult result = vkBindBufferMemory(context->device.logical, buffer->handle, buffer->memory, offset);
     if(!vulkan_result_is_success(result))
@@ -195,7 +195,7 @@ void vulkan_buffer_bind(vulkan_context* context, vulkan_buffer* buffer, u64 offs
     }
 }
 
-void* vulkan_buffer_lock_memory(vulkan_context* context, vulkan_buffer* buffer, u64 offset, u64 size, u32 flags)
+void* vulkan_buffer_lock_memory(vulkan_context* context, vulkan_buffer* buffer, ptr offset, ptr size, u32 flags)
 {
     void* data = null;
     VkResult result = vkMapMemory(context->device.logical, buffer->memory, offset, size, flags, &data);
@@ -211,7 +211,7 @@ void vulkan_buffer_unlock_memory(vulkan_context* context, vulkan_buffer* buffer)
     vkUnmapMemory(context->device.logical, buffer->memory);    
 }
 
-bool vulkan_buffer_allocate(vulkan_buffer* buffer, u64 size, u64* out_offset)
+bool vulkan_buffer_allocate(vulkan_buffer* buffer, ptr size, ptr* out_offset)
 {
     if(!buffer || !size || !out_offset)
     {
@@ -222,7 +222,7 @@ bool vulkan_buffer_allocate(vulkan_buffer* buffer, u64 size, u64* out_offset)
     return freelist_allocate_block(buffer->buffer_freelist, size, out_offset);
 }
 
-bool vulkan_buffer_free(vulkan_buffer* buffer, u64 size, u64 offset)
+bool vulkan_buffer_free(vulkan_buffer* buffer, ptr size, ptr offset)
 {
     if(!buffer || !size)
     {
@@ -234,7 +234,7 @@ bool vulkan_buffer_free(vulkan_buffer* buffer, u64 size, u64 offset)
 }
 
 void vulkan_buffer_load_data(
-    vulkan_context* context, vulkan_buffer* buffer, u64 offset, u64 size, u32 flags, const void* data
+    vulkan_context* context, vulkan_buffer* buffer, ptr offset, ptr size, u32 flags, const void* data
 )
 {
     void* data_ptr = null;
@@ -249,8 +249,8 @@ void vulkan_buffer_load_data(
 }
 
 void vulkan_buffer_copy_to(
-    vulkan_context* context, VkCommandPool pool, VkFence fence, VkQueue queue, VkBuffer source, u64 source_offset,
-    VkBuffer destination, u64 destination_offset, u64 size
+    vulkan_context* context, VkCommandPool pool, VkFence fence, VkQueue queue, VkBuffer source, ptr source_offset,
+    VkBuffer destination, ptr destination_offset, ptr size
 )
 {
     vkQueueWaitIdle(queue);

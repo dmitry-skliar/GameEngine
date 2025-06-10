@@ -44,7 +44,7 @@ bool mesh_loader_load(struct resource_loader* self, const char* name, void* para
     // Попытка найти поддерживаемый файл.
     for(u32 i = 0; i < SUPPORTED_FILETYPE_COUNT; ++i)
     {
-        string_format(filepath_str, format_str, resource_system_base_path(), self->type_path, name, supported_filetypes[i].extension);
+        string_format_unsafe(filepath_str, format_str, resource_system_base_path(), self->type_path, name, supported_filetypes[i].extension);
 
         if(platform_file_exists(filepath_str))
         {
@@ -193,7 +193,7 @@ bool load_ksm_file(file* ksm_file, geometry_config** out_geometries_darray)
 bool write_ksm_file(const char* name, geometry_config* geometries)
 {
     char ksm_filepath[GEOMETRY_NAME_MAX_LENGTH];
-    string_format(ksm_filepath, "%s/models/%s.ksm", resource_system_base_path(), name);
+    string_format_unsafe(ksm_filepath, "%s/models/%s.ksm", resource_system_base_path(), name);
 
     if(platform_file_exists(ksm_filepath))
     {
@@ -569,8 +569,8 @@ bool import_mtl_file(const char* mtl_filename, const char* kmt_filename)
 {
     char kmt_filepath[MATERIAL_NAME_MAX_LENGTH];
     char mtl_filepath[MATERIAL_NAME_MAX_LENGTH];
-    string_format(mtl_filepath, "%s/models/%s", resource_system_base_path(), mtl_filename);
-    string_format(kmt_filepath, "%s/materials/%s.kmt", resource_system_base_path(), kmt_filename);
+    string_format_unsafe(mtl_filepath, "%s/models/%s", resource_system_base_path(), mtl_filename);
+    string_format_unsafe(kmt_filepath, "%s/materials/%s.kmt", resource_system_base_path(), kmt_filename);
 
     if(platform_file_exists(kmt_filepath))
     {
@@ -596,7 +596,7 @@ bool import_mtl_file(const char* mtl_filename, const char* kmt_filename)
     char texture_name[256];
     char write_line_str[256];
     platform_file_write_line(kmt_file, "version=0.1");
-    string_format(write_line_str, "name=%s", kmt_filename);
+    string_format_unsafe(write_line_str, "name=%s", kmt_filename);
     platform_file_write_line(kmt_file, write_line_str);
     platform_file_write_line(kmt_file, "shader=Builtin.MaterialShader");
 
@@ -644,7 +644,7 @@ bool import_mtl_file(const char* mtl_filename, const char* kmt_filename)
         else if(string_nequali(trimmed, "Kd ", 3))
         {
             // Диффузный цвет материала.
-            string_format(write_line_str, "diffuse_color=%s 1.0", &trimmed[3]);
+            string_format_unsafe(write_line_str, "diffuse_color=%s 1.0", &trimmed[3]);
             platform_file_write_line(kmt_file, write_line_str);
         }
         else if(string_nequali(trimmed, "Ks ", 3))

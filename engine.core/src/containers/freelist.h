@@ -90,14 +90,14 @@ KAPI void freelist_clear(freelist* list);
     @param list Указатель на экземпляр списка свободной памяти.
     @return Объем доступной памяти в байтах или 0 при ошибках.
 */
-KAPI ptr freelist_free_space(freelist* list);
+KAPI ptr freelist_get_free_space(freelist* list);
 
 /*
     @brief Возвращает количество блоков свободной памяти в листе.
     @param list Указатель на экземпляр списка свободной памяти.
     @return Количество блоков свободной памяти в данный момент или 0 при ошибках.
 */
-KAPI ptr freelist_block_count(freelist* list);
+KAPI ptr freelist_get_free_block_count(freelist* list);
 
 /*
     @brief Возращает максимально возможное количество блоков свободной памяти
@@ -107,4 +107,4 @@ KAPI ptr freelist_block_count(freelist* list);
     @return Максимально возможное количество блоков свободной памяти в данный момент
             или 0 при ошибках.
 */
-KAPI ptr freelist_block_capacity(freelist* list);
+KAPI ptr freelist_get_block_capacity(freelist* list);

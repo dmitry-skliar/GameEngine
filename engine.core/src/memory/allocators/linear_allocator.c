@@ -42,8 +42,7 @@ void linear_allocator_destroy(linear_allocator* allocator)
         return;
     }
 
-    u64 total_size = sizeof(struct linear_allocator) + allocator->size;
-    kfree(allocator, total_size, MEMORY_TAG_ALLOCATOR);
+    kfree(allocator, MEMORY_TAG_ALLOCATOR);
 }
 
 void* linear_allocator_allocate(linear_allocator* allocator, u64 size)
@@ -67,8 +66,15 @@ void* linear_allocator_allocate(linear_allocator* allocator, u64 size)
         return block;
     }
 
-    u64 remaining = allocator->size - allocator->allocated;
-    kerror("Function '%s' tried to allocate %llu B, only %llu B remaining.", __FUNCTION__, size, remaining);
+    f32 requested_amount = 0;
+    f32 remaining_amount = 0;
+    const char* requested_unit = memory_get_unit_for(size, &requested_amount);
+    const char* remaining_unit = memory_get_unit_for(allocator->size - allocator->allocated, &remaining_amount);
+
+    kerror(
+        "Function '%s' tried to allocate %.2f %s, only %.2f %s remaining.",
+        __FUNCTION__, requested_amount, requested_unit, remaining_amount, remaining_unit
+    );
     return null;
 }
 

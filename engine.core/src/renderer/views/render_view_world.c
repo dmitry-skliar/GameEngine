@@ -150,7 +150,7 @@ void render_view_world_on_destroy(render_view* self)
 {
     if(!view_state_valid(self, __FUNCTION__)) return;
     event_unregister(EVENT_CODE_SET_RENDER_MODE, self->internal_data, render_view_world_on_event);
-    kfree_tc(self->internal_data, render_view_world_internal_data, 1, MEMORY_TAG_RENDERER);
+    kfree(self->internal_data, MEMORY_TAG_RENDERER);
     self->internal_data = null;
 }
 

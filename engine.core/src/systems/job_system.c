@@ -168,13 +168,13 @@ u32 job_thread_run(void* params)
             // Очистка параметров и результата.
             if(job.param_data)
             {
-                kfree(job.param_data, job.param_data_size, MEMORY_TAG_JOB);
+                kfree(job.param_data, MEMORY_TAG_JOB);
                 job.param_data = null;
             }
 
             if(job.result_data)
             {
-                kfree(job.result_data, job.result_data_size, MEMORY_TAG_JOB);
+                kfree(job.result_data, MEMORY_TAG_JOB);
                 job.result_data = null;
             }
 
@@ -399,7 +399,7 @@ void job_system_update()
 
             if(result_entry.params)
             {
-                kfree(result_entry.params, result_entry.param_size, MEMORY_TAG_JOB);
+                kfree(result_entry.params, MEMORY_TAG_JOB);
             }
 
             if(!kmutex_lock(&state_ptr->result_mutex))

@@ -353,6 +353,7 @@ bool freelist_free_block_aligned(freelist* list, ptr size, ptr aligned_offset, u
     return true;
 }
 
+// TODO: Стоит подумать, что через ресайз можно делать не только увеличение но и уменьшение.
 bool freelist_resize(freelist* list, ptr new_size)
 {
     if(!list || !list->nodes)
@@ -397,7 +398,7 @@ void freelist_clear(freelist* list)
     list->free_size = list->total_size;
 }
 
-ptr freelist_free_space(freelist* list)
+ptr freelist_get_free_space(freelist* list)
 {
     if(!list || !list->nodes)
     {
@@ -408,7 +409,7 @@ ptr freelist_free_space(freelist* list)
     return list->free_size;
 }
 
-ptr freelist_block_count(freelist* list)
+ptr freelist_get_free_block_count(freelist* list)
 {
     if(!list || !list->nodes)
     {
@@ -419,7 +420,7 @@ ptr freelist_block_count(freelist* list)
     return list->node_count;
 }
 
-ptr freelist_block_capacity(freelist* list)
+ptr freelist_get_block_capacity(freelist* list)
 {
     if(!list || !list->nodes)
     {

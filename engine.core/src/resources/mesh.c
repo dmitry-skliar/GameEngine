@@ -92,7 +92,7 @@ void mesh_unload(mesh* mesh)
         geometry_system_release(mesh->geometries[i]);
     }
 
-    kfree_tc(mesh->geometries, struct geometry*, mesh->geometry_count, MEMORY_TAG_ARRAY);
+    kfree(mesh->geometries, MEMORY_TAG_ARRAY);
     mesh->geometries = null;
     mesh->geometry_count = 0;
     mesh->generation = INVALID_ID_U8;

@@ -28,9 +28,7 @@ char* string_empty(char* str)
 void string_free(const char* str)
 {
     if(!str) return;
-
-    u64 length = platform_string_length(str) + 1;
-    kfree_tc(str, char, length, MEMORY_TAG_STRING);
+    kfree(str, MEMORY_TAG_STRING);
 }
 
 char* string_trim(char* str)
@@ -302,7 +300,7 @@ u32 string_split(const char* str, char delim, bool trime_entries, bool include_e
         head = ++ptr;
     }
 
-    kfree(strbuf, strbuf_length, MEMORY_TAG_STRING);
+    kfree(strbuf, MEMORY_TAG_STRING);
     return count;
 }
 
@@ -314,52 +312,50 @@ void string_cleanup_split_array(char** str_darray)
     }
 
     u32 count = darray_length(str_darray);
-
     for(u32 i = 0; i < count; ++i)
     {
-        u64 length = platform_string_length(str_darray[i]) + 1;
-        kfree_tc(str_darray[i], char, length, MEMORY_TAG_STRING);
+        kfree(str_darray[i], MEMORY_TAG_STRING);
     }
 }
 
 void string_append_char(char* dest, const char* src, const char symbol)
 {
-    platform_string_format(dest, "%s%c", src, symbol);
+    platform_string_format_unsafe(dest, "%s%c", src, symbol);
 }
 
 void string_append_string(char* dest, const char* src, const char* str)
 {
-    platform_string_format(dest, "%s%s", src, str);
+    platform_string_format_unsafe(dest, "%s%s", src, str);
 }
 
 void string_append_i32(char* dest, const char* src, i32 value)
 {
-    platform_string_format(dest, "%s%i", src, value);
+    platform_string_format_unsafe(dest, "%s%i", src, value);
 }
 
 void string_append_i64(char* dest, const char* src, i64 value)
 {
-    platform_string_format(dest, "%s%lli", src, value);
+    platform_string_format_unsafe(dest, "%s%lli", src, value);
 }
 
 void string_append_u32(char* dest, const char* src, u32 value)
 {
-    platform_string_format(dest, "%s%u", src, value);
+    platform_string_format_unsafe(dest, "%s%u", src, value);
 }
 
 void string_append_u64(char* dest, const char* src, u64 value)
 {
-    platform_string_format(dest, "%s%llu", src, value);
+    platform_string_format_unsafe(dest, "%s%llu", src, value);
 }
 
 void string_append_f32(char* dest, const char* src, f32 value)
 {
-    platform_string_format(dest, "%s%f", src, value);
+    platform_string_format_unsafe(dest, "%s%f", src, value);
 }
 
 void string_append_bool(char* dest, const char* src, bool value)
 {
-    platform_string_format(dest, "%s%s", src, value ? "true" : "false");
+    platform_string_format_unsafe(dest, "%s%s", src, value ? "true" : "false");
 }
 
 void string_directory_from_path(char* directory, const char* path)

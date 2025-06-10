@@ -2,6 +2,15 @@
 
 #include <defines.h>
 
+/*
+    @brief Минимальный размер блока свободной памяти в байтах, не относится к запрашиваемой памяти.
+    @note  Используется при разделении блока на два разных блока, позволяет уменьшить фрагментацию памяти
+           путем увеличения этого значения, но при этом памяти расходуется больше.
+*/
+#define MIN_SPLIT_SIZE 16
+
+// TODO: Можно добавить раздельные списки для разных размеров (например, small/medium/large)? Или сделать отдельный распределитель?
+
 // TODO: Для наблюдения за фрагментацией памяти, реализовать функцию, которая выдеат структуру с информацией по памяти:
 //       - Весь размер памяти
 //       - Смещения свободных участков относительно нуля и размер каждого.
@@ -40,7 +49,7 @@ KAPI void dynamic_allocator_destroy(dynamic_allocator* allocator);
           недостаточно для хранения служебной информации о нем.
     @param allocator Указатель на контекст экземпляра динамического распределителя памяти.
     @param size Размер запрашиваемой памяти в байтах.
-    @param alignment Кратность выравнивания блока памяти.
+    @param alignment Кратность выравнивания блока памяти. Должна быть степенью двойки.
     @return В случае успеха указатель на выделенный блока памяти, в противном случае null c выводом сообщения в логи.
 */
 KAPI void* dynamic_allocator_allocate(dynamic_allocator* allocator, ptr size, u16 alignment);
@@ -54,18 +63,25 @@ KAPI void* dynamic_allocator_allocate(dynamic_allocator* allocator, ptr size, u1
 KAPI bool dynamic_allocator_free(dynamic_allocator* allocator, void* block);
 
 /*
+    @brief Пытается получить количество памяти в распоряжении динамического распределителя памяти.
+    @param allocator Указатель на контекст экземпляра динамического распределителя памяти.
+    @return Количество общей памяти в байтах.
+*/
+KAPI ptr dynamic_allocator_get_total_space(dynamic_allocator* allocator);
+
+/*
     @brief Пытается получить количество свободной памяти доступной динамическому распределителю памяти.
     @param allocator Указатель на контекст экземпляра динамического распределителя памяти.
     @return Количество свободной памяти в байтах.
 */
-KAPI u64 dynamic_allocator_get_free_space(dynamic_allocator* allocator);
+KAPI ptr dynamic_allocator_get_free_space(dynamic_allocator* allocator);
 
 /*
     @brief Пытается получить количество блоков свободной памяти доступной динамическому распределителю памяти.
     @param allocator Указатель на контекст экземпляра динамического распределителя памяти.
     @return Количество блоков свободной памяти.
 */
-KAPI u64 dynamic_allocator_get_free_block_count(dynamic_allocator* allocator);
+KAPI ptr dynamic_allocator_get_free_block_count(dynamic_allocator* allocator);
 
 /*
     @brief Пытается получить размер блока памяти.

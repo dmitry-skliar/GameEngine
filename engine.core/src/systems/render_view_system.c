@@ -107,7 +107,7 @@ void render_view_system_shutdown()
         if(state_ptr->views[i].id != INVALID_ID_U16)
         {
             string_free(state_ptr->views[i].name);
-            kfree_tc(state_ptr->views[i].passes, renderpass*, state_ptr->views[i].renderpass_count, MEMORY_TAG_ARRAY);
+            kfree(state_ptr->views[i].passes, MEMORY_TAG_ARRAY);
             state_ptr->views[i].on_destroy(&state_ptr->views[i]);
         }
     }
@@ -201,7 +201,7 @@ bool render_view_system_create(render_view_config* config)
         if(!view->on_create(view) || !hashtable_set(state_ptr->lookup, config->name, &id, true))
         {
             kerror("Function '%s': Failed to create view or update lookup table.", __FUNCTION__);
-            kfree_tc(view->passes, renderpass*, view->renderpass_count, MEMORY_TAG_ARRAY);
+            kfree(view->passes, MEMORY_TAG_ARRAY);
             state_ptr->views[id].id = INVALID_ID_U16;
             return false;
         }

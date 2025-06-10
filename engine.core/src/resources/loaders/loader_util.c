@@ -21,7 +21,7 @@ void resource_unload(resource_loader* self, resource* resource, memory_tag tag, 
 
     if(resource->data)
     {
-        kfree(resource->data, resource->data_size, tag);
+        kfree(resource->data, tag);
         resource->data = null;
         resource->data_size = 0;
         resource->loader_id = INVALID_ID;

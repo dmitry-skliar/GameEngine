@@ -14,7 +14,7 @@ bool binary_loader_load(resource_loader* self, const char* name, void* params, r
 {
     char* format_str = "%s/%s";
     char full_file_path[512];
-    string_format(full_file_path, format_str, resource_system_base_path(), name);
+    string_format_unsafe(full_file_path, format_str, resource_system_base_path(), name);
 
     file* f;
     if(!platform_file_open(full_file_path, FILE_MODE_READ | FILE_MODE_BINARY, &f))

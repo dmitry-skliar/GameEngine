@@ -30,7 +30,7 @@ VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context
     requirements.extensions         = darray_create(const char*);
     darray_push(requirements.extensions, &VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
-    // Поиск всех устройств и сбор по ним информации.
+    // Получение доступных физических устройств и информация по ним.
     vulkan_device* devices = null;
     VkResult result = vulkan_create_devices_info(backend, context, &devices);
     if(!vulkan_result_is_success(result))
@@ -38,16 +38,18 @@ VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context
         return result;
     }
 
+    // Вывести отладочную информацию по найденым устройствам.
+    vulkan_logging_devices_info(context, devices);
+
     // Выбор физического устройства в соответствии с требованиями.
     result = vulkan_select_device(context, devices, &requirements);
     if(!vulkan_result_is_success(result))
     {
         return result;
     }
-    ktrace("Vulkan physical device obtained.");
 
-    // Вывести отладочную информацию по найденым устройствам.
-    vulkan_logging_devices_info(context, devices);
+    // Удаление собраной информации о физических устройствах.
+    vulkan_destroy_devices_info(backend, context, devices);
 
     // NOTE: Для пропуска совместных очередей с общим индексом.
     bool present_shares_graphics_queue = context->device.graphics_queue.index == context->device.present_queue.index;
@@ -127,7 +129,6 @@ VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context
 
     // Освобождение используемой памяти.
     darray_destroy(requirements.extensions); // NOTE: Обнуление указателей и данных не нужно, они в стеке!
-    vulkan_destroy_devices_info(backend, context, devices);
 
     u32 present_queue_index = present_must_share_graphics ? 0 : (present_shares_graphics_queue ? 1 : 0);
     vkGetDeviceQueue(context->device.logical, context->device.graphics_queue.index, 0, &context->device.graphics_queue.handle);
@@ -146,8 +147,8 @@ VkResult vulkan_device_create(renderer_backend* backend, vulkan_context* context
     {
         kfatal("Failed to create qraphics command pool with result: %s", vulkan_result_get_string(result, true));
     }
-    ktrace("Vulkan command pools created (Now only graphics!).");
 
+    ktrace("Vulkan command pools created (Now only graphics!).");
     return VK_SUCCESS;
 }
 
@@ -421,7 +422,6 @@ void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices
     u32 device_count = darray_capacity(devices);
     const char* gpu_names[] = { "unknown", "integrated", "discrete", "virtual", "host cpu" };
     const char* is_support[] = { "YES", "NO" };
-    u32 gpu_index = INVALID_ID;
 
     for(u32 i = 0; i < device_count; ++i)
     {
@@ -451,7 +451,6 @@ void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices
 
         kdebug("[%2d] GPU Type: %s", i, gpu_names[gpu_type_index]);
         kdebug("[%2d] GPU Name: %s (driver ver. %d.%d.%d)", i, dev_name, drv_major, drv_minor, drv_patch);
-
         kdebug("[%2d] GPU Graphics queue %3s family: index %2d, count %2d", i, graphics_support, qi_graphics, qc_graphics);
         kdebug("[%2d] GPU Present queue  %3s family: index %2d, count %2d", i, present_support, qi_present, qc_present);
         kdebug("[%2d] GPU Compute queue  %3s family: index %2d, count %2d", i, compute_support, qi_compute, qc_compute);
@@ -459,15 +458,16 @@ void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices
 
         for(u32 j = 0; j < devices[i].memory.memoryHeapCount; ++j)
         {
-            f32 mem_size = (((f32)devices[i].memory.memoryHeaps[j].size) / 1024.0f / 1024.0f);
+            f32 mem_amount = 0;
+            const char* mem_unit = memory_get_unit_for(devices[i].memory.memoryHeaps[j].size, &mem_amount);
 
             if(devices[i].memory.memoryHeaps[j].flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
             {
-                kdebug("[%2d] GPU Local memory: %0.2f MiB", i, mem_size);
+                kdebug("[%2d] GPU Local memory: %.2f %s", i, mem_amount, mem_unit);
             }
             else
             {
-                kdebug("[%2d] GPU Shared memory: %0.2f MiB", i, mem_size);
+                kdebug("[%2d] GPU Shared memory: %.2f %s", i, mem_amount, mem_unit);
             }
         }
 
@@ -475,14 +475,7 @@ void vulkan_logging_devices_info(vulkan_context* context, vulkan_device* devices
         {
             kdebug("[%2d] GPU local host visible memory support", i);
         }
-
-        if(devices[i].physical == context->device.physical)
-        {
-            gpu_index = i;
-        }
     }
-
-    ktrace("GPU index selected: %d", gpu_index);
 }
 
 VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, vulkan_device_requirements* requirements)
@@ -514,7 +507,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
                 current_score_device = 2;
                 break;
             default:
-                kwarng("Vulkan device properties: unknown device type! Skipping...");
+                ktrace("Vulkan physical device (index %u): unknown device type! Skipping...", i);
                 continue;
         }
 
@@ -522,7 +515,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
         if((requirements->device_type == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU   && current_score_device != 5)
         || (requirements->device_type == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && current_score_device != 4))
         {
-            kwarng("Vulkan device type does not meet requirements! Skipping...");
+            ktrace("Vulkan physical device (index %u) does not meet requirements! Skipping...", i);
             continue;
         }
 
@@ -531,7 +524,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
         || devices[i].present_queue.index  == INVALID_ID
         || devices[i].transfer_queue.index == INVALID_ID)
         {
-            kwarng("Vulkan device queues does not meet requirements! Skipping...");
+            ktrace("Vulkan physical device (index %u) does not meet requirements! Skipping...", i);
             continue;
         }
 
@@ -547,7 +540,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
 
             if(available_extension_count == 0)
             {
-                kwarng("Extensions for Vulkan devices are not provided. Skipping...");
+                ktrace("Vulkan physical device (index %u) extensions are not provided. Skipping...", i);
                 continue;
             }
 
@@ -574,7 +567,7 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
 
                 if(!found)
                 {
-                    kwarng("Vulkan device extension '%s' not supported. Skipping...", requirements->extensions[i]);
+                    ktrace("Vulkan physical device (index %u) extension '%s' not supported. Skipping...", i, requirements->extensions[i]);
                     required_extension_not_supported = true;
                     break;
                 }
@@ -592,14 +585,14 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
         // Проверка поддержки анизотропной фильтрации.
         if(requirements->sampler_anisotropy && !devices[i].features.samplerAnisotropy)
         {
-            kwarng("Vulkan device does not support sampler anisotropy. Skipping...");
+            ktrace("Vulkan physical device (index %u) does not support sampler anisotropy. Skipping...", i);
             continue;
         }
 
         // Проверка поддерживаемых режимов показов и формата поверхнисти.
         if(devices[i].swapchain_support.format_count < 1 || devices[i].swapchain_support.present_mode_count < 1)
         {
-            kwarng("Vulkan device does not support surface formats or present modes of swapchain. Skipping...");
+            ktrace("Vulkan physical device (index %u) does not support surface formats or present modes of swapchain. Skipping...", i);
             continue;
         }
 
@@ -613,11 +606,14 @@ VkResult vulkan_select_device(vulkan_context* context, vulkan_device* devices, v
 
     if(index_physical_device != INVALID_ID)
     {
+        // Копирование данных выбранного физического устройства.
         kcopy_tc(&context->device, &devices[index_physical_device], vulkan_device, 1);
+
+        ktrace("Vulkan physical device (index %u) obtained.", index_physical_device);
         return VK_SUCCESS;
     }
 
-    kerror("No devices which support requirements were found!");
+    kerror("No physical devices which support requirements were found!");
     return VK_ERROR_UNKNOWN;
 }
 

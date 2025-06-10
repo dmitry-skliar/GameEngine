@@ -28,6 +28,230 @@ static vulkan_context* context = null;
 const u32 DESC_SET_INDEX_GLOBAL   = 0;
 const u32 DESC_SET_INDEX_INSTANCE = 1;
 
+// NOTE: Если установлен - используется пользовательский распределитель памяти для Vulkan.
+#ifdef KVULKAN_USE_CUSTOM_ALLOCATOR_FLAG
+
+// Дополнительная проверка размеров типов.
+STATIC_ASSERT(sizeof(ptr) == sizeof(size_t), "Size of ptr must be equal to size_t.");
+
+const char* vulkan_get_allocation_scope(VkSystemAllocationScope scope)
+{
+    switch(scope)
+    {
+        case VK_SYSTEM_ALLOCATION_SCOPE_COMMAND:
+            return "command";
+        case VK_SYSTEM_ALLOCATION_SCOPE_OBJECT:
+            return "object";
+        case VK_SYSTEM_ALLOCATION_SCOPE_CACHE:
+            return "cache";
+        case VK_SYSTEM_ALLOCATION_SCOPE_DEVICE:
+            return "device";
+        case VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE:
+            return "instance";
+        default:
+            return "unknown";
+    }
+}
+
+/*
+    @brief Пытается выделить запрашиваемое количество памяти с заданным выравниванием и областью использования.
+    @param user_data Указатель на пользовательские данные (контекст).
+    @param size Размер запрашиваемой памяти в байтах.
+    @param alignment Кратность выравнивания блока памяти. Должна быть степенью двойки.
+    @param allocation_scope Область использования, так же означает время использования.
+    @return В случае успеха указатель на выделенный блока памяти, в противном случае null c выводом сообщения в логи.
+*/
+void* vulkan_allocator_allocate(void* user_data, ptr size, ptr alignment, VkSystemAllocationScope allocation_scope)
+{
+    if(!size || !alignment)
+    {
+        kerror("Function '%s' requires size and alignment greater than zero.", __FUNCTION__);
+        return null;
+    }
+
+    void* block = kallocate_aligned(size, (u16)alignment, MEMORY_TAG_VULKAN);
+
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+    // Обновление размера, с тем учетом, что распределитель может иногда выдавать блок чуть-чуть болбше.
+    // NOTE: Можно использовать без проверки, в случае если block == null, значение не будет изменено.
+    memory_block_get_size(block, &size);
+
+    // Получение количества и единицу измерения полученого блока памяти, если block == null - запрошенное значени.
+    f32 amount = 0;
+    const char* unit = memory_get_unit_for(size, &amount);
+    // Получение области использования.
+    const char* scope = vulkan_get_allocation_scope(allocation_scope);
+    ktrace("Function '%s': Allocated block %p (size %.2f %s, alignment %llu, scope %s)", __FUNCTION__, block, amount, unit, alignment, scope);
+#endif
+
+    return block;    
+}
+
+/*
+    @brief Птается освободить предоставленный участок памяти.
+    @param user_data Указатель на пользовательские данные (контекст).
+    @param block Указатель на блок памяти который необходимо освободить.
+*/
+void vulkan_allocator_free(void* user_data, void* block)
+{
+    if(!block)
+    {
+        // ktrace("Block is null, nothing to free.");
+        kerror("Function '%s' requires a valid pointer to memory block.", __FUNCTION__);
+        return;
+    }
+
+    // Получение размера освобождаемого блока памяти.
+    ptr size = 0;
+    memory_block_get_size(block, &size);
+
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+    // Получение количества и единицу измерения освобождаемого блока памяти.
+    f32 amount = 0;
+    const char* unit = memory_get_unit_for(size, &amount);
+    ktrace("Function '%s': Attempting to free block %p (size %.2f %s)...", __FUNCTION__, block, amount, unit);
+#endif
+
+    kfree(block, MEMORY_TAG_VULKAN);
+}
+
+// TODO: Взять на заметку, и переделать другие распределители памяти!
+/*
+    @brief Пытается выделить участок памяти и скопировать туда данные старого, после чего удалит старый.
+    @note  В случае неудачи при original != null останется нетронутой (не освобожденной).
+    @param user_data Указатель на пользовательские данные (контекст).
+    @param original Указатель на старый блок памяти разпределителя vulkan, или null (поведение как у vulkan_allocator_allocate).
+    @param size Размер запрашиваемой памяти в байтах, или 0 (поведение как у vulkan_allocator_free).
+    @param alignment Кратность выравнивания блока памяти. Должна быть степенью двойки. Используется при original = null!
+    @param allocation_scope Область использования, так же означает время использования.
+    @return В случае успеха указатель на выделенный блока памяти, в противном случае null c выводом сообщения в логи.
+*/
+void* vulkan_allocator_reallocate(void* user_data, void* original, ptr size, ptr alignment, VkSystemAllocationScope allocation_scope)
+{
+    if(!original)
+    {
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+        ktrace("Function '%s' using for allocate operation.", __FUNCTION__);
+#endif
+        return vulkan_allocator_allocate(user_data, size, alignment, allocation_scope);
+    }
+
+    if(!size)
+    {
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+        ktrace("Function '%s' using for free operation.", __FUNCTION__);
+#endif
+        vulkan_allocator_free(user_data, original);
+        return null;
+    }
+
+    // Получение служебной информации блока.
+    ptr original_size = 0;
+    u16 original_alignment = 0;
+    memory_block_get_size(original, &original_size);
+    memory_block_get_alignment(original, &original_alignment);
+
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+    // Получение количества и единицу измерения.
+    f32 original_amount = 0;
+    f32 required_amount = 0;
+    const char* original_unit = memory_get_unit_for(original_size, &original_amount);
+    const char* required_unit = memory_get_unit_for(size, &required_amount);
+
+    if(original_size > size)
+    {
+        ktrace(
+            "Function '%s': Required block %.2f %s less then original block %.2f %s (%p).",
+            __FUNCTION__, required_amount, required_unit, original_amount, original_unit, original
+        );
+    }
+
+    if(!original_alignment)
+    {
+        ktrace("Function '%s': Original block %p is not aligned.", __FUNCTION__, original);
+    }
+
+    if(original_alignment != alignment)
+    {
+        // NOTE: Смотри https://registry.khronos.org/vulkan/specs/latest/man/html/PFN_vkReallocationFunction.html
+        ktrace(
+            "Function '%s': Different alignments: original %u required %llu. Using original!",
+            __FUNCTION__, original_alignment, alignment
+        );
+    }
+
+    ktrace(
+        "Function '%s': Attempting to reallocate block %p (size %.2f %s alignment %u)...",
+        __FUNCTION__, original, original_amount, original_unit, original_alignment
+    );
+#endif
+
+    void* block = vulkan_allocator_allocate(user_data, size, original_alignment, allocation_scope);
+    if(block)
+    {
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+        ktrace(
+            "Function '%s': Block %p reallocated to %p (size %.2f %s alignment %u), copying data...",
+            __FUNCTION__, original, block, required_amount, required_unit, original_alignment
+        );
+#endif
+        // Копирование старого блока памяти в новый.
+        kcopy(block, original, KMIN(original_size, size));
+
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+        ktrace("Function '%s': Freeing original block %p...", __FUNCTION__, original);
+#endif
+        // Освобождение старого блока памяти.
+        kfree(original, MEMORY_TAG_VULKAN);
+    }
+    else
+    {
+        kerror("Function '%s': Failed to reallocate block %p.", __FUNCTION__, original);
+    }
+
+    return block;
+}
+
+/*
+    @brief Уведомляет об выделении количества байт памяти с типом и областью использования.
+    @param user_data Указатель на пользовательские данные (контекст).
+    @param size Размер выделенной памяти в байтах.
+    @param allocation_type Тип памяти, которая выделена.
+    @param allocation_scope Область использования, так же означает время использования.
+*/
+void vulkan_allocator_allocate_report(void* user_data, ptr size, VkInternalAllocationType allocation_type, VkSystemAllocationScope allocation_scope)
+{
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+    f32 amount = 0;
+    const char* unit = memory_get_unit_for(size, &amount);
+    const char* scope = vulkan_get_allocation_scope(allocation_scope);
+    ktrace("Function '%s': Internal allocated block (size %.2f %s scope %s) ...", __FUNCTION__, amount, unit, scope);
+#endif
+
+    kallocate_report(size, MEMORY_TAG_VULKAN_INTERNAL);
+}
+
+/*
+    @brief Уведомляет об освобождении количества байт памяти с типом и областью использования.
+    @param user_data Указатель на пользовательские данные (контекст).
+    @param size Размер освобожденной памяти в байтах.
+    @param allocation_type Тип памяти, которая освобождена.
+    @param allocation_scope Область использования, так же означает время использования.
+
+*/
+void vulkan_allocator_free_report(void* user_data, ptr size, VkInternalAllocationType allocation_type, VkSystemAllocationScope allocation_scope)
+{
+#ifdef KVULKAN_ALLOCATOR_TRACE_FLAG
+    f32 amount = 0;
+    const char* unit = memory_get_unit_for(size, &amount);
+    const char* scope = vulkan_get_allocation_scope(allocation_scope);
+    ktrace("Function '%s': Internal freed block (size %.2f %s scope %s) ...", __FUNCTION__, amount, unit, scope);
+#endif
+
+    kfree_report(size, MEMORY_TAG_VULKAN_INTERNAL);
+}
+#endif // Окончание функций пользовательского распределителя памяти для vulkan.
+
 VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_message_handler(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data
@@ -138,7 +362,7 @@ bool swapchain_recreate()
     return true;
 }
 
-bool upload_data_range(VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, u64* out_offset, u64 size, const void* data)
+bool upload_data_range(VkCommandPool pool, VkFence fence, VkQueue queue, vulkan_buffer* buffer, ptr* out_offset, ptr size, const void* data)
 {
     // Выделение памяти в буфере.
     if(!vulkan_buffer_allocate(buffer, size, out_offset))
@@ -287,8 +511,20 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
     // Начальная инициализация.
     context->find_memory_index = find_memory_index;
 
-    // TODO: Сделать аллокатор.
+    // Пользовательский распределитель памяти.
+#ifdef KVULKAN_USE_CUSTOM_ALLOCATOR_FLAG
+    context->custom_allocator.pUserData             = context;
+    context->custom_allocator.pfnAllocation         = vulkan_allocator_allocate;
+    context->custom_allocator.pfnReallocation       = vulkan_allocator_reallocate;
+    context->custom_allocator.pfnFree               = vulkan_allocator_free;
+    context->custom_allocator.pfnInternalAllocation = vulkan_allocator_allocate_report;
+    context->custom_allocator.pfnInternalFree       = vulkan_allocator_free_report;
+    context->allocator = &context->custom_allocator;
+    ktrace("Vulkan using custom allocator.");
+#else
     context->allocator = null;
+    ktrace("Vulkan using default allocator.");
+#endif
 
     context->on_rendertarget_refresh_required = config->on_rendertarget_refresh_required;
     context->framebuffer_width = backend->window_state->width;
@@ -324,7 +560,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
     darray_push(required_extentions, &VK_KHR_SURFACE_EXTENSION_NAME);                    // Расширение для использования поверхности.
     platform_window_get_vulkan_extentions(backend->window_state, &required_extentions);  // Платформо-зависимые расширения.
 #if KDEBUG_FLAG
-    darray_push(required_extentions, &VK_EXT_DEBUG_UTILS_EXTENSION_NAME); // Расширение для отладки.
+    darray_push(required_extentions, &VK_EXT_DEBUG_UTILS_EXTENSION_NAME);                // Расширение для отладки.
 #endif
 
     // Получение списока доступных расширений.
@@ -332,7 +568,6 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
     vkEnumerateInstanceExtensionProperties(null, &available_extension_count, null);
     VkExtensionProperties* avaulable_extensions = darray_reserve(VkExtensionProperties, available_extension_count);
     vkEnumerateInstanceExtensionProperties(null, &available_extension_count, avaulable_extensions);
-
     kdebug("Vulkan supported extensions:");
     for(u32 i = 0; i < available_extension_count; ++i)
     {
@@ -380,7 +615,6 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
     vkEnumerateInstanceLayerProperties(&available_layer_count, null);
     VkLayerProperties* available_layers = darray_reserve(VkLayerProperties, available_layer_count);
     vkEnumerateInstanceLayerProperties(&available_layer_count, available_layers);
-
     kdebug("Vulkan supported validation layers:");
     for(u32 i = 0; i < available_layer_count; ++i)
     {
@@ -420,12 +654,13 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
     VkResult result = vkCreateInstance(&instinfo, context->allocator, &context->instance);
     if(!vulkan_result_is_success(result))
     {
-        kerror("Failed to create vulkan instance with result: %s", vulkan_result_get_string(result, true));
+        const char* result_str = vulkan_result_get_string(result, true);
+        kfatal("Vulkan instance creation failed with result: '%s'.", result_str);
         return false;
     }
     ktrace("Vulkan instance created.");
 
-    // TODO: Мультипоточность.
+    // TODO: Многопоточность.
     context->multithreading_enabled = false; // заглушка.
 
     // Очистка используемой памяти.
@@ -478,7 +713,7 @@ bool vulkan_renderer_backend_initialize(renderer_backend* backend, const rendere
         kerror("Failed to create vulkan device with result: %s", vulkan_result_get_string(result, true));
         return false;
     }
-    ktrace("Vulkan device created.");
+    ktrace("Vulkan device has been successfully created.");
 
     // Создание цепочки обмена.
     vulkan_swapchain_create(context, context->framebuffer_width, context->framebuffer_height, &context->swapchain);
@@ -669,7 +904,7 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
 
     // Уничтожение проходов визуализатора.
     hashtable_destroy(context->renderpass_table);
-    kfree(context->renderpass_memory, context->renderpass_memory_requirements, MEMORY_TAG_HASHTABLE);
+    kfree(context->renderpass_memory, MEMORY_TAG_HASHTABLE);
     
     for(u32 i = 0; i < VULKAN_MAX_REGISTERED_RENDERPASSES; ++i)
     {
@@ -717,8 +952,9 @@ void vulkan_renderer_backend_shutdown(renderer_backend* backend)
     // Уничтожение контекста vulkan.
     if(context)
     {
-        kfree_tc(context, vulkan_context, 1, MEMORY_TAG_RENDERER);
+        kfree(context, MEMORY_TAG_RENDERER);
         context = null;
+
         ktrace("Vulkan context destroyed.");
     }
 }
@@ -1007,7 +1243,7 @@ void vulkan_renderer_renderpass_destroy(renderpass* pass)
     vkDestroyRenderPass(context->device.logical, vk_renderpass->handle, context->allocator);
     vk_renderpass->handle = null;
 
-    kfree_tc(vk_renderpass, vulkan_renderpass, 1, MEMORY_TAG_RENDERER);
+    kfree(vk_renderpass, MEMORY_TAG_RENDERER);
     pass->internal_data = null;
 }
 
@@ -1126,7 +1362,7 @@ void vulkan_renderer_texture_destroy(texture* t)
     if(t->internal_data)
     {
         vulkan_image_destroy(context, t->internal_data);
-        kfree_tc(t->internal_data, vulkan_image, 1, MEMORY_TAG_TEXTURE);
+        kfree(t->internal_data, MEMORY_TAG_TEXTURE);
     }
 
     kzero_tc(t, texture, 1);
@@ -1637,7 +1873,7 @@ void vulkan_renderer_shader_destroy(shader* shader)
         vkDestroyShaderModule(logical, vk_shader->stages[i].handle, vk_allocator);
     }
 
-    kfree_tc(vk_shader, vulkan_shader, 1, MEMORY_TAG_RENDERER);
+    kfree(vk_shader, MEMORY_TAG_RENDERER);
     shader->internal_data = null;
 }
 
@@ -2058,7 +2294,7 @@ bool vulkan_renderer_shader_acquire_instance_resources(shader* s, texture_map** 
     {
         if(!vulkan_buffer_allocate(&vk_shader->uniform_buffer, size, &instance_state->offset))
         {
-            kerror("Function '%': Failed t oacuire ubo space.", __FUNCTION__);
+            kerror("Function '%': Failed to acquire ubo space.", __FUNCTION__);
             return false;
         }
     }
@@ -2132,10 +2368,11 @@ bool vulkan_renderer_shader_release_instance_resources(shader* shader, u32 insta
 
     if(instance_state->instance_texture_maps)
     {
-        kfree_tc(instance_state->instance_texture_maps, texture_map*, shader->instance_texture_count, MEMORY_TAG_ARRAY);
+        kfree(instance_state->instance_texture_maps, MEMORY_TAG_ARRAY);
         instance_state->instance_texture_maps = null;
     }
 
+    // TODO: Размер ubo_stride не проверсяется.
     vulkan_buffer_free(&vk_shader->uniform_buffer, shader->ubo_stride, instance_state->offset);
     instance_state->offset = INVALID_ID;
     instance_state->id = INVALID_ID;
@@ -2223,7 +2460,7 @@ void vulkan_renderer_render_target_destroy(render_target* target, bool free_inte
 
     if(free_internal_memory)
     {
-        kfree_tc(target->attachments, texture*, target->attachment_count, MEMORY_TAG_ARRAY);
+        kfree(target->attachments, MEMORY_TAG_ARRAY);
         target->attachments = null;
         target->attachment_count = 0;
     }

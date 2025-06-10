@@ -7,7 +7,7 @@
 #include <debug/assert.h>
 
 // NOTE: Смотри за реализацией! Необходимо для более глубокого тестирования.
-#define CONTEXT_SIZE      40
+#define CONTEXT_SIZE      48
 #define BLOCK_HEADER_SIZE 24
 
 // Макрос получения реального общего размера памяти с учетом контекста и размера заголовка блока.
@@ -15,8 +15,8 @@
 
 u8 test1()
 {
-    u64 total_size = KIBIBYTES(1);
-    u64 memory_requirement = 0;
+    ptr total_size = 1 KiB;
+    ptr memory_requirement = 0;
     
     dynamic_allocator* dalloc = dynamic_allocator_create(total_size, &memory_requirement, null);
     expect_should_not_be(0, memory_requirement);
@@ -28,21 +28,21 @@ u8 test1()
     expect_pointer_should_not_be(null, dalloc);
     // Начало зоны тестов!
 
-    u64 free_space = dynamic_allocator_get_free_space(dalloc);
+    ptr free_space = dynamic_allocator_get_free_space(dalloc);
     expect_should_be(REAL_TOTAL_SIZE(total_size), free_space);
-    u64 free_blocks = dynamic_allocator_get_free_block_count(dalloc);
+    ptr free_blocks = dynamic_allocator_get_free_block_count(dalloc);
     expect_should_be(1, free_blocks);
 
     // Конец зоны тестов!
     dynamic_allocator_destroy(dalloc);
-    kfree(memory, memory_requirement, MEMORY_TAG_ALLOCATOR);
+    kfree(memory, MEMORY_TAG_ALLOCATOR);
     return true;
 }
 
 u8 test2()
 {
-    u64 total_size = KIBIBYTES(1);
-    u64 memory_requirement = 0;
+    ptr total_size = 1 KiB;
+    ptr memory_requirement = 0;
     
     dynamic_allocator* dalloc = dynamic_allocator_create(total_size, &memory_requirement, null);
     expect_should_not_be(0, memory_requirement);
@@ -54,9 +54,9 @@ u8 test2()
     expect_pointer_should_not_be(null, dalloc);
     // Начало зоны тестов!
 
-    u64 free_space = dynamic_allocator_get_free_space(dalloc);
+    ptr free_space = dynamic_allocator_get_free_space(dalloc);
     expect_should_be(REAL_TOTAL_SIZE(total_size), free_space);
-    u64 free_blocks = dynamic_allocator_get_free_block_count(dalloc);
+    ptr free_blocks = dynamic_allocator_get_free_block_count(dalloc);
     expect_should_be(1, free_blocks);
 
     // Т.е. выделение всей свободной памяти сразу.
@@ -78,14 +78,14 @@ u8 test2()
 
     // Конец зоны тестов!
     dynamic_allocator_destroy(dalloc);
-    kfree(memory, memory_requirement, MEMORY_TAG_ALLOCATOR);
+    kfree(memory, MEMORY_TAG_ALLOCATOR);
     return true;
 }
 
 u8 test3()
 {
-    u64 total_size = 1040;
-    u64 memory_requirement = 0;
+    ptr total_size = 1040;
+    ptr memory_requirement = 0;
     
     dynamic_allocator* dalloc = dynamic_allocator_create(total_size, &memory_requirement, null);
     expect_should_not_be(0, memory_requirement);
@@ -97,9 +97,9 @@ u8 test3()
     expect_pointer_should_not_be(null, dalloc);
     // Начало зоны тестов!
 
-    u64 free_space = dynamic_allocator_get_free_space(dalloc);
+    ptr free_space = dynamic_allocator_get_free_space(dalloc);
     expect_should_be(REAL_TOTAL_SIZE(total_size), free_space); // 976 B.
-    u64 free_blocks = dynamic_allocator_get_free_block_count(dalloc);
+    ptr free_blocks = dynamic_allocator_get_free_block_count(dalloc);
     expect_should_be(1, free_blocks);
 
     void* block = dynamic_allocator_allocate(dalloc, REAL_TOTAL_SIZE(total_size), 1);
@@ -119,13 +119,13 @@ u8 test3()
     expect_should_be(1, free_blocks);
 
     #define ALLOC_COUNT 3
-    u64 alloc_size = 0;
-    u64 sizes[ALLOC_COUNT] = {256, 512, 160}; // 976 - 256 - 24 - 512 - 24 - 160
+    ptr alloc_size = 0;
+    ptr sizes[ALLOC_COUNT] = {256, 512, 152}; // 968 - 256 - 24 - 512 - 24 - 152
     void* blocks[ALLOC_COUNT] = {0};
 
     void* expect_block = block;
 
-    for(u64 i = 0; i < ALLOC_COUNT; ++i)
+    for(ptr i = 0; i < ALLOC_COUNT; ++i)
     {
         blocks[i] = dynamic_allocator_allocate(dalloc, sizes[i], 1);
         expect_pointer_should_not_be(null, blocks[i]);
@@ -149,7 +149,7 @@ u8 test3()
     free_blocks = dynamic_allocator_get_free_block_count(dalloc);
     expect_should_be(0, free_blocks);
 
-    u64 free_size = 0;
+    ptr free_size = 0;
 
     // Освобождение последнего. На этом этапе появится один блок.
     result = dynamic_allocator_free(dalloc, blocks[2]);
@@ -202,14 +202,14 @@ u8 test3()
 
     // Конец зоны тестов!
     dynamic_allocator_destroy(dalloc);
-    kfree(memory, memory_requirement, MEMORY_TAG_ALLOCATOR);
+    kfree(memory, MEMORY_TAG_ALLOCATOR);
     return true;
 }
 
 u8 test4()
 {
-    u64 total_size = 1104; // 40 + 24 + 1040.
-    u64 memory_requirement = 0;
+    ptr total_size = 1104; // 40 + 24 + 1040.
+    ptr memory_requirement = 0;
     
     dynamic_allocator* dalloc = dynamic_allocator_create(total_size, &memory_requirement, null);
     expect_should_not_be(0, memory_requirement);
@@ -221,9 +221,9 @@ u8 test4()
     expect_pointer_should_not_be(null, dalloc);
     // Начало зоны тестов!
 
-    u64 free_space = dynamic_allocator_get_free_space(dalloc);
+    ptr free_space = dynamic_allocator_get_free_space(dalloc);
     expect_should_be(REAL_TOTAL_SIZE(total_size), free_space);
-    u64 free_blocks = dynamic_allocator_get_free_block_count(dalloc);
+    ptr free_blocks = dynamic_allocator_get_free_block_count(dalloc);
     expect_should_be(1, free_blocks);
 
     // Так как памяти для разделения блока на два не хватает, то будет выделен весь блок.
@@ -254,14 +254,14 @@ u8 test4()
 
     // Конец зоны тестов!
     dynamic_allocator_destroy(dalloc);
-    kfree(memory, memory_requirement, MEMORY_TAG_ALLOCATOR);
+    kfree(memory, MEMORY_TAG_ALLOCATOR);
     return true;
 }
 
 u8 test5()
 {
-    u64 total_size = 1104; // 40 + 24 + 1040.
-    u64 memory_requirement = 0;
+    ptr total_size = 1104; // 40 + 24 + 1040.
+    ptr memory_requirement = 0;
     
     dynamic_allocator* dalloc = dynamic_allocator_create(total_size, &memory_requirement, null);
     expect_should_not_be(0, memory_requirement);
@@ -273,9 +273,9 @@ u8 test5()
     expect_pointer_should_not_be(null, dalloc);
     // Начало зоны тестов!
 
-    u64 free_space = dynamic_allocator_get_free_space(dalloc);
+    ptr free_space = dynamic_allocator_get_free_space(dalloc);
     expect_should_be(REAL_TOTAL_SIZE(total_size), free_space);
-    u64 free_blocks = dynamic_allocator_get_free_block_count(dalloc);
+    ptr free_blocks = dynamic_allocator_get_free_block_count(dalloc);
     expect_should_be(1, free_blocks);
 
     kdebug("Note: The following 2 warning messages are intentionally caused by this test.");
@@ -292,13 +292,13 @@ u8 test5()
     dynamic_allocator_free(dalloc, block);
 
     #define ALLOC_COUNT 3
-    u64 alloc_size = 0;
-    u64 sizes[ALLOC_COUNT] = {256, 512, 128}; // 1040 - 256 - 24 - 512 - 24 - 128 = 96
+    ptr alloc_size = 0;
+    ptr sizes[ALLOC_COUNT] = {256, 512, 128}; // 1040 - 256 - 24 - 512 - 24 - 128 = 96
     void* blocks[ALLOC_COUNT] = {0};
 
     void* expect_block = block;
 
-    for(u64 i = 0; i < ALLOC_COUNT; ++i)
+    for(ptr i = 0; i < ALLOC_COUNT; ++i)
     {
         blocks[i] = dynamic_allocator_allocate(dalloc, sizes[i], 1);
         expect_pointer_should_not_be(null, blocks[i]);
@@ -323,7 +323,7 @@ u8 test5()
 
     bool result = false;
 
-    for(u64 i = 0; i < ALLOC_COUNT; ++i)
+    for(ptr i = 0; i < ALLOC_COUNT; ++i)
     {
         result = dynamic_allocator_free(dalloc, blocks[i]);
         expect_to_be_true(result);
@@ -336,7 +336,7 @@ u8 test5()
 
     // Конец зоны тестов!
     dynamic_allocator_destroy(dalloc);
-    kfree(memory, memory_requirement, MEMORY_TAG_ALLOCATOR);
+    kfree(memory, MEMORY_TAG_ALLOCATOR);
     return true;
 }
 

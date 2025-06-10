@@ -275,7 +275,7 @@ void texture_system_release(const char* name)
 
     if(!name || !string_length(name))
     {
-        kerror("Function '%s': Failed to call function without texture name.", __FUNCTION__);
+        kerror("Function '%s' called without texture name.", __FUNCTION__);
         return;
     }
 
@@ -492,7 +492,7 @@ bool default_textures_create()
     renderer_texture_create(&state_ptr->default_normal_texture, norm_pixels);
     state_ptr->default_normal_texture.generation = INVALID_ID;
 
-    kfree(pixels, pixels_size, MEMORY_TAG_TEXTURE);
+    kfree(pixels, MEMORY_TAG_TEXTURE);
     return true;
 }
 
@@ -537,7 +537,7 @@ bool texture_load_cube(const char* name, const char texture_names[6][TEXTURE_NAM
         else if(t->width != resource_data->width || t->height != resource_data->height || t->channel_count != resource_data->channel_count)
         {
             kerror("Function '%s': All textures must be the same resolution and bit depth.", __FUNCTION__);
-            kfree_tc(pixels, u8, image_size * 6, MEMORY_TAG_ARRAY);
+            kfree(pixels, MEMORY_TAG_ARRAY);
             pixels = null;
             return false;
         }
@@ -550,7 +550,7 @@ bool texture_load_cube(const char* name, const char texture_names[6][TEXTURE_NAM
     // Загрузка текстуры в видеопамять (текстура с несколькими слоями).
     renderer_texture_create(t, pixels);
 
-    kfree_tc(pixels, u8, image_size * 6, MEMORY_TAG_ARRAY);
+    kfree(pixels, MEMORY_TAG_ARRAY);
     pixels = null;
 
     return true;
@@ -688,12 +688,12 @@ bool texture_process_acquire(const char* name, texture_type type, bool auto_rele
         {
             // +X, -X, +Y, -Y, +Z, -Z.
             char texture_names[6][TEXTURE_NAME_MAX_LENGTH];
-            string_format(texture_names[0], "%s_r", name); // Правая текстура.
-            string_format(texture_names[1], "%s_l", name); // Левая текстура.
-            string_format(texture_names[2], "%s_u", name); // Верхняя текстура.
-            string_format(texture_names[3], "%s_d", name); // Нижняя текстура.
-            string_format(texture_names[4], "%s_f", name); // Передняя текстура (Фронтовая).
-            string_format(texture_names[5], "%s_b", name); // Задняя текстура (Тыловая).
+            string_format_unsafe(texture_names[0], "%s_r", name); // Правая текстура.
+            string_format_unsafe(texture_names[1], "%s_l", name); // Левая текстура.
+            string_format_unsafe(texture_names[2], "%s_u", name); // Верхняя текстура.
+            string_format_unsafe(texture_names[3], "%s_d", name); // Нижняя текстура.
+            string_format_unsafe(texture_names[4], "%s_f", name); // Передняя текстура (Фронтовая).
+            string_format_unsafe(texture_names[5], "%s_b", name); // Задняя текстура (Тыловая).
 
             if(!skip_load && !texture_load_cube(name, texture_names, t))
             {

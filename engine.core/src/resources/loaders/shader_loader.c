@@ -20,7 +20,7 @@ bool shader_loader_load(resource_loader* self, const char* name, void* params, r
 
     char* format_str = "%s/%s/%s%s";
     char  filepath_str[512];                // TODO: Сделать общей константой длинну. Добавить в проверку длину имени!
-    string_format(filepath_str, format_str, resource_system_base_path(), self->type_path, name, ".shadercfg");
+    string_format_unsafe(filepath_str, format_str, resource_system_base_path(), self->type_path, name, ".shadercfg");
 
     file* f;
     if(!platform_file_open(filepath_str, FILE_MODE_READ, &f))

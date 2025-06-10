@@ -27,7 +27,7 @@ typedef enum memory_tag {
     MEMORY_TAG_ENTITY_NODE,
     MEMORY_TAG_NODE,
     MEMORY_TAG_VULKAN,
-    MEMORY_TAG_VULKAN_EXT,
+    MEMORY_TAG_VULKAN_INTERNAL,
     MEMORY_TAG_GPU_LOCAL,
     MEMORY_TAGS_MAX
 } memory_tag;
@@ -76,8 +76,9 @@ KAPI ptr memory_system_allocation_count();
 KAPI void* memory_allocate(ptr size, u16 alignment, memory_tag tag);
 
 /*
-    @brief Запрашивает память у системы, без выделения памяти.
-    @param size Количество байт памяти.
+    @brief Уведомляет об выделении указаного количестве памяти.
+    @note  Используется для контроля памяти вне системы.
+    @param size Количество выделенной памяти в байтах.
     @param tag Маркер памяти.
 */
 KAPI void memory_allocate_report(ptr size, memory_tag tag);
@@ -89,11 +90,12 @@ KAPI void memory_allocate_report(ptr size, memory_tag tag);
     @param size Количество байт памяти.
     @param tag Маркер памяти.
 */
-KAPI void memory_free(void* block, ptr size, memory_tag tag);
+KAPI void memory_free(void* block, memory_tag tag);
 
 /*
-    @brief Возвращает память системе, без освобождения реальной памяти. 
-    @param size Количество байт памяти.
+    @brief Уведомляет об освободлении указанного количества памяти.
+    @note  Используется для контроля памяти вне системы.
+    @param size Количество освобожденной памяти в байтах.
     @param tag Маркер памяти.
 */
 KAPI void memory_free_report(ptr size, memory_tag tag);
@@ -104,7 +106,7 @@ KAPI void memory_free_report(ptr size, memory_tag tag);
     @param out_size Указатель на переменую для сохранения размера памяти в байтах.
     @retunr True в случае успеха, в противном случае false с выводом сообщения в логи.
 */
-KAPI bool memory_get_size(void* block, ptr* out_size);
+KAPI bool memory_block_get_size(void* block, ptr* out_size);
 
 /*
     @brief Пытается получить кратность выравнивания указаного блока памяти.
@@ -112,7 +114,16 @@ KAPI bool memory_get_size(void* block, ptr* out_size);
     @param out_alignment Указатель на переменую для сохранения кратности выравнивания блока памяти.
     @retunr True в случае успеха, в противном случае false с выводом сообщения в логи.
 */
-KAPI bool memory_get_alignment(void* block, u16* out_alignment);
+KAPI bool memory_block_get_alignment(void* block, u16* out_alignment);
+
+/*
+    @brief Получает количество и единицу измерения для указаного количества байт (стандарт МЭК).
+    @note  Можно использовать даже когда система не инициализирована.
+    @param bytes Количество байт для которого нужно получить количество и единицу изерения.
+    @param out_amount Указатель на переменую для сохранеиня преобразованного количества для единицы измерения.
+    @return Елиница измерения в виде строки стандарта МЭК.
+*/
+KAPI const char* memory_get_unit_for(ptr bytes, f32* out_amount);
 
 /*
     @brief Запрашивает память у системы без учета выравнивания.
@@ -169,20 +180,9 @@ KAPI bool memory_get_alignment(void* block, u16* out_alignment);
     @brief Возвращает память системе.
     @note  Указатель необходимо обнулить самостоятельно!
     @param block Указатель на память.
-    @param size Количество байт памяти.
     @param tag Маркер памяти.
 */
-#define kfree(block, size, tag) memory_free((void*)block, size, tag)
-
-/*
-    @brief Возвращает память системе.
-    @note  Указатель необходимо обнулить самостоятельно!
-    @param block Указатель на память.
-    @param type Тип элемента.
-    @param count Количество элементов.
-    @param tag Маркер памяти.
-*/
-#define kfree_tc(block, type, count, tag) memory_free((void*)block, sizeof(type) * count, tag)
+#define kfree(block, tag) memory_free((void*)block, tag)
 
 /*
     @brief Возвращает память системе, без реального освобождения.

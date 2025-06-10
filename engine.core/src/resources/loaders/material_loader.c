@@ -15,7 +15,7 @@ bool material_loader_load(resource_loader* self, const char* name, void* params,
 {
     char* format_str = "%s/%s/%s%s";
     char full_file_path[512];
-    string_format(full_file_path, format_str, resource_system_base_path(), self->type_path, name, ".kmt");
+    string_format_unsafe(full_file_path, format_str, resource_system_base_path(), self->type_path, name, ".kmt");
 
     file* f;
     if(!platform_file_open(full_file_path, FILE_MODE_READ, &f))

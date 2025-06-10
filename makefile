@@ -111,6 +111,8 @@ __platform_library_prefix     := lib
 __platform_library_format     := .so
 __platform_application_format :=
 __platform_define_flags       := -DKPLATFORM_LINUX_FLAG -DKPLATFORM_LINUX_WAYLAND_FLAG
+__platform_define_flags       += -DKVULKAN_USE_CUSTOM_ALLOCATOR_FLAG
+# __platform_define_flags       += -DKVULKAN_ALLOCATOR_TRACE_FLAG
 __platform_linker_flags       := -lwayland-client -lxkbcommon
 endif
 

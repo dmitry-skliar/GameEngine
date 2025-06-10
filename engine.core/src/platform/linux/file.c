@@ -99,7 +99,7 @@
         }
 
         fclose(file->handle);
-        kfree_tc(file, struct file, 1, MEMORY_TAG_FILE);
+        kfree(file, MEMORY_TAG_FILE);
     }
 
     u64 platform_file_size(file* file)

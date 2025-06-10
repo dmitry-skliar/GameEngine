@@ -16,7 +16,7 @@ int main()
 {
     // Использование менеджера памяти.
     memory_system_config conf;
-    conf.total_allocation_size = GIBIBYTES(1);
+    conf.total_allocation_size = 1 GiB;
     memory_system_initialize(&conf);
 
     // Инициализация менеджера тестирования.

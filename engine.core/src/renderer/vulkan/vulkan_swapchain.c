@@ -30,7 +30,7 @@ void vulkan_swapchain_destroy(vulkan_context* context, vulkan_swapchain* swapcha
 
     for(u32 i = 0; i < swapchain->image_count; ++i)
     {
-        kfree_tc(swapchain->render_textures[i]->internal_data, vulkan_image, 1, MEMORY_TAG_TEXTURE);
+        kfree(swapchain->render_textures[i]->internal_data, MEMORY_TAG_TEXTURE);
     }
 
     if(swapchain->render_textures)
@@ -41,11 +41,11 @@ void vulkan_swapchain_destroy(vulkan_context* context, vulkan_swapchain* swapcha
             texture* t = swapchain->render_textures[i];
             if(t)
             {
-                kfree_tc(t, texture, 1, MEMORY_TAG_TEXTURE);
+                kfree(t, MEMORY_TAG_TEXTURE);
             }
         }
 
-        kfree_tc(swapchain->render_textures, texture*, swapchain->image_count, MEMORY_TAG_RENDERER);
+        kfree(swapchain->render_textures, MEMORY_TAG_RENDERER);
     }
 }
 
@@ -243,6 +243,7 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
         {
             void* internal_data = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE);
             char tex_name[27] = "__default_frame_texture_0__";
+            // TODO: Обернуть в string_int_to_str
             tex_name[24] = '0' + (char)i;
 
             swapchain->render_textures[i] = texture_system_wrap_internal(
@@ -304,6 +305,11 @@ void create(vulkan_context* context, u32 width, u32 height, vulkan_swapchain* sw
         kerror("Function '%s': Failed to find a supported depth format.", __FUNCTION__);
     }
 
+    if(!swapchain->depth_texture)
+    {
+        
+    }
+
     // Создание буфера глубины (изображение и его представление).
     vulkan_image* image = kallocate_tc(vulkan_image, 1, MEMORY_TAG_TEXTURE); // TODO: Можно оптимизировать, что бы не создавать часто!
     vulkan_image_create(
@@ -326,9 +332,11 @@ void destroy(vulkan_context* context, vulkan_swapchain* swapchain)
     vkDeviceWaitIdle(context->device.logical);
 
     vulkan_image_destroy(context, swapchain->depth_texture->internal_data);
-    kfree_tc(swapchain->depth_texture->internal_data, vulkan_image, 1, MEMORY_TAG_TEXTURE);
+
+    kfree(swapchain->depth_texture->internal_data, MEMORY_TAG_TEXTURE);
     swapchain->depth_texture->internal_data = null;
-    kfree_tc(swapchain->depth_texture, texture, 1, MEMORY_TAG_TEXTURE);
+
+    kfree(swapchain->depth_texture, MEMORY_TAG_TEXTURE);
     swapchain->depth_texture = null;
 
     // Уничтожить только представление, но не изображения, поскольку они принадлежат цепочке

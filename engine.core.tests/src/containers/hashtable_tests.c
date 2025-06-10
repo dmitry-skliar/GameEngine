@@ -39,7 +39,7 @@ u8 hashtable_test1()
     expect_pointer_should_not_be(null, table);
 
     hashtable_destroy(table);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 
@@ -85,7 +85,7 @@ u8 hashtable_test2()
     }
 
     hashtable_destroy(table);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 
@@ -117,7 +117,7 @@ u8 hashtable_test3()
     expect_to_be_false(result);
 
     hashtable_destroy(table);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 
@@ -160,7 +160,7 @@ u8 hashtable_test4()
     expect_to_be_false(result);
 
     hashtable_destroy(table);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 
@@ -211,7 +211,7 @@ u8 hashtable_test5()
     }
 
     hashtable_destroy(table);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 
@@ -259,7 +259,7 @@ u8 hashtable_test6()
     }
 
     hashtable_destroy(table);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 
@@ -320,7 +320,7 @@ u8 hashtable_test7()
     }
 
     hashtable_destroy(table);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 
@@ -387,8 +387,8 @@ u8 hashtable_test8()
     }
 
     hashtable_destroy(table);
-    kfree_tc(test_values, test_structure, entry_count, MEMORY_TAG_ARRAY);
-    kfree(hashtable_memory, hashtable_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(test_values, MEMORY_TAG_ARRAY);
+    kfree(hashtable_memory, MEMORY_TAG_HASHTABLE);
     return true;
 }
 

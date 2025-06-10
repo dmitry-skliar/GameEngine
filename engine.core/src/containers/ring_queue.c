@@ -84,8 +84,7 @@ void ring_queue_destroy(ring_queue* queue)
 
     if(queue->owns_memory)
     {
-        u64 requirement = sizeof(struct ring_queue) + queue->stride * queue->capacity;
-        kfree(queue, requirement, MEMORY_TAG_RING_QUEUE);
+        kfree(queue, MEMORY_TAG_RING_QUEUE);
     }
 }
 

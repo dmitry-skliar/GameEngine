@@ -70,7 +70,7 @@ typedef struct shader {
     // @brief Шаг глобального объекта uniform-буфера (расстояние между объектами).
     u64 global_ubo_stride;
     // @brief Смещение в байтах от начала uniform-буфера.
-    u64 global_ubo_offset;
+    ptr global_ubo_offset;
     // @brief Размер экземпляра объекта uniform-буфера.
     u64 ubo_size;
     // @brief Шаг экземпляра объекта uniform-буфера.
@@ -125,6 +125,8 @@ bool shader_system_initialize(u64* memory_requirement, void* memory, shader_syst
 
 /*
     @brief Завершает работу системы шейдеров и освобождает выделеные ей ресурсы.
+    @note  Т.к. по окончании работы система автоматически уничтожает шейдеры, то
+           ее завершение должно происходить до уничтожении системы визуализации.
 */
 void shader_system_shutdown();
 

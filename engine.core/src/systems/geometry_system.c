@@ -183,12 +183,12 @@ void geometry_system_config_dispose(geometry_config* config)
 
     if(config->vertices)
     {
-        kfree(config->vertices, config->vertex_size * config->vertex_count, MEMORY_TAG_ARRAY);
+        kfree(config->vertices, MEMORY_TAG_ARRAY);
     }
 
     if(config->indices)
     {
-        kfree(config->indices, config->index_size * config->index_count, MEMORY_TAG_ARRAY);
+        kfree(config->indices, MEMORY_TAG_ARRAY);
     }
 
     kzero_tc(config, geometry_config, 1);

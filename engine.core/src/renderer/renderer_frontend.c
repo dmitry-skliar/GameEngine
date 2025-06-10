@@ -254,9 +254,9 @@ void renderer_system_shutdown()
         state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], true);
         state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], true);
     }
-    kfree_tc(state_ptr->skybox_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
-    kfree_tc(state_ptr->world_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
-    kfree_tc(state_ptr->ui_renderpass->targets, render_target, state_ptr->window_render_target_count, MEMORY_TAG_ARRAY);
+    kfree(state_ptr->skybox_renderpass->targets, MEMORY_TAG_ARRAY);
+    kfree(state_ptr->world_renderpass->targets, MEMORY_TAG_ARRAY);
+    kfree(state_ptr->ui_renderpass->targets, MEMORY_TAG_ARRAY);
 
     // Завершение работы рендерера.
     state_ptr->backend.shutdown(&state_ptr->backend);

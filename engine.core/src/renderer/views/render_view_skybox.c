@@ -63,7 +63,7 @@ bool render_view_skybox_on_create(render_view* self)
 void render_view_skybox_on_destroy(render_view* self)
 {
     if(!view_state_valid(self, __FUNCTION__)) return;
-    kfree_tc(self->internal_data, render_view_skybox_internal_data, 1, MEMORY_TAG_RENDERER);
+    kfree(self->internal_data, MEMORY_TAG_RENDERER);
     self->internal_data = null;
 }
 

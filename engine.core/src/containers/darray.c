@@ -58,7 +58,6 @@ void* dynamic_array_resize(void* array, u64 capacity)
         return array;
     }
 
-    u64 old_array_total_size = sizeof(struct dynamic_array_header) + old_array->stride * old_array->capacity;
     u64 new_array_total_size = sizeof(struct dynamic_array_header) + old_array->stride * capacity;
 
     void* new_array = kallocate(new_array_total_size, MEMORY_TAG_DARRAY);
@@ -69,7 +68,7 @@ void* dynamic_array_resize(void* array, u64 capacity)
         old_array->capacity = capacity; // Заранее обновляем емкость.
 
         kcopy(new_array, old_array, old_array_data_size);
-        kfree(old_array, old_array_total_size, MEMORY_TAG_DARRAY);
+        kfree(old_array, MEMORY_TAG_DARRAY);
 
         return (void*)((u8*)new_array + sizeof(struct dynamic_array_header));
     }
@@ -83,8 +82,7 @@ void dynamic_array_destroy(void* array)
     if(array)
     {
         dynamic_array_header* header = (void*)((u8*)array - sizeof(struct dynamic_array_header));
-        u64 total_size = sizeof(struct dynamic_array_header) + header->stride * header->capacity;
-        kfree(header, total_size, MEMORY_TAG_DARRAY);
+        kfree(header, MEMORY_TAG_DARRAY);
     }
     else
     {

@@ -1,6 +1,5 @@
 // Cобственные подключения.
 #include "platform/string.h"
-#include "platform/memory.h"
 
 #if KPLATFORM_LINUX_FLAG
 
@@ -43,35 +42,46 @@
         return strncasecmp(lstr, rstr, length) == 0;
     }
 
-    i32 platform_string_format(char* dest, const char* format, ...)
+    i32 platform_string_format(char* dest, u16 length, const char* format, ...)
     {
+        // Получение указателя на аргументы строки формата.
+        // NOTE: Параметры используются только для одного вызова vsnprintf, для повторного использования
+        //       необходимо вызвать va_end, после чего повторить va_start и тогда можно вызвать еще раз.
         va_list args;
         va_start(args, format);
-        // TODO: Заменить без использования стека!
-        char buffer[32000];
-        i32 written = vsnprintf(buffer, 32000, format, args);
-        buffer[written] = 0;
-        platform_memory_copy(dest, buffer, written + 1);
+
+        // Форматирование строки с использованием предоставленных максимальной длинны и аргументов.
+        i32 written = vsnprintf(dest, length, format, args);
+
+        // Завершение работы с аргументами.
         va_end(args);
         return written;
     }
 
-    // TODO: При успешном завершении работы эти функции возвращают количество напечатанных
-    // символов (не включая завершающий `\0', использующийся для обозначения конца строки данных).
-    // Функции snprintf и vsnprintf передают не больше байтов, чем указано в переменной size
-    // (включая завершающий '\0'). Если вывод был урезан из-за этого ограничения, то возвращаемое
-    // значение является числом символов (кроме заверщающего '\0'), переданных в конечной строке,
-    // если для этого имелось достаточно места. Таким образом, возвращаемое значение size или более
-    // обозначает, что вывод был обрезан. Если случилась ошибка, то возвратится отрицательное значение.
-    //                                                                             Источник: opennet.ru 
-    i32 platform_string_formatv(char* dest, u64 length, const char* format, void* va_list)
+    i32 platform_string_format_va(char* dest, u64 length, const char* format, void* va_list)
     {
-        if(!dest || !length || !format || !va_list)
-        {
-            return -1;
-        }
-
         return vsnprintf(dest, length, format, va_list);
+    }
+
+    i32 platform_string_format_unsafe(char* dest, const char* format, ...)
+    {
+        // Получение указателя на аргументы строки формата.
+        // NOTE: Параметры используются только для одного вызова vsprintf, для повторного использования
+        //       необходимо вызвать va_end, после чего повторить va_start и тогда можно вызвать еще раз.
+        va_list args;
+        va_start(args, format);
+
+        // Форматирование строки с использованием предоставленных аргументов.
+        i32 written = vsprintf(dest, format, args);
+
+        // Завершение работы с аргументами.
+        va_end(args);
+        return written;
+    }
+
+    i32 platform_string_format_va_unsafe(char* dest, const char* format, void* va_list)
+    {
+        return vsprintf(dest, format, va_list);
     }
 
     char* platform_string_copy(char* dest, const char* src)
@@ -91,9 +101,16 @@
 
     i32 platform_string_sscanf(const char* str, const char* format, ...)
     {
+        // Получение указателя на аргументы строки формата.
+        // NOTE: Параметры используются только для одного вызова vsscanf, для повторного использования
+        //       необходимо вызвать va_end, после чего повторить va_start и тогда можно вызвать еще раз.
         va_list args;
         va_start(args, format);
+
+        // Форматирование строки с использованием предоставленных аргументов.
         i32 result = vsscanf(str, format, args);
+
+        // Завершение работы с аргументами.
         va_end(args);
         return result;
     }

@@ -33,7 +33,7 @@ typedef struct vulkan_buffer {
     // @brief Флаги памяти.
     u32 memory_property_flags;
     // @brief Требования памяти списка.
-    u64 freelist_memory_requirement;
+    ptr freelist_memory_requirement;
     // @brief Блок памяти выделенный под список.
     void* freelist_memory;
     // @brief Экземпляр списка.
@@ -197,13 +197,13 @@ typedef struct vulkan_geometry_data {
     // @brief Размер вершины в байтах.
     u32 vertex_element_size;
     // @brief Смещение вершин в буфере вершин.
-    u64 vertex_buffer_offset;
+    ptr vertex_buffer_offset;
     // @brief Количество индексов в буфере индексов.
     u32 index_count;
     // @brief Размер индекса в байтах.
     u32 index_element_size;
     // @brief Смещение индексов в буфере индексов.
-    u64 index_buffer_offset;
+    ptr index_buffer_offset;
 } vulkan_geometry_data;
 
 // @brief Конкретная конфигурация стадии шейдера на конвейере.
@@ -261,7 +261,7 @@ typedef struct vulkan_shader_instance_state {
     // @brief Идентификатор экземпляра.
     u32 id;
     // @brief Смещение в байтах в uniform-буфере.
-    u64 offset;
+    ptr offset;
     // @brief Состояние набора дескрипторов.
     vulkan_shader_descriptor_set_state descriptor_set_state;
     // @brief Указатель на карты текстур экземпляра.
@@ -328,6 +328,7 @@ typedef struct vulkan_context {
 
     VkInstance instance;
     VkAllocationCallbacks* allocator;
+    VkAllocationCallbacks custom_allocator;
     VkSurfaceKHR surface;
     VkDebugUtilsMessengerEXT debug_messenger;
     vulkan_device device;

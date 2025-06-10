@@ -677,6 +677,7 @@ bool material_load(material_config* config, material* m)
 
 void material_destroy(material* m)
 {
+    // TODO: Как текстурные карты оказываются без имени текстуры?
     // Освобождение загруженых текстур.
     if(m->diffuse_map.texture)
     {

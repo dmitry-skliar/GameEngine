@@ -178,15 +178,15 @@ bool shader_system_create(const shader_config* config)
     if(!hashtable_create(&hashtable_requirement, shader->uniform_lookup_memory, &hcfg, &shader->uniform_lookup))
     {
         kerror("Function '%s': Failed to create hashtable.", __FUNCTION__);
-        kfree(shader->uniform_lookup_memory, hashtable_requirement, MEMORY_TAG_UNKNOWN); // Можно спокойно уничтожать, т.к. записей еще нет!
+        kfree(shader->uniform_lookup_memory, MEMORY_TAG_UNKNOWN); // Можно спокойно уничтожать, т.к. записей еще нет!
         return false;
     }
-
-    // NOTE: Требование выравнивания UBO установлено в бэкэнде рендерера.
 
     // TODO: Это жестко закодировано, поскольку спецификация Vulkan гарантирует, что доступно только минимум 128 байт
     // пространства, и драйвер должен определить, сколько доступно. Поэтому, чтобы избежать проблем, будет использоваться
     // только наименьший общий знаменатель 128 байт.
+    // NOTE: Требование выравнивания UBO установлено в бэкэнде рендерера.
+    // TODO: Получать из рендерера.
     shader->push_constant_stride = 128;
 
     renderpass* pass = renderer_renderpass_get(config->renderpass_name);
@@ -733,7 +733,7 @@ void shader_destroy(shader* s)
     u32 sampler_count = darray_length(s->global_texture_maps);
     for(u32 i = 0; i < sampler_count; ++i)
     {
-        kfree_tc(s->global_texture_maps[i], texture_map, 1, MEMORY_TAG_RENDERER);
+        kfree(s->global_texture_maps[i], MEMORY_TAG_RENDERER);
     }
     darray_destroy(s->global_texture_maps);
 
@@ -762,7 +762,7 @@ void shader_destroy(shader* s)
 
     // Освобождение hashtable.
     hashtable_destroy(s->uniform_lookup);
-    kfree(s->uniform_lookup_memory, s->uniform_lookup_memory_requirement, MEMORY_TAG_HASHTABLE);
+    kfree(s->uniform_lookup_memory, MEMORY_TAG_HASHTABLE);
 
     // Освободить слот шейдера, для новых использований!
     kzero_tc(s, shader, 1);

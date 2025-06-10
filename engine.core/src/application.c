@@ -75,6 +75,7 @@ typedef struct application_state {
 
     // TODO: Временный тестовый код: начало.
     skybox sb;
+    texture_map* sb_maps[1];
 
     mesh world_meshes[10];
     mesh* car_mesh;
@@ -170,7 +171,7 @@ bool application_create(game* game_inst)
     // TODO: Сделать менеджер систем и подсистем. Решит проблему правильной инициализации и завершения.
     // Система контроля памяти.
     memory_system_config memory_cfg;
-    memory_cfg.total_allocation_size = MEBIBYTES(500); //GIBIBYTES(1);
+    memory_cfg.total_allocation_size = 1 GiB;
     if(!memory_system_initialize(&memory_cfg))
     {
         kerror("Failed to initialize memory system. Aborted!");
@@ -188,7 +189,7 @@ bool application_create(game* game_inst)
     app_state->models_loaded = false;
 
     // Создание системного линейного распределителя памяти.
-    u64 systems_allocator_total_size = MEBIBYTES(64);
+    u64 systems_allocator_total_size = 64 MiB;
     app_state->systems_allocator = linear_allocator_create(systems_allocator_total_size); // TODO: Реарганизовать!
 
     // Система событий (должно быть инициализировано до создания окна приложения).
@@ -436,19 +437,21 @@ bool application_create(game* game_inst)
         return false;
     }
     cube_map->texture = texture_system_acquire_cube("skybox", true);
+
     geometry_config skybox_cube_config = geometry_system_generate_cube_config(10.0f, 10.0f, 10.0f, 1.0f, 1.0f, "skybox_cube", null);
     skybox_cube_config.material_name[0] = '\0';
     app_state->sb.g = geometry_system_acquire_from_config(&skybox_cube_config, true);
     app_state->sb.render_frame_number = INVALID_ID_U64;
     shader* skybox_shader = shader_system_get(BUILTIN_SHADER_NAME_SKYBOX);
-    texture_map* maps[1] = { cube_map };
-    if(!renderer_shader_acquire_instance_resources(skybox_shader, maps, &app_state->sb.instance_id))
+    app_state->sb_maps[0] = cube_map; 
+    if(!renderer_shader_acquire_instance_resources(skybox_shader, app_state->sb_maps, &app_state->sb.instance_id))
     {
         kerror("Unable to acquire shader resources for skybox texture.");
         return false;
     }
     geometry_system_config_dispose(&skybox_cube_config);
 
+    // Обнуление сеток.
     for(u32 i = 0; i < 10; ++i)
     {
         app_state->world_meshes[i].generation = INVALID_ID_U8;
@@ -714,7 +717,7 @@ bool application_run()
         }
     }
 
-    kfree(app_state->game_inst->state, app_state->game_inst->state_memory_requirement, MEMORY_TAG_GAME);
+    kfree(app_state->game_inst->state, MEMORY_TAG_GAME);
     kinfor("Game stopped.");
 
     // TODO: Временный тестовый код: начало.
@@ -723,7 +726,7 @@ bool application_run()
         if(app_state->world_meshes[i].generation != INVALID_ID_U8)
         {
             kdebug("World mesh[%u]: get geometries is %u", i, app_state->world_meshes[i].geometry_count);
-            kfree_tc(app_state->world_meshes[i].geometries, geometry*, app_state->world_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+            kfree(app_state->world_meshes[i].geometries, MEMORY_TAG_ARRAY);
         }
     }
 
@@ -732,13 +735,14 @@ bool application_run()
         if(app_state->ui_meshes[i].generation != INVALID_ID_U8)
         {
             kdebug("UI mesh[%u]: get geometries is %u", i, app_state->ui_meshes[i].geometry_count);
-            kfree_tc(app_state->ui_meshes[i].geometries, geometry*, app_state->ui_meshes[i].geometry_count, MEMORY_TAG_ARRAY);
+            kfree(app_state->ui_meshes[i].geometries, MEMORY_TAG_ARRAY);
         }
     }
 
     // Удаление данных скайбокса.
     shader* skybox_shader = shader_system_get(BUILTIN_SHADER_NAME_SKYBOX);
-    renderer_shader_release_instance_resources(skybox_shader, app_state->sb.instance_id);
+    renderer_shader_release_instance_resources(skybox_shader, app_state->sb.instance_id); // TODO: Размер ubo_stride не проверяется, а потому error!
+    renderer_texture_map_release_resources(&app_state->sb.cubemap);
     // TODO: Временный тестовый код: конецы.
 
     // NOTE: Что бы исключить нежелательные эффекты управление остановить первым!
@@ -763,10 +767,6 @@ bool application_run()
     shader_system_shutdown(); // Остановка раньше, потому как использует функции рендерера!
     kinfor("Shader system stopped.");
 
-    // TODO: Временно: начало.
-    renderer_texture_map_release_resources(&app_state->sb.cubemap);
-    // TODO: Временно: конец.
-
     renderer_system_shutdown();
     kinfor("Renderer system stopped.");
 
@@ -787,7 +787,7 @@ bool application_run()
     app_state->systems_allocator = null;
     app_state->game_inst->application_state = null;
 
-    kfree_tc(app_state, application_state, 1, MEMORY_TAG_APPLICATION);
+    kfree(app_state, MEMORY_TAG_APPLICATION);
     app_state = null;
 
     memory_system_shutdown();

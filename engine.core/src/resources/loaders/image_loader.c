@@ -32,7 +32,7 @@ bool image_loader_load(resource_loader* self, const char* name, void* params, re
     // Поиск расширений.
     for(u32 i = 0; i < IMAGE_EXTENSION_COUNT; ++i)
     {
-        string_format(full_file_path, format_str, resource_system_base_path(), self->type_path, name, extentions[i]);
+        string_format_unsafe(full_file_path, format_str, resource_system_base_path(), self->type_path, name, extentions[i]);
         if(platform_file_exists(full_file_path))
         {
             found = true;
@@ -76,7 +76,7 @@ bool image_loader_load(resource_loader* self, const char* name, void* params, re
     if(!read_result || read_bytes != file_size)
     {
         kerror("Function '%s': Unable to read file: %s.", __FUNCTION__, full_file_path);
-        kfree(raw_data, file_size, MEMORY_TAG_TEXTURE);
+        kfree(raw_data, MEMORY_TAG_TEXTURE);
         return false;
     }
 
@@ -87,12 +87,12 @@ bool image_loader_load(resource_loader* self, const char* name, void* params, re
     if(!data)
     {
         kerror("Function '%s': Image resource loader failed to load file: %s.", __FUNCTION__, full_file_path);
-        kfree(raw_data, file_size, MEMORY_TAG_TEXTURE);
+        kfree(raw_data, MEMORY_TAG_TEXTURE);
         return false;
     }
 
     // TODO: Масло масленное, но пока что сойдет и так!
-    kfree(raw_data, file_size, MEMORY_TAG_TEXTURE);
+    kfree(raw_data, MEMORY_TAG_TEXTURE);
 
     image_resouce_data* resource_data = kallocate_tc(image_resouce_data, 1, MEMORY_TAG_TEXTURE);
     resource_data->pixels = data;
