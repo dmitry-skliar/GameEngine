@@ -8,13 +8,14 @@
 
 void vulkan_image_create(
     vulkan_context* context, texture_type type, u32 width, u32 height, VkFormat imageformat, VkImageTiling imagetiling,
-    VkImageUsageFlags imageusage, VkMemoryPropertyFlags memoryflags, bool createview, VkImageAspectFlags viewaspectflags,
+    VkImageUsageFlags imageusage, VkMemoryPropertyFlags memory_flags, bool createview, VkImageAspectFlags viewaspectflags,
     vulkan_image* out_image
 )
 {
     // Копирование параметров.
     out_image->width = width;
     out_image->height = height;
+    out_image->memory_property_flags = memory_flags;
 
     VkImageCreateInfo imageinfo = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 
@@ -50,10 +51,9 @@ void vulkan_image_create(
     VkResult result = vkCreateImage(context->device.logical, &imageinfo, context->allocator, &out_image->handle);
 
     // Запрос требований памяти.
-    VkMemoryRequirements memory_requirements;
-    vkGetImageMemoryRequirements(context->device.logical, out_image->handle, &memory_requirements);
+    vkGetImageMemoryRequirements(context->device.logical, out_image->handle, &out_image->memory_requirements);
 
-    i32 memory_type = context->find_memory_index(memory_requirements.memoryTypeBits, memoryflags);
+    i32 memory_type = context->find_memory_index(out_image->memory_requirements.memoryTypeBits, out_image->memory_property_flags);
     if(memory_type == INVALID_ID)
     {
         kfatal("Required memory type not found. Image not valid.");
@@ -61,7 +61,7 @@ void vulkan_image_create(
 
     // Выделение памяти.
     VkMemoryAllocateInfo memoryinfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-    memoryinfo.allocationSize = memory_requirements.size;
+    memoryinfo.allocationSize = out_image->memory_requirements.size;
     memoryinfo.memoryTypeIndex = memory_type;
 
     result = vkAllocateMemory(context->device.logical, &memoryinfo, context->allocator, &out_image->memory);
@@ -77,6 +77,11 @@ void vulkan_image_create(
     {
         kfatal("Failed to bind memory to image for vulkan_image with result: %s", vulkan_result_get_string(result, true));
     }
+
+    // Указание типа используемой памяти (True - GPU, False - Host).
+    out_image->use_device_local = (out_image->memory_property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    // Указание системе о выделении типа и размера памяти в Vulkan.
+    kallocate_report(out_image->memory_requirements.size, out_image->use_device_local ? MEMORY_TAG_GPU_LOCAL : MEMORY_TAG_VULKAN);
 
     // Создание представления изображения.
     if(createview)
@@ -219,4 +224,9 @@ void vulkan_image_destroy(vulkan_context* context, vulkan_image* image)
         vkDestroyImage(context->device.logical, image->handle, context->allocator);
         image->handle = null;
     }
+
+    // Указание системе об освобождении типа и размера памяти в Vulkan.
+    kfree_report(image->memory_requirements.size, image->use_device_local ? MEMORY_TAG_GPU_LOCAL : MEMORY_TAG_VULKAN);
+    // Делает изображение недействительным.
+    kzero_tc(image, struct vulkan_image, 1);
 }

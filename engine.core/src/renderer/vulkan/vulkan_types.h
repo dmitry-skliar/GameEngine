@@ -9,14 +9,11 @@
 
 /*
     @brief Проверяет возвразаемое значение указанного выражения на соответствие VK_SUCCESS.
-    @param Выражение, результат которого следует проверить. 
+    @param expr Выражение, результат которого следует проверить. 
 */
 #define VK_CHECK(expr) kassert(expr == VK_SUCCESS, "")
 
-/*
-    @brief Контекст буфер Vulkan.
-    NOTE: Используется для загрузки данных на видеокарту.
-*/
+// @brief Контекст экземпляра буфера в Vulkan, используется для загрузки данных на видеокарту.
 typedef struct vulkan_buffer {
     // @brief Экземпляр буфера.
     VkBuffer handle;
@@ -28,6 +25,8 @@ typedef struct vulkan_buffer {
     u64 total_size;
     // @brief Используемая память для буфера.
     VkDeviceMemory memory;
+    // @brief Требования к памяти для буфера.
+    VkMemoryRequirements memory_requirements;
     // @brief Индекс используемый буфером.
     i32 memory_index;
     // @brief Флаги памяти.
@@ -38,16 +37,30 @@ typedef struct vulkan_buffer {
     void* freelist_memory;
     // @brief Экземпляр списка.
     freelist* buffer_freelist;
-    //
+    // @brief Флаг
     bool has_freelist;
+    // @brief Флаг указывающий на использование памяти GPU.
+    bool use_device_local;
 } vulkan_buffer;
 
+// @brief Котекст экземпляра изображения в Vulkan.
 typedef struct vulkan_image {
+    // @brief Внутренний объект изображения.
     VkImage handle;
+    // @brief Вид изображения, используется для доступа к изображению.
     VkImageView view;
+    // @brief Память GPU для изображений.
     VkDeviceMemory memory;
+    // @brief Требования к памяти GPU.
+    VkMemoryRequirements memory_requirements;
+    // @brief Флаги свойств памяти.
+    VkMemoryPropertyFlags memory_property_flags;
+    // @brief Ширина изображения.
     u32 width;
+    // @brief Высота изображения.
     u32 height;
+    // @brief Флаг указывающий на использование памяти GPU.
+    bool use_device_local;
 } vulkan_image;
 
 typedef enum vulkan_renderpass_state {

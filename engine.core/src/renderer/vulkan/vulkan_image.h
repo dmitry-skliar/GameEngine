@@ -7,7 +7,7 @@
 */
 void vulkan_image_create(
     vulkan_context* context, texture_type type, u32 width, u32 height, VkFormat imageformat, VkImageTiling imagetiling,
-    VkImageUsageFlags imageusage, VkMemoryPropertyFlags memoryflags, bool createview, VkImageAspectFlags viewaspectflags,
+    VkImageUsageFlags imageusage, VkMemoryPropertyFlags memory_flags, bool createview, VkImageAspectFlags viewaspectflags,
     vulkan_image* out_image
 );
 

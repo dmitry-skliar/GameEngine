@@ -227,12 +227,17 @@ void memory_allocate_report(ptr size, memory_tag tag)
     // Здесь обновлять размер не требуется, реального блока нет.
 
     state_ptr->stats.tagged_allocated[tag] += size;
-    state_ptr->stats.total_allocated += size;
-    state_ptr->stats.allocation_count++;
 
-    if(state_ptr->stats.total_allocated > state_ptr->stats.peak_allocated)
+    // NOTE: Пропуск учета памяти GPU, для корректного отображения статистики!
+    if(tag != MEMORY_TAG_GPU_LOCAL)
     {
-        state_ptr->stats.peak_allocated = state_ptr->stats.total_allocated;
+        state_ptr->stats.total_allocated += size;
+        state_ptr->stats.allocation_count++;
+
+        if(state_ptr->stats.total_allocated > state_ptr->stats.peak_allocated)
+        {
+            state_ptr->stats.peak_allocated = state_ptr->stats.total_allocated;
+        }
     }
 
     kmutex_unlock(&state_ptr->allocation_mutex);
@@ -295,8 +300,13 @@ void memory_free_report(ptr size, memory_tag tag)
     }
 
     state_ptr->stats.tagged_allocated[tag] -= size;
-    state_ptr->stats.total_allocated -= size;
-    state_ptr->stats.allocation_count--;
+
+    // NOTE: Пропуск учета памяти GPU, для корректного отображения статистики!
+    if(tag != MEMORY_TAG_GPU_LOCAL)
+    {
+        state_ptr->stats.total_allocated -= size;
+        state_ptr->stats.allocation_count--;
+    }
 
     kmutex_unlock(&state_ptr->allocation_mutex);
 }

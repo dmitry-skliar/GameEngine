@@ -50,9 +50,8 @@ bool vulkan_buffer_create(
     }
 
     // Получение требований памяти.
-    VkMemoryRequirements requirements = {0};
-    vkGetBufferMemoryRequirements(context->device.logical, out_buffer->handle, &requirements);
-    out_buffer->memory_index = context->find_memory_index(requirements.memoryTypeBits, out_buffer->memory_property_flags);
+    vkGetBufferMemoryRequirements(context->device.logical, out_buffer->handle, &out_buffer->memory_requirements);
+    out_buffer->memory_index = context->find_memory_index(out_buffer->memory_requirements.memoryTypeBits, out_buffer->memory_property_flags);
     if(out_buffer->memory_index == INVALID_ID)
     {
         kerror("Function '%s': Failed to find required memory type index.", __FUNCTION__);
@@ -64,7 +63,7 @@ bool vulkan_buffer_create(
 
     // Выделение памяти.
     VkMemoryAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-    allocate_info.allocationSize = requirements.size;
+    allocate_info.allocationSize = out_buffer->memory_requirements.size;
     allocate_info.memoryTypeIndex = (u32)out_buffer->memory_index;
 
     result = vkAllocateMemory(context->device.logical, &allocate_info, context->allocator, &out_buffer->memory);
@@ -76,6 +75,11 @@ bool vulkan_buffer_create(
         cleanup_freelist(out_buffer);
         return false;
     }
+
+    // Указание типа используемой памяти (True - GPU, False - Host).
+    out_buffer->use_device_local = (out_buffer->memory_property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    // Указание системе о выделении типа и размера памяти в Vulkan.
+    kallocate_report(out_buffer->memory_requirements.size, out_buffer->use_device_local ? MEMORY_TAG_GPU_LOCAL : MEMORY_TAG_VULKAN);
 
     if(bind_on_create)
     {
@@ -102,6 +106,9 @@ void vulkan_buffer_destroy(vulkan_context* context, vulkan_buffer* buffer)
         vkDestroyBuffer(context->device.logical, buffer->handle, context->allocator);
     }
 
+    // Указание системе об освобождении типа и размера памяти в Vulkan.
+    kfree_report(buffer->memory_requirements.size, buffer->use_device_local ? MEMORY_TAG_GPU_LOCAL : MEMORY_TAG_VULKAN);
+    // Делает буфер недействительным.
     kzero_tc(buffer, struct vulkan_buffer, 1);
 }
 
@@ -178,6 +185,13 @@ bool vulkan_buffer_resize(vulkan_context* context, u64 new_size, vulkan_buffer* 
         buffer->handle = null;
     }
 
+    // Указание системе об освобождении типа и размера памяти в Vulkan.
+    kfree_report(buffer->memory_requirements.size, buffer->use_device_local ? MEMORY_TAG_GPU_LOCAL : MEMORY_TAG_VULKAN);
+    // Обновление текущих требований памяти.
+    buffer->memory_requirements = requirements;
+    // Указание системе о выделении типа и размера памяти в Vulkan.
+    kallocate_report(buffer->memory_requirements.size, buffer->use_device_local ? MEMORY_TAG_GPU_LOCAL : MEMORY_TAG_VULKAN);
+
     // Установка новых значений.
     buffer->total_size = new_size;
     buffer->memory = new_memory;
@@ -208,7 +222,7 @@ void* vulkan_buffer_lock_memory(vulkan_context* context, vulkan_buffer* buffer, 
 
 void vulkan_buffer_unlock_memory(vulkan_context* context, vulkan_buffer* buffer)
 {
-    vkUnmapMemory(context->device.logical, buffer->memory);    
+    vkUnmapMemory(context->device.logical, buffer->memory);
 }
 
 bool vulkan_buffer_allocate(vulkan_buffer* buffer, ptr size, ptr* out_offset)
