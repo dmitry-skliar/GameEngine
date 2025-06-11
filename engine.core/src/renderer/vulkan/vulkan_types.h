@@ -3,7 +3,6 @@
 #include <defines.h>
 #include <debug/assert.h>
 #include <vulkan/vulkan.h>
-#include <containers/freelist.h>
 #include <containers/hashtable.h>
 #include <renderer/renderer_types.h>
 
@@ -13,6 +12,7 @@
 */
 #define VK_CHECK(expr) kassert(expr == VK_SUCCESS, "")
 
+// TODO?: Что если renderbuffer поместить внутрь vulkan_buffer для этого нужно С++!
 // @brief Контекст экземпляра буфера в Vulkan, используется для загрузки данных на видеокарту.
 typedef struct vulkan_buffer {
     // @brief Экземпляр буфера.
@@ -21,8 +21,6 @@ typedef struct vulkan_buffer {
     VkBufferUsageFlagBits usage;
     // @brief Указывает если буфер заблокирован.
     bool is_locked;
-    // @brief Размер буфера.
-    u64 total_size;
     // @brief Используемая память для буфера.
     VkDeviceMemory memory;
     // @brief Требования к памяти для буфера.
@@ -31,16 +29,6 @@ typedef struct vulkan_buffer {
     i32 memory_index;
     // @brief Флаги памяти.
     u32 memory_property_flags;
-    // @brief Требования памяти списка.
-    ptr freelist_memory_requirement;
-    // @brief Блок памяти выделенный под список.
-    void* freelist_memory;
-    // @brief Экземпляр списка.
-    freelist* buffer_freelist;
-    // @brief Флаг
-    bool has_freelist;
-    // @brief Флаг указывающий на использование памяти GPU.
-    bool use_device_local;
 } vulkan_buffer;
 
 // @brief Котекст экземпляра изображения в Vulkan.
@@ -306,7 +294,7 @@ typedef struct vulkan_shader {
     // @brief Массив набора дескрипторов на кадр.
     VkDescriptorSet global_descriptor_sets[5];       // TODO: image_count == 5!
     // @brief Буфер uniform переменных.
-    vulkan_buffer uniform_buffer;
+    renderbuffer uniform_buffer;
     // @brief Трансляция памяти буфера uniform (привязка).
     void* uniform_buffer_mapped_block;
     // @brief Количество экземпляров.
@@ -373,8 +361,8 @@ typedef struct vulkan_context {
     hashtable* renderpass_table;
     renderpass registered_passes[VULKAN_MAX_REGISTERED_RENDERPASSES];
 
-    vulkan_buffer object_vertex_buffer;
-    vulkan_buffer object_index_buffer;
+    renderbuffer object_vertex_buffer;
+    renderbuffer object_index_buffer;
 
     // TODO: Сделать динамическим размер.
     vulkan_geometry_data geometries[VULKAN_SHADER_MAX_GEOMETRY_COUNT];

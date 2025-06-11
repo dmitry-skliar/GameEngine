@@ -353,7 +353,6 @@ bool freelist_free_block_aligned(freelist* list, ptr size, ptr aligned_offset, u
     return true;
 }
 
-// TODO: Стоит подумать, что через ресайз можно делать не только увеличение но и уменьшение.
 bool freelist_resize(freelist* list, ptr new_size)
 {
     if(!list || !list->nodes)

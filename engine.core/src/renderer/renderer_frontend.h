@@ -270,3 +270,132 @@ renderpass* renderer_renderpass_get(const char* name);
     @return True многопоточность поддерживается, false не поддерживается.
 */
 bool renderer_is_multithreaded();
+
+/*
+    @brief Создает новый буфера для заданной целей визуализатора.
+    @param type Тип буфера, определяет цель использования (вершинные/индексные данные, uniforms переменные и т.д.).
+    @param total_size Размер буфера в байтах.
+    @param use_freelist Указывает, что буфер должен использовать freelist для распределения памяти.
+    @param out_buffer Указатель для сохранения созданного буфера данных.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_create(renderbuffer_type type, ptr total_size, bool use_freelist, renderbuffer* out_buffer);
+
+/*
+    @brief Уничтожает предоставленный буфер визуализатора.
+    @param buffer Указатель на буфер данных для уничтожения.
+*/
+void renderer_renderbuffer_destroy(renderbuffer* buffer);
+
+/*
+    @brief Устанавливает указанное смещение в предоставленном буфере.
+    @param buffer Указатель на буфер данных для установки смещения.
+    @param offset Смещение в байтах от начала буфера.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_bind(renderbuffer* buffer, ptr offset);
+
+/*
+    @brief Сбрасывает смещение в предоставленном буфере.
+    @param buffer Указатель на буфер данных для сброса смещения.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_unbind(renderbuffer* buffer);
+
+/*
+    @brief Отображает память указанного буфера в блок памяти.
+    @param buffer Указатель на буфер данных для отображения в память.
+    @param offset Смещение в байтах от начала буфера данных для отображения.
+    @param size Количество байт памяти от начала смещения для отображения.
+    @return Указатель на отображенный блок памяти, после отмены отображения недействителен.
+*/
+void* renderer_renderbuffer_map_memory(renderbuffer* buffer, ptr offset, ptr size);
+
+/*
+    @brief Отменяет отображение указанного буфера в блок памяти.
+    @note  После отмены отображения, указатель на блок памяти становится недействительным.
+    @param buffer Указатель на буфер данных для отмены отображения в память.
+    @param offset Смещение в байтах от начала буфера данных для отмены отображения.
+    @param size Количество байт памяти от начала смещения для отмены отображения.
+*/
+void renderer_renderbuffer_unmap_memory(renderbuffer* buffer, ptr offset, ptr size);
+
+/*
+    @brief Синхронизирует память буфера в указанном диапазоне.
+    @note  Должна выполняться после записи данных в буфер.
+    @param buffer Указатель на буфер данных для синхронизации памяти.
+    @param offset Смещение в байтах от начала буфера данных для синхронизации.
+    @param size Количество байт памяти от начала смещения для синхронизации.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_flush(renderbuffer* buffer, ptr offset, ptr size);
+
+/*
+    @brief Считывает данные из предоставленного буфера в указанную память.
+    @param buffer Указатель на буфер данных для выполнения считывания.
+    @param offset Смещение в байтах от начала буфера данных для считывания.
+    @param size Количество байт памяти от начала смещения для считывания.
+    @param out_memory Указатель на память куда выполнить считывание, должна быть соответствующего размера.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_read(renderbuffer* buffer, ptr offset, ptr size, void* out_memory);
+
+/*
+    @brief Создает новый буфер с указанным размером, копирует из старого в новый, после чего уничтожает старый.
+    @param buffer Указатель на буфер данных для изменения размера.
+    @param new_total_size Новый размер буфера данных, должен быть больше текущего.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_resize(renderbuffer* buffer, ptr new_total_size);
+
+/*
+    @brief Пытается выделить память из предоставленного буфера c заданым смещением и размером блока.
+    @note  Использовать бля буферов использующих freelist (use_freelist = true).
+    @param buffer Указатель на буфер данных для выделения памяти.
+    @param size Количество байт памяти которое необходимо выделить (от начала смещения out_offset).
+    @param out_offset Указатель на переменную для сохранения смещения в байтах (от начала буфера данных).
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_allocate(renderbuffer* buffer, ptr size, ptr* out_offset);
+
+/*
+    @brief Пытается освободить память в предоставленном буфере с заданным смещением и размером блока.
+    @note  Использовать бля буферов использующих freelist (use_freelist = true).
+    @param buffer Указатель на буфер данных для освобождения памяти.
+    @param size Количество байт памяти которое необходимо освободить (от начала смещения offset).
+    @param offset Смещения в байтах от начала буфера данных по которому нужно освободить память.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_free(renderbuffer* buffer, ptr size, ptr offset);
+
+/*
+    @brief Загружает предоставленные данные в указанный диапазон предоставленного буфера.
+    @param buffer Указатель на буфер данных для загрузки данных.
+    @param offset Смещение в байтах от начала буфера данных для загрузки.
+    @param size Количество байт памяти от начала смещения для загрузки.
+    @param data Указатель на данные для загрузки.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_load_range(renderbuffer* buffer, ptr offset, ptr size, const void* data);
+
+/*
+    @brief Копирует данные в указанном диапазоне из исходного буфера в целевой.
+    @param src Указатель на исходный буфер данных откуда копировать данные.
+    @param src_offset Смещение в байтах от начала исходного буфера данных для копирования.
+    @param dest Указатель на целевой буфер данных куда копировать данные.
+    @param dest_offset Смещение в байтах от начала целевого буфера данных для копирования.
+    @param size Количество байт памяти от начала смещений для копирования.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_copy_range(renderbuffer* src, ptr src_offset, renderbuffer* dest, ptr dest_offset, ptr size);
+
+/*
+    @brief Пытается нарисовать содержимое указанного буфера по указанному смещению и количеству элементов.
+    @note  Предназначено только для использования с буферами вершин и индексов.
+    @param buffer Указатель на буфер данных для выполнения отрисовки.
+    @param offset Смещение в байтах от начала буфера данных для отрисовки.
+    @param element_count Количество элементов, которое необходимо отрисовать.
+    @param bind_only Указывает выполнить установку смещения, но не вызывать ортисовку.
+    @return True в случае успеха, false в случае ошибки.
+*/
+bool renderer_renderbuffer_draw(renderbuffer* buffer, ptr offset, u32 element_count, bool bind_only);

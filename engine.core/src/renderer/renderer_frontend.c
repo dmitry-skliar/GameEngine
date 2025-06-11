@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "debug/assert.h"
 #include "memory/memory.h"
+#include "containers/freelist.h"
 #include "resources/resource_types.h"
 #include "systems/resource_system.h"
 #include "systems/shader_system.h"
@@ -40,13 +41,19 @@ static renderer_system_state* state_ptr = null;
 
 void regenerate_render_targets()
 {
+    // Первичная инициализация.
+    static bool initialized = false;
+
     // TODO: Должно настраиваться.
     for(u8 i = 0; i < state_ptr->window_render_target_count; ++i)
     {
-        // TODO: При инициализации еще нечего уничтожать, а потому возникают ошибки, но они пока допустимые.
-        state_ptr->backend.render_target_destroy(&state_ptr->skybox_renderpass->targets[i], false);
-        state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], false);
-        state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], false);
+        // При инициализации еще нечего уничтожать, а потому возникают ошибки, но они пока допустимые.
+        if(initialized)
+        {
+            state_ptr->backend.render_target_destroy(&state_ptr->skybox_renderpass->targets[i], false);
+            state_ptr->backend.render_target_destroy(&state_ptr->world_renderpass->targets[i], false);
+            state_ptr->backend.render_target_destroy(&state_ptr->ui_renderpass->targets[i], false);
+        }
 
         texture* window_target_texture = state_ptr->backend.window_attachment_get(i);
         texture* depth_target_texture = state_ptr->backend.depth_attachment_get();
@@ -72,6 +79,8 @@ void regenerate_render_targets()
             &state_ptr->ui_renderpass->targets[i]
         );
     }
+
+    initialized = true;
 }
 
 bool system_status_valid(const char* func_name)
@@ -459,4 +468,262 @@ bool renderer_is_multithreaded()
 {
     if(!system_status_valid(__FUNCTION__)) kdebug_break();
     return state_ptr->backend.is_multithreaded();
+}
+
+bool renderer_renderbuffer_create(renderbuffer_type type, ptr total_size, bool use_freelist, renderbuffer* out_buffer)
+{
+    if(!out_buffer)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    // Очистка структуры.
+    kzero_tc(out_buffer, struct renderbuffer, 1);
+
+    out_buffer->type = type;
+    out_buffer->total_size = total_size;
+
+    // Создание списка свободной памяти буфера.
+    if(use_freelist)
+    {
+        // Получение требований к памяти.
+        ptr freelist_memory_requirement = 0;
+        freelist_create(total_size, &freelist_memory_requirement, null);
+
+        // Выделение требуемой памяти.
+        void* memory = kallocate(freelist_memory_requirement, MEMORY_TAG_RENDERER);
+
+        // Создание списка памяти.
+        out_buffer->buffer_freelist = freelist_create(total_size, &freelist_memory_requirement, memory);
+        if(!out_buffer->buffer_freelist)
+        {
+            kerror("Function '%s': Failed to create freelist of buffer.", __FUNCTION__);
+            return false;
+        }
+    }
+
+    // Создание внутренних данных буфера.
+    if(!state_ptr->backend.renderbuffer_create(out_buffer))
+    {
+        kfatal("Function '%s': Unable to create internal data for renderbuffer. Application cannot continue.", __FUNCTION__);
+        return false;
+    }
+
+    return true;
+}
+
+void renderer_renderbuffer_destroy(renderbuffer* buffer)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return;
+    }
+
+    // Уничтожение списка свободной памяти буфера.
+    if(buffer->buffer_freelist)
+    {
+        freelist_destroy(buffer->buffer_freelist);
+        kfree(buffer->buffer_freelist, MEMORY_TAG_RENDERER); // Т.к. при создании memory == buffer->buffer_freelist.
+        buffer->buffer_freelist = null;
+    }
+
+    // Уничтожение внутренних данных буфера.
+    state_ptr->backend.renderbuffer_destroy(buffer);
+    buffer->internal_data = null;
+}
+
+bool renderer_renderbuffer_bind(renderbuffer* buffer, ptr offset)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_bind(buffer, offset);
+}
+
+bool renderer_renderbuffer_unbind(renderbuffer* buffer)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_unbind(buffer);
+}
+
+void* renderer_renderbuffer_map_memory(renderbuffer* buffer, ptr offset, ptr size)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_map_memory(buffer, offset, size);
+}
+
+void renderer_renderbuffer_unmap_memory(renderbuffer* buffer, ptr offset, ptr size)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return;
+    }
+
+    state_ptr->backend.renderbuffer_unmap_memory(buffer, offset, size);
+}
+
+bool renderer_renderbuffer_flush(renderbuffer* buffer, ptr offset, ptr size)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_flush(buffer, offset, size);
+}
+
+bool renderer_renderbuffer_read(renderbuffer* buffer, ptr offset, ptr size, void* out_memory)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_read(buffer, offset, size, out_memory);
+}
+
+bool renderer_renderbuffer_resize(renderbuffer* buffer, ptr new_total_size)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    if(new_total_size <= buffer->total_size)
+    {
+        kerror("Function '%s' requires that new size be larger than the old, because this can lead to data loss.", __FUNCTION__);
+        return false;
+    }
+
+    if(buffer->buffer_freelist)
+    {
+        if(!freelist_resize(buffer->buffer_freelist, new_total_size))
+        {
+            kerror("Function '%s': Failed to reszie internal freelist.", __FUNCTION__);
+            return false;
+        }
+    }
+
+    bool result = state_ptr->backend.renderbuffer_resize(buffer, new_total_size);
+    if(result)
+    {
+        buffer->total_size = new_total_size;
+    }
+    else
+    {
+        kerror("Function '%s': Failed to resize internal buffer.", __FUNCTION__);
+    }
+
+    return result;
+}
+
+bool renderer_renderbuffer_allocate(renderbuffer* buffer, ptr size, ptr* out_offset)
+{
+    if(!buffer || !buffer->internal_data || !out_offset)
+    {
+        kerror("Function '%s' requires a valid buffer pointer and out_offset pointer.", __FUNCTION__);
+        return false;
+    }
+
+    if(!size)
+    {
+        kerror("Function '%s' requires a size greater than zero.", __FUNCTION__);
+        return false;
+    }
+
+    if(!buffer->buffer_freelist)
+    {
+        kwarng("Function '%s' called on a buffer not using freelist. Offset will not be valid. Call 'renderer_renderbuffer_load_range' instead.", __FUNCTION__);
+        *out_offset = 0;
+        return true;
+    }
+
+    return freelist_allocate_block(buffer->buffer_freelist, size, out_offset);
+}
+
+bool renderer_renderbuffer_free(renderbuffer* buffer, ptr size, ptr offset)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    if(!size)
+    {
+        kerror("Function '%s' requires a size greater than zero.", __FUNCTION__);
+        return false;
+    }
+
+    if(!buffer->buffer_freelist)
+    {
+        kwarng("Function '%s' called on a buffer not using freelist. Nothing was done.", __FUNCTION__);
+        return true;
+    }
+
+    return freelist_free_block(buffer->buffer_freelist, size, offset);
+}
+
+bool renderer_renderbuffer_load_range(renderbuffer* buffer, ptr offset, ptr size, const void* data)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_load_range(buffer, offset, size, data);
+}
+
+bool renderer_renderbuffer_copy_range(renderbuffer* src, ptr src_offset, renderbuffer* dest, ptr dest_offset, ptr size)
+{
+    if(!src || !src->internal_data || !dest || !dest->internal_data)
+    {
+        kerror("Function '%s' requires a valid source buffer pointer and destination buffer.", __FUNCTION__);
+        return false;
+    }
+
+    if(!size)
+    {
+        kerror("Function '%s' requires a size greater than zero.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_copy_range(src, dest_offset, dest, dest_offset, size);
+}
+
+bool renderer_renderbuffer_draw(renderbuffer* buffer, ptr offset, u32 element_count, bool bind_only)
+{
+    if(!buffer || !buffer->internal_data)
+    {
+        kerror("Function '%s' requires a valid buffer pointer.", __FUNCTION__);
+        return false;
+    }
+
+    if(!element_count)
+    {
+        kerror("Function '%s' requires a number of elements greater than zero.", __FUNCTION__);
+        return false;
+    }
+
+    return state_ptr->backend.renderbuffer_draw(buffer, offset, element_count, bind_only);
 }
